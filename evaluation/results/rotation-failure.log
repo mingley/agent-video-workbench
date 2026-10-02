@@ -1,0 +1,45 @@
+Input #0, lavfi, from 'color=c=#000000@1.0000:s=360x640:r=30:d=3.000000000':
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: wrapped_avframe, yuv420p, 360x640 [SAR 1:1 DAR 9:16], 30 fps, 30 tbr, 30 tbn
+Input #1, mov,mp4,m4a,3gp,3g2,mj2, from './rotated.mov':
+  Metadata:
+    major_brand     : qt
+    minor_version   : 512
+    compatible_brands: qt
+    encoder         : Lavf63.1.102
+  Duration: 00:00:12.00, start: 0.000000, bitrate: 63 kb/s
+  Stream #1:0[0x1]: Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 640x360 [SAR 1:1 DAR 16:9], 6 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : FFMP
+      encoder         : Lavc63.1.102 libx264
+    Side data:
+      Display Matrix: rotation of 90.00 degrees
+  Stream #1:1[0x2]: Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, mono, fltp, 47 kb/s (default)
+    Metadata:
+      handler_name    : SoundHandler
+      vendor_id       : [0][0][0][0]
+Input #2, lavfi, from 'anullsrc=channel_layout=stereo:sample_rate=48000:d=3.000000000':
+  Duration: N/A, start: 0.000000, bitrate: 768 kb/s
+  Stream #2:0: Audio: pcm_u8, 48000 Hz, stereo, u8, 768 kb/s
+Stream mapping:
+  Stream #0:0 (wrapped_avframe) -> format:default
+  Stream #1:0 (h264) -> transpose:default
+  Stream #1:1 (aac) -> atrim:default
+  Stream #2:0 (pcm_u8) -> amix
+  format:default -> Stream #0:0 (libx264)
+  alimiter:default -> Stream #0:1 (aac)
+[Parsed_crop_7 @ 0x8bf42bc00] Invalid too big or non positive size for width '360' or height '640'
+[Parsed_crop_7 @ 0x8bf42bc00] Failed to configure input pad on Parsed_crop_7
+[fc#0 @ 0x8bf415400] Error reinitializing filters!
+[fc#0 @ 0x8bf415400] Task finished with error code: -22 (Invalid argument)
+[fc#0 @ 0x8bf415400] Terminating thread with return code -22 (Invalid argument)
+[aost#0:1/aac @ 0x8be92c300] [enc:aac @ 0x8be85ce00] Could not open encoder before EOF
+[aost#0:1/aac @ 0x8be92c300] Task finished with error code: -22 (Invalid argument)
+[vost#0:0/libx264 @ 0x8be92c000] [enc:libx264 @ 0x8be85c4d0] Could not open encoder before EOF
+[vost#0:0/libx264 @ 0x8be92c000] Task finished with error code: -22 (Invalid argument)
+[vost#0:0/libx264 @ 0x8be92c000] Terminating thread with return code -22 (Invalid argument)
+[aost#0:1/aac @ 0x8be92c300] Terminating thread with return code -22 (Invalid argument)
+[out#0/mp4 @ 0x8bf4289c0] Nothing was written into output file, because at least one of its streams received no packets.
+frame=    0 fps=0.0 q=0.0 Lsize=       0KiB time=N/A bitrate=N/A speed=N/A elapsed=0:00:00.00
+Conversion failed!

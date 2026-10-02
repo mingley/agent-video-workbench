@@ -1,0 +1,182 @@
+{
+  "platform": "macOS-26.7-arm64-arm-64bit",
+  "machine": "arm64",
+  "fixture": "12s generated SDR H.264/AAC; red intro, grey pause, green demo, blue ending",
+  "limitations": [
+    "No real iPhone footage, ASR, HDR, long-video benchmark, or external agent tested"
+  ],
+  "tool_versions": {
+    "agentcut": "agentcut 0.1.0",
+    "ave": "ave 0.2.0",
+    "openreelio": "openreelio-cli 0.1.13",
+    "ffmpeg": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+    "ffprobe": "ffprobe version 9.0.2 Copyright (c) 2007-2026 the FFmpeg developers"
+  },
+  "source_hash_before": "ac8871164dc20e67c68fd4881d822b386d06de9b691e076b7071407633332d4a",
+  "agentcut_draft_revision": 10,
+  "agentcut_render": {
+    "ok": true,
+    "apiVersion": "1",
+    "command": "render",
+    "requestId": "req_2e5d9a7b5c4c41ea9984345f86bc75ef",
+    "data": {
+      "bytes": 161975,
+      "cacheHit": false,
+      "cached": true,
+      "deterministic": true,
+      "elapsedSeconds": 0.301824916,
+      "frames": 180,
+      "output": "draft.mp4",
+      "planHash": "405004a38bff99a23fe25f83d45b8f25",
+      "renderId": "bf0fac35-bf78-48d4-a3e6-8d681fa943ba"
+    },
+    "warnings": []
+  },
+  "agentcut_draft": {
+    "width": 360,
+    "height": 640,
+    "video_frames": 180,
+    "video_duration": "6.000000",
+    "video_rate": "30/1",
+    "audio_duration": "6.000000",
+    "container_duration": "6.000000",
+    "sha256": "3edb64ec03cdcf021edff872e81e7942ba97feddf987348f144cb7a5f7d0d9da"
+  },
+  "agentcut_audio_mean_db": {
+    "source": -24.1,
+    "draft": -23.9
+  },
+  "agentcut_decoded_pixels": {
+    "intro": [
+      252,
+      0,
+      0
+    ],
+    "demo": [
+      0,
+      252,
+      0
+    ]
+  },
+  "agentcut_cache": {
+    "cache_hit": true,
+    "same_bytes": true
+  },
+  "agentcut_atomic_rejection": true,
+  "agentcut_idempotent_retry": true,
+  "agentcut_stale_revision": {
+    "exit": 4,
+    "code": "E_REVISION_CONFLICT"
+  },
+  "agentcut_journal_failure": {
+    "edit_reported_success": true,
+    "warnings": [],
+    "undo_exit": 5,
+    "undo_error": {
+      "code": "E_OPERATION_INVALID",
+      "message": "invalid operation undo: there is nothing left to undo",
+      "operationId": "undo",
+      "details": {
+        "operationId": "undo"
+      }
+    }
+  },
+  "agentcut_revision": {
+    "ok": true,
+    "apiVersion": "1",
+    "command": "render",
+    "requestId": "req_961d974485db40d9b445ba804d5c946c",
+    "data": {
+      "bytes": 163983,
+      "cacheHit": false,
+      "cached": true,
+      "deterministic": true,
+      "elapsedSeconds": 0.323693584,
+      "frames": 210,
+      "output": "revision.mp4",
+      "planHash": "41917cabab3b60ecfeedddac2bdb2276",
+      "renderId": "8330851f-a181-4ea3-89c9-dfd77be79ef3"
+    },
+    "warnings": []
+  },
+  "agentcut_revised": {
+    "width": 360,
+    "height": 640,
+    "video_frames": 210,
+    "video_duration": "7.000000",
+    "video_rate": "30/1",
+    "audio_duration": "7.000000",
+    "container_duration": "7.000000",
+    "sha256": "4671992765ee3ffa05dd8e976573463da2a70b75499d7e146b06148c4dbdcb73"
+  },
+  "agentcut_undo_restores_render": true,
+  "ave_silence": {
+    "ok": true,
+    "op": "detect",
+    "kind": "silence",
+    "input": "source.mp4",
+    "segments": [
+      {
+        "start_s": 3.007875,
+        "end_s": 7.018667,
+        "kind": "silence"
+      }
+    ],
+    "ffmpeg": [
+      "$FFMPEG",
+      "-i",
+      "source.mp4",
+      "-vn",
+      "-af",
+      "silencedetect=noise=-30dB:d=0.5",
+      "-f",
+      "null",
+      "-"
+    ]
+  },
+  "ave_draft": {
+    "width": 360,
+    "height": 640,
+    "video_frames": 180,
+    "video_duration": "6.021333",
+    "video_rate": "33750/1129",
+    "audio_duration": "6.050667",
+    "container_duration": "6.054785",
+    "sha256": "78fe08770bfeefa18598a87014616af0423d1ad2b85d2ff7634bb06202a67811"
+  },
+  "ave_rejects_in_place": true,
+  "openreelio_draft": {
+    "width": 1920,
+    "height": 1080,
+    "video_frames": 180,
+    "video_duration": "6.000000",
+    "video_rate": "30/1",
+    "audio_duration": "6.000000",
+    "container_duration": "6.000000",
+    "sha256": "8b977c4f88c53e279815f81b6a1fa54ad45942976ef082b1a63ee0995687ab9b"
+  },
+  "openreelio_error": {
+    "exit": 1,
+    "stdout": "",
+    "stderr": "Error: Project path 'missing-project' not found: No such file or directory (os error 2)\n"
+  },
+  "agentcut_rotation": {
+    "exit": 8,
+    "result": {
+      "ok": false,
+      "apiVersion": "1",
+      "command": "render",
+      "requestId": "req_38849d6f72eb4db194dd4396ccee31c4",
+      "error": {
+        "code": "E_RENDER_FAILED",
+        "message": "render failed: [aost#0:1/aac @ 0x8be92c300] Terminating thread with return code -22 (Invalid argument)",
+        "details": {
+          "exitCode": 234,
+          "logPath": "./agentcut-render-c643b1d088d6442bacd282dd98d4248e.log",
+          "planHash": "55d556f5027958f0a92661df17781c03"
+        }
+      }
+    }
+  },
+  "source_hash_after": "ac8871164dc20e67c68fd4881d822b386d06de9b691e076b7071407633332d4a"
+}

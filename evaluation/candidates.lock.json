@@ -1,0 +1,76 @@
+{
+  "evaluated_at": "2026-10-02",
+  "scope": "Pinned source review; no full security audit, minimum-version test or upstream test suite",
+  "environment": {
+    "os": "macOS 26.7",
+    "architecture": "arm64",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+    "ffmpeg": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+    "ffmpeg_distribution": "Homebrew ffmpeg-full (external binary, not bundled)",
+    "font": "System Arial.ttf (not redistributed)",
+    "python": "Python 3.9.6"
+  },
+  "candidates": [
+    {
+      "name": "agentcut",
+      "repository": "https://github.com/wuwangzhang1216/agentcut",
+      "commit": "20ecdffc9d770bc280b294ee00414cafe4ce36ed",
+      "commit_date": "2026-07-25T23:45:58-04:00",
+      "source_license": "MIT",
+      "source_license_file": "LICENSE",
+      "declared_rust_version": "1.75",
+      "tested_build_package": "agentcut-cli",
+      "tested_binary": "agentcut",
+      "runtime_tested": true
+    },
+    {
+      "name": "ave",
+      "repository": "https://github.com/MatheusBBarni/agent-video-editor",
+      "commit": "71a75bda2d9289f9dc0ace802ec274f0f580bb8f",
+      "commit_date": "2026-08-20T00:20:49-03:00",
+      "source_license": "MIT",
+      "source_license_file": "LICENSE",
+      "declared_rust_version": "1.85",
+      "tested_build_package": "agent-video-editor",
+      "tested_binary": "ave",
+      "runtime_tested": true
+    },
+    {
+      "name": "openreelio",
+      "repository": "https://github.com/openreelio/openreelio",
+      "commit": "13993f3f824081f1d83204aa0c08f0288ce8e075",
+      "commit_date": "2026-09-14T03:52:17+09:00",
+      "source_license": "MIT",
+      "source_license_file": "LICENSE",
+      "declared_rust_version": "1.85",
+      "tested_build_package": "openreelio-cli",
+      "tested_binary": "openreelio-cli",
+      "runtime_tested": true
+    },
+    {
+      "name": "kinewright",
+      "repository": "https://github.com/CanadaApollo6/Kinewright",
+      "commit": "b7f432c180414dc23851c3bbab9f4a66a9eb7f31",
+      "commit_date": "2026-09-29T18:27:25-04:00",
+      "source_license": "GPL-3.0-only",
+      "source_license_file": "LICENSE",
+      "declared_rust_version": "1.92",
+      "tested_build_package": null,
+      "tested_binary": null,
+      "runtime_tested": false
+    },
+    {
+      "name": "openreels",
+      "repository": "https://github.com/tsensei/OpenReels",
+      "commit": "edc1c973634a3e179a527d00857b85de7b52a1dd",
+      "commit_date": "2026-04-10T17:17:16+06:00",
+      "source_license": "MIT",
+      "source_license_file": "LICENSE",
+      "declared_rust_version": null,
+      "tested_build_package": null,
+      "tested_binary": null,
+      "runtime_tested": false
+    }
+  ]
+}
