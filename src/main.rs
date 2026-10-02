@@ -11,12 +11,32 @@ use std::path::PathBuf;
     about = "Persistent agent-operated video workbench"
 )]
 struct Cli {
+    #[arg(long, default_value = "ffmpeg", global = true)]
+    ffmpeg: PathBuf,
+    #[arg(long, default_value = "ffprobe", global = true)]
+    ffprobe: PathBuf,
     #[command(subcommand)]
     command: Action,
 }
 
 #[derive(Subcommand)]
 enum Action {
+    Doctor,
+    Import {
+        project: PathBuf,
+        source: PathBuf,
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+    },
+    Render {
+        project: PathBuf,
+        #[arg(long, default_value = "seq_main")]
+        sequence: String,
+    },
     Create {
         project: PathBuf,
         #[arg(long)]
@@ -54,7 +74,26 @@ enum Action {
 }
 
 fn execute(cli: Cli) -> Result<Value> {
+    let backend = agent_video_workbench::media::backend(cli.ffmpeg, cli.ffprobe);
     match cli.command {
+        Action::Doctor => Ok(serde_json::to_value(agentcut_render::doctor(&backend))?),
+        Action::Import {
+            project,
+            source,
+            id,
+            expected_revision,
+            key,
+        } => Ok(serde_json::to_value(agent_video_workbench::media::import(
+            &project,
+            &source,
+            &id,
+            expected_revision,
+            &key,
+            &backend,
+        )?)?),
+        Action::Render { project, sequence } => {
+            agent_video_workbench::media::render(&project, &sequence, &backend)
+        }
         Action::Create { project, name } => Ok(serde_json::to_value(
             Store::create(&project, &name)?.project()?,
         )?),

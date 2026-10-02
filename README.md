@@ -4,8 +4,9 @@ An evidence-backed plan for an open-source Rust video editor operated by an
 external persistent agent. The first user is an iPhone content creator who
 wants to send footage, review drafts, and request revisions conversationally.
 
-**Status: planning and candidate evaluation, October 2, 2026.** No editing
-application has been implemented. `agent-video-workbench` is a provisional
+**Status: Rust prototype and candidate evaluation, October 2, 2026.** The
+[development guide](DEVELOPMENT.md) describes the transactional project store
+and synthetic SDR editing/render loop. Creator acceptance is still pending. `agent-video-workbench` is a provisional
 repository name; a product name remains open. Reelwright is already used by
 other video products and a GitHub project.
 

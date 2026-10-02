@@ -1,3 +1,4 @@
+pub mod media;
 pub mod store;
 
 use thiserror::Error;
