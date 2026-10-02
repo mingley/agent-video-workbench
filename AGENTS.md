@@ -1,7 +1,7 @@
 # Repository instructions
 
-This repository currently contains research, design, and an evaluation harness.
-There is no implemented editing application yet. Read README.md and
+This repository contains research, design, an evaluation harness and an initial
+Rust editing prototype. Read DEVELOPMENT.md for its verified scope. Read README.md and
 docs/decision.md before implementation. A later user request can change scope.
 
 - Use Rust for application logic, project state, interfaces, and job execution.

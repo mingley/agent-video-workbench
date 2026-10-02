@@ -1,7 +1,8 @@
 # Proposed architecture
 
 This document describes future Rust application behavior. `avw` is a provisional
-CLI spelling used in examples; none of these application commands exists yet.
+CLI spelling. The initial implemented subset is documented in
+[DEVELOPMENT.md](../DEVELOPMENT.md); the broader interface below remains proposed.
 
 ```mermaid
 flowchart LR

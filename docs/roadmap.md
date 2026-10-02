@@ -1,7 +1,12 @@
 # Phased implementation backlog
 
 Each phase delivers a usable check of the workflow. The current repository
-contains planning/evaluation only. Do not start by implementing the entire
+contains planning/evaluation and an initial Rust phase 1 prototype.
+See [DEVELOPMENT.md](../DEVELOPMENT.md) for commands and verified limitations.
+Synthetic Linux checks now cover transactional storage, immutable import,
+captioned renders, rotation, revision restoration, source protection, durable
+render records and portable media backups. Real phone/host acceptance gates
+remain open; none of phases 0–5 is claimed complete. Do not start by implementing the entire
 command table or a desktop editor.
 
 | Phase | Work | Acceptance criteria |

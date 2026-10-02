@@ -79,3 +79,16 @@ phone/HDR/VFR acceptance, hosted-bot trials and release packaging are still
 roadmap work. Rendering is synchronous; preserve the project directory and
 all originals. Never interpret the historical candidate evaluation as an
 application acceptance run.
+
+
+## Local release archive
+
+`scripts/package.sh /path/to/new-release-directory` runs the required Rust
+checks and produces a native archive with the binary, licenses, dependency
+license declarations and SHA256SUMS. Verify the archive with
+`sha256sum -c SHA256SUMS`, extract it, then run
+`avw/install.sh /path/to/user-bin`. Installation does not require Cargo, Node,
+a GUI or root. The archive contains no FFmpeg, fonts, private media or models;
+configure the required FFmpeg/ffprobe paths separately. This native build is
+validated on Debian 13 x86_64, not a claim of compatibility with every Linux
+libc or architecture. No GitHub release is published by this script.
