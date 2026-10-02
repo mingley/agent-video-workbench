@@ -20,7 +20,7 @@ def main():
     def run(argv, expected=0):
         p = subprocess.run(list(map(str, argv)), capture_output=True, timeout=180)
         ledger.append({'argv': list(map(str, argv)), 'exit': p.returncode,
-                       'stdout': p.stdout.decode(errors='replace'),
+                       'stdout': '<binary>' if '-pix_fmt' in argv and argv[-1] == '-' else p.stdout.decode(errors='replace'),
                        'stderr': p.stderr.decode(errors='replace')})
         (root / 'commands.json').write_text(json.dumps(ledger, indent=2))
         assert p.returncode == expected, ledger[-1]
@@ -58,7 +58,7 @@ def main():
     run([args.ffmpeg, '-v', 'error', '-f', 'lavfi', '-i',
          'color=c=red:s=640x360:r=30:d=120', '-f', 'lavfi', '-i',
          'sine=frequency=440:sample_rate=48000:duration=120', '-vf',
-         "drawbox=color=lime:t=fill:enable='between(t,60,90)',drawbox=color=blue:t=fill:enable='gte(t,90)'",
+         "drawbox=color=lime:t=fill:enable='between(t,60,90)',drawbox=color=blue:t=fill:enable='gte(t,90)',drawbox=x=80:y=100:w=80:h=100:color=white:t=fill",
          '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
          '-c:a', 'aac', '-shortest', source])
     original_hash = hashlib.sha256(source.read_bytes()).hexdigest()
@@ -105,15 +105,51 @@ def main():
     avw('restore', project, '--revision', revision, '--expected-revision', state()['revision'], '--key', 'redo')
     assert state()['sequences'] == json.loads(Path(revised['manifest']).read_text())['snapshot']['sequences']
     assert hashlib.sha256(source.read_bytes()).hexdigest() == original_hash
+    protection = root / 'protection.json'
+    protection.write_text(json.dumps({'id': 'demonstration', 'assetId': 'phone',
+        'sequenceId': 'seq_main', 'start': time(1800), 'end': time(2250)}))
+    protected = avw('protect', project, '--request', protection,
+        '--expected-revision', state()['revision'], '--key', 'protect-demo')
+    before = state()
+    apply('remove-protected-demo', [op('item.remove', {}, 'demo')], expected=1)
+    assert state() == before
+    avw('restore', project, '--revision', 0, '--expected-revision', before['revision'],
+        '--key', 'unsafe-undo', expected=1)
+    assert state() == before
+    jobs = avw('jobs', project)
+    assert len(jobs) == 3 and all(job['state'] == 'succeeded' for job in jobs)
+    backup = root / 'backup'
+    avw('backup', project, backup)
+    assert avw('status', backup) == state()
+    assert avw('history', backup) == avw('history', project)
+    assert all(job['state'] == 'unavailable' for job in avw('jobs', backup))
+    assert avw('render', backup)['revision'] == state()['revision']
     # Corrupting a managed original must reject rendering, preserving earlier finals.
     managed = project / ('originals/' + original_hash)
     with managed.open('ab') as f:
         f.write(b'corruption')
     avw('render', project, expected=1)
     assert Path(draft['path']).is_file()
+    # Rotation must happen exactly once and preserve the visible orientation.
+    rotated = root / 'rotated.mov'
+    run([args.ffmpeg, '-v', 'error', '-display_rotation', '90', '-i', source,
+         '-t', '3', '-c', 'copy', rotated])
+    project = root / 'rotation-project'
+    avw('create', project, '--name', 'Rotation regression')
+    avw('import', project, rotated, '--id', 'rotated', '--expected-revision', 0, '--key', 'rotation-import')
+    apply('rotation-edit', [op('clip.add', {'id': 'rotation', 'asset': 'rotated',
+        'track': 'track_v1', 'at': time(0), 'sourceIn': time(0), 'duration': time(90), 'fit': 'cover'})])
+    artifact = avw('render', project)
+    def pixels(path):
+        return run([args.ffmpeg, '-v', 'error', '-ss', '1', '-i', path,
+                    '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'])
+    reference, actual = pixels(rotated), pixels(artifact['path'])
+    assert len(reference) == len(actual) == 360 * 640 * 3
+    assert sum(abs(a-b) for a,b in zip(reference, actual)) / len(actual) < 5
+    assert Path(artifact['manifest']).with_name('sheet.png').is_file()
     (root / 'summary.json').write_text(json.dumps({'passed': True, 'draftFrames': 900,
         'revisedFrames': 930, 'sourceUnchanged': True, 'undoBytesMatch': True,
-        'corruptOriginalRejected': True, 'limitations': ['synthetic SDR only; no real iPhone or hosted bot trial']}, indent=2))
+        'corruptOriginalRejected': True, 'rotationOrientationVerified': True, 'limitations': ['synthetic SDR only; no real iPhone or hosted bot trial']}, indent=2))
     print('Application smoke passed:', root / 'summary.json')
 
 

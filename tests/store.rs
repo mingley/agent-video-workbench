@@ -95,3 +95,74 @@ fn failed_request_insert_rolls_back_snapshot_and_head() {
     assert_eq!(store.project().unwrap().revision, 0);
     assert_eq!(store.history().unwrap().len(), 1);
 }
+
+#[test]
+fn job_records_survive_reopen_and_do_not_change_revision() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("p");
+    let store = Store::create(&path, "original").unwrap();
+    store.start_job("render-1", 0).unwrap();
+    drop(store);
+    let store = Store::open(&path).unwrap();
+    assert_eq!(store.jobs().unwrap()[0]["state"], "running");
+    store
+        .finish_job("render-1", &json!({"path":"renders/render-1/video.mp4"}))
+        .unwrap();
+    assert!(store.finish_job("render-1", &json!({})).is_err());
+    store.start_job("render-2", 0).unwrap();
+    store.fail_job("render-2", "renderer failed").unwrap();
+    drop(store);
+    let store = Store::open(&path).unwrap();
+    assert_eq!(store.jobs().unwrap()[0]["state"], "succeeded");
+    assert_eq!(store.jobs().unwrap()[1]["state"], "failed");
+    assert_eq!(store.project().unwrap().revision, 0);
+}
+
+#[test]
+fn migrates_old_schema_with_recoverable_consistent_backup() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("p");
+    drop(Store::create(&path, "original").unwrap());
+    let conn = rusqlite::Connection::open(path.join("project.sqlite")).unwrap();
+    conn.execute_batch("DROP TABLE jobs; PRAGMA user_version=1;")
+        .unwrap();
+    drop(conn);
+    let store = Store::open(&path).unwrap();
+    assert!(store.jobs().unwrap().is_empty());
+    let backups: Vec<_> = std::fs::read_dir(&path)
+        .unwrap()
+        .filter_map(|p| {
+            let p = p.unwrap().path();
+            p.file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("schema1-")
+                .then_some(p)
+        })
+        .collect();
+    assert_eq!(backups.len(), 1);
+    let backup = rusqlite::Connection::open(&backups[0]).unwrap();
+    assert_eq!(
+        backup
+            .pragma_query_value::<u32, _>(None, "user_version", |row| row.get(0))
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        backup
+            .query_row::<String, _, _>("SELECT snapshot FROM revisions WHERE id=0", [], |row| row
+                .get(0))
+            .unwrap(),
+        serde_json::to_string(&store.project().unwrap()).unwrap()
+    );
+}
+
+#[test]
+fn incomplete_backup_is_not_opened_as_a_project() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("p");
+    drop(Store::create(&path, "original").unwrap());
+    std::fs::write(path.join("backup.incomplete"), b"pending").unwrap();
+    assert!(Store::open(&path).is_err());
+}

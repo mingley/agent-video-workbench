@@ -22,6 +22,26 @@ struct Cli {
 #[derive(Subcommand)]
 enum Action {
     Doctor,
+    Jobs {
+        project: PathBuf,
+    },
+    Backup {
+        project: PathBuf,
+        destination: PathBuf,
+    },
+    Protect {
+        project: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+    },
+    Capabilities,
+    Describe {
+        capability: String,
+    },
     Import {
         project: PathBuf,
         source: PathBuf,
@@ -76,6 +96,28 @@ enum Action {
 fn execute(cli: Cli) -> Result<Value> {
     let backend = agent_video_workbench::media::backend(cli.ffmpeg, cli.ffprobe);
     match cli.command {
+        Action::Jobs { project } => Ok(json!(Store::open(&project)?.jobs()?)),
+        Action::Backup {
+            project,
+            destination,
+        } => agent_video_workbench::media::backup(&project, &destination),
+        Action::Protect {
+            project,
+            request,
+            expected_revision,
+            key,
+        } => {
+            let range = serde_json::from_slice(&std::fs::read(request)?)?;
+            Ok(serde_json::to_value(Store::open(&project)?.protect(
+                range,
+                expected_revision,
+                &key,
+            )?)?)
+        }
+        Action::Capabilities => Ok(
+            json!({"apiVersion":"1","operations":agentcut_core::capabilities::registry(),"limitations":["SDR only","synchronous render; crashed running jobs require manual reconciliation","no ASR or hosted-bot validation"]}),
+        ),
+        Action::Describe { capability } => Ok(agentcut_core::capabilities::describe(&capability)?),
         Action::Doctor => Ok(serde_json::to_value(agentcut_render::doctor(&backend))?),
         Action::Import {
             project,

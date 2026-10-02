@@ -40,7 +40,8 @@ impl Store {
             "CREATE TABLE revisions(id INTEGER PRIMARY KEY, parent INTEGER REFERENCES revisions(id), snapshot TEXT NOT NULL, request TEXT NOT NULL);
              CREATE TABLE head(singleton INTEGER PRIMARY KEY CHECK(singleton=1), revision INTEGER NOT NULL REFERENCES revisions(id));
              CREATE TABLE requests(key TEXT PRIMARY KEY, hash TEXT NOT NULL, outcome TEXT NOT NULL);
-             PRAGMA user_version=1;",
+             CREATE TABLE jobs(id TEXT PRIMARY KEY, revision INTEGER NOT NULL REFERENCES revisions(id), state TEXT NOT NULL, result TEXT, error TEXT);
+             PRAGMA user_version=2;",
         )?;
         let project = Project::new(
             "",
@@ -65,14 +66,30 @@ impl Store {
     }
 
     pub fn open(path: &Path) -> Result<Self> {
+        if path.join("backup.incomplete").exists() {
+            return Err(Error::Invalid("backup is incomplete".into()));
+        }
+        Self::open_backup(path)
+    }
+
+    pub(crate) fn open_backup(path: &Path) -> Result<Self> {
         if !path.join("project.sqlite").is_file() {
             return Err(Error::Invalid("project.sqlite is missing".into()));
         }
-        let store = Self::connect(path)?;
+        let mut store = Self::connect(path)?;
         let version: u32 = store
             .conn
             .pragma_query_value(None, "user_version", |row| row.get(0))?;
-        if version != 1 {
+        if version == 1 {
+            // Keep a consistent pre-migration copy. Never overwrite a user's backup.
+            let backup = path.join(format!("schema1-{}.sqlite", uuid::Uuid::new_v4()));
+            store.backup(&backup)?;
+            let tx = store
+                .conn
+                .transaction_with_behavior(TransactionBehavior::Immediate)?;
+            tx.execute_batch("CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, revision INTEGER NOT NULL REFERENCES revisions(id), state TEXT NOT NULL, result TEXT, error TEXT); PRAGMA user_version=2;")?;
+            tx.commit()?;
+        } else if version != 2 {
             return Err(Error::Invalid(format!(
                 "unsupported store schema {version}"
             )));
@@ -130,6 +147,20 @@ impl Store {
     }
 
     /// Undo/redo are explicit restores; they append history instead of rewriting it.
+    pub fn protect(
+        &mut self,
+        range: crate::policy::ProtectedRange,
+        expected: u64,
+        key: &str,
+    ) -> Result<Outcome> {
+        let request = json!({"kind":"protect","range":range,"expectedRevision":expected});
+        self.change(key, expected, request, false, |current| {
+            let mut next = current.clone();
+            crate::policy::add(&mut next, range)?;
+            Ok(next)
+        })
+    }
+
     pub fn restore(&mut self, revision: u64, expected: u64, key: &str) -> Result<Outcome> {
         let target = self.revision(revision)?;
         self.change(
@@ -141,6 +172,8 @@ impl Store {
                 if target.project_id != current.project_id {
                     return Err(Error::Invalid("wrong project".into()));
                 }
+                let mut target = target;
+                crate::policy::preserve(current, &mut target);
                 Ok(target)
             },
         )
@@ -188,6 +221,7 @@ impl Store {
             });
         }
         let mut next = change(&current)?;
+        crate::policy::validate(&current, &next)?;
         next.revision = current
             .revision
             .checked_add(1)
@@ -218,6 +252,58 @@ impl Store {
             tx.commit()?;
         }
         Ok(outcome)
+    }
+
+    pub(crate) fn mark_backup_jobs_unavailable(&self) -> Result<()> {
+        self.conn.execute("UPDATE jobs SET state='unavailable',error='Derived artifacts omitted from portable backup'", [])?;
+        Ok(())
+    }
+
+    pub fn start_job(&self, id: &str, revision: u64) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO jobs(id,revision,state) VALUES(?1,?2,'running')",
+            params![id, sql_revision(revision)?],
+        )?;
+        Ok(())
+    }
+
+    pub fn finish_job(&self, id: &str, result: &Value) -> Result<()> {
+        let changed = self.conn.execute("UPDATE jobs SET state='succeeded',result=?1,error=NULL WHERE id=?2 AND state='running'", params![serde_json::to_string(result)?, id])?;
+        if changed != 1 {
+            return Err(Error::Invalid("job is missing or no longer running".into()));
+        }
+        Ok(())
+    }
+
+    pub fn fail_job(&self, id: &str, error: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE jobs SET state='failed',error=?1 WHERE id=?2 AND state='running'",
+            params![error, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn jobs(&self) -> Result<Vec<Value>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id,revision,state,result,error FROM jobs ORDER BY rowid")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<String>>(4)?,
+            ))
+        })?;
+        rows.map(|row| {
+            let (id, revision, state, result, error) = row?;
+            let result = result
+                .map(|value| serde_json::from_str::<Value>(&value))
+                .transpose()?;
+            Ok(json!({"id":id,"revision":revision,"state":state,"result":result,"error":error}))
+        })
+        .collect()
     }
 
     pub fn backup(&self, destination: &Path) -> Result<()> {
