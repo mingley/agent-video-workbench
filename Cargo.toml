@@ -1,0 +1,24 @@
+[package]
+name = "agent-video-workbench"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+
+[[bin]]
+name = "avw"
+path = "src/main.rs"
+
+[dependencies]
+agentcut-core = { git = "https://github.com/wuwangzhang1216/agentcut", rev = "20ecdffc9d770bc280b294ee00414cafe4ce36ed" }
+agentcut-render = { git = "https://github.com/wuwangzhang1216/agentcut", rev = "20ecdffc9d770bc280b294ee00414cafe4ce36ed" }
+clap = { version = "4", features = ["derive"] }
+rusqlite = { version = "0.38", features = ["bundled", "backup"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3"
