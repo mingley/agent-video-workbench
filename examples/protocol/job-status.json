@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "apiVersion": "1",
+  "requestId": "req_003",
+  "command": "job.status",
+  "result": {
+    "jobId": "job_preview_01",
+    "projectId": "e00f6aac-23b8-4ebd-ab21-b122cc257400",
+    "sequenceId": "seq_demo",
+    "revision": 13,
+    "state": "verifying",
+    "attempt": {
+      "number": 1,
+      "claimGeneration": 1
+    },
+    "progress": {
+      "stage": "verify",
+      "encodedFrames": 180,
+      "expectedFrames": 180
+    },
+    "artifactId": null
+  },
+  "warnings": []
+}

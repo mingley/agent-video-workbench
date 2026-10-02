@@ -1,8 +1,12 @@
 # Proposed architecture
 
-This document describes future Rust application behavior. `avw` is a provisional
-CLI spelling. The initial implemented subset is documented in
-[DEVELOPMENT.md](../DEVELOPMENT.md); the broader interface below remains proposed.
+This document describes the target Rust application. The `avw` SDR editing
+prototype implements a subset documented in [DEVELOPMENT.md](../DEVELOPMENT.md)
+and [implementation status](implementation-status.md). The broader interface
+and advanced workflows below remain proposed. Detailed contracts appear in the
+[agent protocol](specs/agent-protocol.md), [lifecycle](specs/project-lifecycle.md),
+[media](specs/media-pipeline.md), and [worker](specs/distribution-and-workers.md)
+specifications.
 
 ```mermaid
 flowchart LR

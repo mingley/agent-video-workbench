@@ -1,8 +1,16 @@
-# Recommendation and MVP
+# Foundation recommendation and first creator workflow
 
 Decision date: October 2, 2026. This is a proposed implementation direction,
 supported by [source review and executable evaluation](research.md), rather
 than a claim that an existing editor already meets every requirement.
+
+The MVP described here is the first milestone within the expanded
+[product plan](product-plan.md). The longer-term scope includes multiple
+recordings, B-roll, creator libraries, alternate hooks, review comments,
+multilingual captions, batch delivery and portable workers. The
+[expanded backlog](implementation-backlog.md) defines their dependencies and
+acceptance criteria. The Rust store prototype now provides part of the foundation;
+see [current status](implementation-status.md).
 
 **Extend AgentCut's Rust libraries in this new application.** Reuse its pure
 project model, validation, rational time, operation batches, render IR, FFmpeg

@@ -1,13 +1,14 @@
-# Phased implementation backlog
+# Initial implementation roadmap and broader milestones
 
-Each phase delivers a usable check of the workflow. The current repository
-contains planning/evaluation and an initial Rust phase 1 prototype.
-See [DEVELOPMENT.md](../DEVELOPMENT.md) for commands and verified limitations.
-Synthetic Linux checks now cover transactional storage, immutable import,
-captioned renders, rotation, revision restoration, source protection, durable
-render records and portable media backups. Real phone/host acceptance gates
-remain open; none of phases 0–5 is claimed complete. Do not start by implementing the entire
-command table or a desktop editor.
+Each phase delivers a usable check of the workflow. The current Rust SDR
+prototype is described in [DEVELOPMENT.md](../DEVELOPMENT.md) and the
+[implementation inventory](implementation-status.md). Its synthetic Linux checks
+cover transactional storage, immutable import, captioned renders, rotation,
+revision restoration, source protection, durable render records and portable
+media backup. Real phone/host acceptance remains open; none of phases 0–5 is
+claimed complete. These initial phases feed the [broader product milestones](product-plan.md),
+with an [expanded backlog](implementation-backlog.md) for the complete creator
+workbench. Build usable slices while retaining that larger product design.
 
 | Phase | Work | Acceptance criteria |
 | --- | --- | --- |
@@ -30,6 +31,21 @@ gates. Keep phase 1 to the smallest complete sequence:
 5. Exit, reopen, locate the omitted sentence/range through history, apply the
    restoration/style/opening batch, render, undo, and redo.
 6. Repeat from a clean hosted environment or supported external media worker.
+
+## Beyond the first workflow
+
+| Milestone | Additional scope | Acceptance |
+| --- | --- | --- |
+| M2 — Daily creator workflow | Multi-source editing/B-roll, richer A/V edits, reusable profiles/templates, alternate hooks, review bundles and multi-aspect delivery | Assemble three originals over continuous dialogue; preserve named variants; apply profile upgrades explicitly; resolve feedback against an older preview |
+| M3 — Portable beta | Multilingual captions, worker scheduling, CLI/MCP parity, portable projects and qualified installation routes | Restore on a fresh host, recover an interrupted batch, verify script/font output, and demonstrate equivalent tool outcomes across supported routes |
+| M4 — Stable 1.0 | Versioned compatibility guarantees, migrations, long-input measurement and reproducible release bundles | Pass the supported input/platform matrix, backup/upgrade drills and repeated creator trials; publish measured resource budgets and known limitations |
+| M5 — Advanced releases | Assisted reframing, richer color/HDR delivery, timeline interchange and provider extensions | Each optional capability passes its own source/timing/quality fixtures and reports unavailable cases precisely |
+
+M2 and M3 can overlap where dependencies allow. Transactional integrity and
+minimum render recovery are required before creator alpha; later milestones
+extend their coverage. The feature catalog and issue-ready epics define what
+each milestone actually includes, instead of treating all future editing ideas
+as required for the first release.
 
 The application implementation should have meaningful tests for atomic
 rollback, lost-response retries, concurrent writers, crash recovery, VFR time

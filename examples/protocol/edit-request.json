@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0.0",
+  "projectId": "e00f6aac-23b8-4ebd-ab21-b122cc257400",
+  "baseRevision": 12,
+  "idempotencyKey": "creator-caption-change-001",
+  "description": "Keep the edit and make its demonstration captions smaller.",
+  "author": {
+    "type": "agent",
+    "name": "external-agent"
+  },
+  "operations": [
+    {
+      "id": "op_name",
+      "op": "project.rename",
+      "params": {
+        "name": "Product demonstration — revised captions"
+      }
+    },
+    {
+      "id": "op_caption_size",
+      "op": "item.set",
+      "target": "caption_demo",
+      "params": {
+        "property": "text.style.fontSize",
+        "value": 36
+      }
+    }
+  ]
+}

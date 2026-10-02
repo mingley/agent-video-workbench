@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "apiVersion": "1",
+  "requestId": "req_001",
+  "command": "apply",
+  "result": {
+    "projectId": "e00f6aac-23b8-4ebd-ab21-b122cc257400",
+    "previousRevision": 12,
+    "revision": 13,
+    "replayed": false,
+    "changedIds": [
+      "caption_demo"
+    ]
+  },
+  "warnings": []
+}

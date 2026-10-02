@@ -1,0 +1,17 @@
+{
+  "ok": false,
+  "apiVersion": "1",
+  "requestId": "req_002",
+  "command": "apply",
+  "error": {
+    "code": "E_REVISION_CONFLICT",
+    "message": "The project changed after this request was prepared.",
+    "phase": "commit",
+    "recovery": "refresh_revision",
+    "details": {
+      "expectedRevision": 12,
+      "currentRevision": 13
+    }
+  },
+  "warnings": []
+}

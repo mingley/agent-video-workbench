@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/mingley/agent-video-workbench/main/specs/schemas/response.schema.json",
+  "title": "Draft AVW response envelope",
+  "$comment": "Compatible with the existing broad result/error shape. New requestId/command/warnings/recovery fields are proposed and optional. Command-specific result validation is separate.",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "ok",
+        "apiVersion",
+        "result"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": "1"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "message": {
+                "type": "string"
+              },
+              "subjectId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "ok": {
+          "const": true
+        },
+        "result": {}
+      },
+      "not": {
+        "required": [
+          "error"
+        ]
+      },
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "required": [
+        "ok",
+        "apiVersion",
+        "error"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": "1"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "message": {
+                "type": "string"
+              },
+              "subjectId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "ok": {
+          "const": false
+        },
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      },
+      "not": {
+        "required": [
+          "result"
+        ]
+      },
+      "additionalProperties": true
+    }
+  ],
+  "$defs": {
+    "error": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^E_[A-Z0-9_]+$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "phase": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "fieldPath": {
+          "type": "string"
+        },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "recovery": {
+          "enum": [
+            "repair_request",
+            "refresh_revision",
+            "relink_source",
+            "install_dependency",
+            "retry_job",
+            "inspect_result",
+            "upgrade",
+            "none"
+          ]
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

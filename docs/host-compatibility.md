@@ -6,6 +6,11 @@ Official documentation establishes useful capabilities, but it does not
 establish that our binary can install or render large videos on a given account.
 Keep product claims separate from installation tests.
 
+The [distribution and worker specification](specs/distribution-and-workers.md)
+expands the proposed install/update, long-job lifetime, remote execution and
+compatibility-test contracts. The dated provider observations below remain
+research evidence; new product specifications do not constitute host validation.
+
 | Host | What official sources establish | What remains to verify |
 | --- | --- | --- |
 | OpenAI dot | Own cloud computer for files and software; state can persist between uses; can coordinate configured Codex cloud work and supported plugins | Cloud OS/architecture, arbitrary binary installation, shell permissions for this task, quotas, long process lifetime, GPU, original-video upload/download limits |
