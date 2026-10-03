@@ -38,9 +38,10 @@
       "cliMcpOutcomeEquivalent": true,
       "transcriptMappedCaptions": true,
       "independentNamedOutputs": 3,
+      "defaultHdCanvasTested": true,
       "cacheReused": true,
       "decodedFrames": 180,
-      "jobId": "83f10925-ac36-4dfd-b905-e861151f5f81"
+      "jobId": "4211d6ec-8497-48c7-8c6e-8530022fa28f"
     },
     "mediaMatrix": {
       "passed": true,
@@ -149,8 +150,14 @@
     }
   },
   "releaseInstallation": {
-    "status": "pending",
-    "scope": "same-host native no-Cargo install and official MCP loop"
+    "status": "passed",
+    "binarySha256": "2b555f1cd7088b59dc519eeaa9d8142dd17a04dbe532fff9a9ebbf0ecb9e0a2b",
+    "scope": "same-host native no-Cargo install and official MCP loop; full-HD default output included",
+    "archiveChecksumVerified": true,
+    "extractedBinaryChecksumVerified": true,
+    "doctorPassed": true,
+    "officialMcpWorkflowPassed": true,
+    "testedSourceCommit": "56597b9e9408adb2197f1835e008d6981405aec0"
   },
   "limits": [
     "Generated fixtures; real camera appearance/color/audio and hosted bots remain unqualified",

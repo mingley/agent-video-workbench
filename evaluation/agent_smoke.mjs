@@ -54,7 +54,9 @@ try {
  const originalOutput=JSON.stringify((await state()).sequences.find(s=>s.id==='product_demo'));
  let finalRevision=edited.revision;
  for(const [outputId,name] of [['hook_b','Alternative opening'],['hook_c','Third short']]) {
-   const outcome=await call({...compose,key:'compose-'+outputId,expectedRevision:finalRevision,edit:{...compose.edit,outputId,name,cuts:[...compose.edit.cuts].reverse()}});
+   const edit={...compose.edit,outputId,name,cuts:[...compose.edit.cuts].reverse()};
+   if(outputId==='hook_b'){delete edit.width;delete edit.height;delete edit.fontSize;}
+   const outcome=await call({...compose,key:'compose-'+outputId,expectedRevision:finalRevision,edit});
    finalRevision=outcome.revision;
  }
  if(JSON.stringify((await state()).sequences.find(s=>s.id==='product_demo'))!==originalOutput)throw new Error('composing variants changed the first output');
@@ -75,6 +77,6 @@ try {
  const escape=await call({command:'status',project:'../outside'},true);if(escape.ok!==false)throw new Error('workspace escape accepted');
  await call({command:'backup',project:'project',destination:'backup'});
  const reopened=await call({command:'status',project:'backup'});if(reopened.revision!==finalRevision)throw new Error('backup lost revision');
- fs.writeFileSync(path.join(root,'summary.json'),JSON.stringify({passed:true,officialMcpSdk:true,cliMcpOutcomeEquivalent:true,transcriptMappedCaptions:true,independentNamedOutputs:3,cacheReused:true,decodedFrames:180,jobId:job.id,artifact:artifact.path},null,2));
+ fs.writeFileSync(path.join(root,'summary.json'),JSON.stringify({passed:true,officialMcpSdk:true,cliMcpOutcomeEquivalent:true,transcriptMappedCaptions:true,independentNamedOutputs:3,defaultHdCanvasTested:true,cacheReused:true,decodedFrames:180,jobId:job.id,artifact:artifact.path},null,2));
  console.log('Agent interface smoke passed:',path.join(root,'summary.json'));
 } finally {await client.close();}

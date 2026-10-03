@@ -49,7 +49,7 @@ operation discovery, abandoned imports and caption overflow.
 | media_matrix.py | Rotation 0/90/180/270 pixel comparison, synthetic HEVC SDR and VFR, video without audio; all outputs decode 60 frames; tagged PQ/HLG and nonzero starts rejected without committed assets | Does not prove real-camera color or speech lip sync |
 | asr_smoke.py | Real tiny.en model on generated speech; recognized product/video; searchable source cues; analysis leaves history unchanged; cache reuse, wrong-model and altered-artifact/cache rejection | Machine text needs review; English fixture only |
 | long_input.py | One-hour 256×144/10 fps source; five-second output at source 59:00; input seek at 3540 seconds; 150 decoded frames; render about 1.7 s and sampled process-tree peak about 145 MiB | Low-resolution CPU fixture, not 4K/iPhone performance or a hard memory reservation |
-| Native bundle installation | Pending the release installation run; required gate is archive/binary SHA-256 validation, doctor and official MCP workflow through the installed binary | Same-host native route; no separate host certification |
+| Native bundle installation | Archive extraction and archive/binary SHA-256 validation; no-root installation, doctor with system-only PATH, official MCP workflow using the installed binary, including default 1080×1920 output | Same Debian 13 x86_64 host, not a separate machine qualification |
 
 [Release evidence](../evaluation/service-results/qualification.json) records
 summaries and provenance. Generated footage, models and project databases stay
