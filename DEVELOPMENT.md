@@ -52,10 +52,17 @@ python3 evaluation/media_matrix.py \
   --avw "$PWD/target/release/avw" \
   --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe \
   --output /path/to/new-matrix-run
+python3 evaluation/combined_media_smoke.py \
+  --avw "$PWD/target/release/avw" \
+  --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe \
+  --font /path/to/font.ttf --output /path/to/new-combined-run
 npm ci --ignore-scripts --prefix evaluation
 node evaluation/agent_smoke.mjs "$PWD/target/release/avw" \
   /path/to/ffmpeg /path/to/ffprobe /path/to/font.ttf \
   /path/to/new-agent-run "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+node evaluation/browser_smoke.mjs /path/to/chromium \
+  /path/to/new-agent-run/review-set /path/to/new-browser-run \
+  "$PWD/evaluation/node_modules/playwright"
 ```
 
 The application regression creates a two-minute source, a captioned 30-second
@@ -69,6 +76,13 @@ SDR, VFR and missing audio; it converts 10-bit PQ/HLG and accepts nonzero stream
 The official MCP SDK test produces three independent captioned outputs, checks
 CLI/MCP replay equivalence, cached inspection, conflicts, policy removal,
 artifact verification and backup reopening. Node is only a test dependency.
+The combined matrix mixes PQ/HLG/SDR with burned captions and independently
+measures paired light/audio bursts in a rotated 10-bit PQ/VFR input with HDR10
+mastering metadata, nonzero container start and delayed audio. The browser check
+serves only the chosen review directory on loopback, supports byte ranges and
+tests actual Chromium playback/seeking, caption/manifest links and 1280/390/320px
+layouts. It requires an installed Chromium or Chrome; no browser is needed at
+application runtime. Viewport emulation does not certify iOS Safari or a phone.
 
 Optional local ASR needs CMake and C/C++ to build pinned whisper.cpp v1.9.4.
 `scripts/setup-asr.sh /path/to/providers` verifies source revision and tiny.en

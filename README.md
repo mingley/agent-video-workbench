@@ -5,7 +5,7 @@ stdio. It owns immutable originals, editable projects, revision history,
 analysis, persistent jobs and verified delivery. The agent chooses content and
 uses its host's file tools to deliver results.
 
-**Version 0.3: Linux x86_64 and ARM64, October 3, 2026.** Import local or
+**Version 0.3.1: Linux x86_64 and ARM64, October 3, 2026.** Import local or
 resumable HTTPS originals, convert PQ/HLG HDR to Rec.709 SDR, inspect source
 frames/PTS/scenes/silence, transcribe locally, and compose captioned shorts.
 Revise with selective source restoration, saved profiles/templates, B-roll,
@@ -20,7 +20,7 @@ Start with [installation and MCP connection](docs/deployment.md) and the
 The native binary installer needs no Rust compiler, Node, GUI or root:
 
 ```sh
-scripts/install-release.sh /path/to/new-bin 0.3.0
+scripts/install-release.sh /path/to/new-bin 0.3.1
 scripts/setup-media.sh /path/to/tools
 /path/to/new-bin/avw --ffmpeg /path/to/tools/ffmpeg8/linux/ffmpeg \
   --ffprobe /path/to/tools/ffmpeg8/linux/ffprobe doctor

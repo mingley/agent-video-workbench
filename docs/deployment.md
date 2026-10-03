@@ -12,7 +12,7 @@ x86_64/ARM64 CI qualifies each archive through installed-binary workflows.
 Use Ubuntu 24.04 or newer/glibc-compatible Linux; Debian 13 x86_64 is also tested.
 The binary dynamically needs libc, libm and libgcc_s. Mac/Windows are not supported.
 
-From the checkout, `scripts/install-release.sh NEW_BIN_DIRECTORY 0.3.0`
+From the checkout, `scripts/install-release.sh NEW_BIN_DIRECTORY 0.3.1`
 downloads the matching archive, verifies its checksum and installs without root.
 For offline installation, transfer the archive and SHA256SUMS, verify the
 matching checksum, extract, then run `avw/install.sh NEW_BIN_DIRECTORY`.

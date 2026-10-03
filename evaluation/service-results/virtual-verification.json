@@ -1,0 +1,1068 @@
+{
+  "date": "2026-10-03",
+  "publishedBaseline": {
+    "version": "0.3.0",
+    "sourceCommit": "7c520b50f44e1286563693180311c6030afed877",
+    "binarySha256": "8f4ec1f41ac95c7d7be80c956d68419d5688170cb6c965a4431a8c58dd0c41af",
+    "freshSuites": {
+      "studio": {
+        "exitCode": 0,
+        "elapsedSeconds": 16.972,
+        "summary": {
+          "passed": true,
+          "checks": [
+            "selective restore with later style",
+            "corrections survive reanalysis",
+            "review source remap",
+            "B-roll preserves dialogue samples",
+            "measured loudness",
+            "versioned profile/template",
+            "frozen batch in three formats with Spanish captions",
+            "sidecars/covers/hash-verified review package",
+            "verified backup restore and relink",
+            "catalog and safe cache planning",
+            "portable reusable font/profile library",
+            "OTIO supported cut roundtrip with loss report"
+          ]
+        }
+      },
+      "media_matrix": {
+        "exitCode": 0,
+        "elapsedSeconds": 21.36,
+        "summary": {
+          "passed": true,
+          "accepted": [
+            {
+              "fixture": "rotation_0",
+              "decodedFrames": 60,
+              "sourceUnchanged": true,
+              "orientationMeanAbsoluteDifference": 4.307452256944444,
+              "audioGap": null
+            },
+            {
+              "fixture": "rotation_90",
+              "decodedFrames": 60,
+              "sourceUnchanged": true,
+              "orientationMeanAbsoluteDifference": 1.173062789351852,
+              "audioGap": null
+            },
+            {
+              "fixture": "rotation_180",
+              "decodedFrames": 60,
+              "sourceUnchanged": true,
+              "orientationMeanAbsoluteDifference": 6.02322337962963,
+              "audioGap": null
+            },
+            {
+              "fixture": "rotation_270",
+              "decodedFrames": 60,
+              "sourceUnchanged": true,
+              "orientationMeanAbsoluteDifference": 1.215234375,
+              "audioGap": null
+            },
+            {
+              "fixture": "sar",
+              "decodedFrames": 60,
+              "sourceUnchanged": true,
+              "orientationMeanAbsoluteDifference": 3.1305772569444446,
+              "audioGap": null
+            },
+            {
+              "fixture": "sar_rotated",
+              "decodedFrames": 60,
+              "sourceUnchanged": true,
+              "orientationMeanAbsoluteDifference": 0.9245992476851852,
+              "audioGap": null
+            },
+            {
+              "fixture": "hevc_sdr",
+              "decodedFrames": 60,
+              "sourceUnchanged": true,
+              "orientationMeanAbsoluteDifference": null,
+              "audioGap": null
+            },
+            {
+              "fixture": "vfr",
+              "decodedFrames": 60,
+              "sourceUnchanged": true,
+              "orientationMeanAbsoluteDifference": null,
+              "audioGap": null
+            },
+            {
+              "fixture": "pq",
+              "decodedFrames": 60,
+              "sourceUnchanged": true,
+              "orientationMeanAbsoluteDifference": 4.718817997685186,
+              "audioGap": null
+            },
+            {
+              "fixture": "hlg",
+              "decodedFrames": 60,
+              "sourceUnchanged": true,
+              "orientationMeanAbsoluteDifference": 4.45927662037037,
+              "audioGap": null
+            },
+            {
+              "fixture": "offset",
+              "decodedFrames": 60,
+              "sourceUnchanged": true,
+              "orientationMeanAbsoluteDifference": 4.307452256944444,
+              "audioGap": null
+            },
+            {
+              "fixture": "delayed_audio",
+              "decodedFrames": 60,
+              "sourceUnchanged": true,
+              "orientationMeanAbsoluteDifference": null,
+              "audioGap": {
+                "initialSilenceRms": 0.0,
+                "laterToneRms": 2130.2556026703305
+              }
+            }
+          ],
+          "limitations": [
+            "Generated inputs; real camera appearance/audio needs human review",
+            "Dolby Vision profile 5 is inspectable but has no delivery path",
+            "VFR fixture verifies output cadence/count, not lip sync in real speech"
+          ]
+        }
+      },
+      "audio": {
+        "exitCode": 0,
+        "elapsedSeconds": 5.551,
+        "summary": {
+          "passed": true,
+          "musicAttenuationDb": -16.342175791678425,
+          "speechAmplitudeRatio": 0.9999861148146902,
+          "checks": [
+            "real sidechain attenuation during speech",
+            "effect-based in/out fades",
+            "music retained in silence",
+            "dialogue amplitude/timing retained",
+            "history restores unprocessed mix"
+          ]
+        }
+      },
+      "transfer": {
+        "exitCode": 0,
+        "elapsedSeconds": 1.973,
+        "summary": {
+          "passed": true,
+          "checks": [
+            "partial transfer resumes with strong ETag",
+            "changed validator restarts",
+            "wrong checksum preserves head/originals",
+            "redirect destinations and initial hosts scoped",
+            "signed URL absent from SQLite"
+          ]
+        }
+      },
+      "timeline": {
+        "exitCode": 0,
+        "elapsedSeconds": 5.648,
+        "summary": {
+          "passed": true,
+          "checks": [
+            "measured J-cut incoming dialogue",
+            "measured L-cut outgoing dialogue",
+            "no duplicate embedded audio",
+            "logo replacement preserves dialogue PCM",
+            "crossfade handles and blended pixels/full decode"
+          ]
+        }
+      },
+      "analysis": {
+        "exitCode": 0,
+        "elapsedSeconds": 6.313,
+        "summary": {
+          "passed": true,
+          "trackingCenterErrorsSourcePixels": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "renderedProductCenters": [
+            177.0188450561051,
+            180.99203000468825,
+            180.99953137813878
+          ],
+          "checks": [
+            "PTS-based frame index",
+            "mapped SDR proxy/cache reuse",
+            "selected-region tracking with occlusion hold",
+            "proxy attachment tamper rejection",
+            "grade with pan",
+            "accepted pan renders motion",
+            "provider version/hash contract/cache",
+            "malformed result and cancellation preserve history"
+          ]
+        }
+      },
+      "highres": {
+        "exitCode": 0,
+        "elapsedSeconds": 5.01,
+        "summary": {
+          "passed": true,
+          "sourceSize": [
+            3840,
+            2160
+          ],
+          "sourceFps": 60,
+          "sourceSeconds": 2,
+          "outputSize": [
+            1080,
+            1920
+          ],
+          "outputFrames": 30,
+          "renderWallSeconds": 2.95,
+          "sourceUnchanged": true,
+          "limitations": [
+            "Short generated SDR fixture; no one-hour 4K performance or camera appearance claim"
+          ]
+        }
+      },
+      "asr": {
+        "exitCode": 0,
+        "elapsedSeconds": 2.683,
+        "summary": {
+          "passed": true,
+          "realWhisperModel": true,
+          "modelSha256": "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
+          "cueCount": 1,
+          "text": "hello, this video shows our product demonstration. please keep the product visible.",
+          "analysisDidNotMutateHistory": true,
+          "cacheReused": true,
+          "modelMismatchRejected": true,
+          "changedArtifactRejected": true,
+          "changedCacheRejected": true
+        }
+      },
+      "application": {
+        "exitCode": 0,
+        "elapsedSeconds": 33.826,
+        "summary": {
+          "passed": true,
+          "draftFrames": 900,
+          "revisedFrames": 930,
+          "sourceUnchanged": true,
+          "undoBytesMatch": true,
+          "corruptOriginalRejected": true,
+          "rotationOrientationVerified": true,
+          "limitations": [
+            "synthetic SDR only; no real iPhone or hosted bot trial"
+          ]
+        }
+      },
+      "agent": {
+        "exitCode": 0,
+        "elapsedSeconds": 14.473,
+        "summary": {
+          "passed": true,
+          "officialMcpSdk": true,
+          "cliMcpOutcomeEquivalent": true,
+          "transcriptMappedCaptions": true,
+          "independentNamedOutputs": 4,
+          "defaultHdCanvasTested": true,
+          "frozenBatchDelivery": true,
+          "expandedSchemaAndAnalysis": true,
+          "cacheReused": true,
+          "decodedFrames": 180,
+          "jobId": "cf7585db-9971-4fbd-8807-17311d412263",
+          "artifact": "/workspace/.onboarding/virtual-verify-20261003/agent/project/renders/cf7585db-9971-4fbd-8807-17311d412263-1/video.mp4"
+        }
+      },
+      "long_input": {
+        "exitCode": 0,
+        "elapsedSeconds": 33.745,
+        "summary": {
+          "passed": true,
+          "sourceSeconds": 3600,
+          "sourceBytes": 16386540,
+          "outputFrames": 150,
+          "inputSeekSeconds": 3540,
+          "measurements": [
+            {
+              "command": "/workspace/.onboarding/virtual-verify-20261003/long_input/one-hour.mp4",
+              "elapsedSeconds": 32.142,
+              "peakProcessTreeRssBytes": 48971776
+            },
+            {
+              "command": "One-hour fixture",
+              "elapsedSeconds": 0.104,
+              "peakProcessTreeRssBytes": 7307264
+            },
+            {
+              "command": "long-source",
+              "elapsedSeconds": 0.208,
+              "peakProcessTreeRssBytes": 8835072
+            },
+            {
+              "command": "long-font",
+              "elapsedSeconds": 0.104,
+              "peakProcessTreeRssBytes": 8249344
+            },
+            {
+              "command": "late-compose",
+              "elapsedSeconds": 0.104,
+              "peakProcessTreeRssBytes": 9269248
+            },
+            {
+              "command": "late_short",
+              "elapsedSeconds": 1.04,
+              "peakProcessTreeRssBytes": 161624064
+            }
+          ],
+          "limitations": [
+            "256x144 10fps synthetic SDR, 360x640 output; not a 4K/iPhone benchmark",
+            "Linux /proc sampled RSS, not a hard memory reservation"
+          ]
+        }
+      },
+      "jobs": {
+        "exitCode": 0,
+        "elapsedSeconds": 4.634,
+        "summary": {
+          "passed": true,
+          "ownerDeathStopsChild": true,
+          "interruptedJobRecovered": true,
+          "retryAttempt": 2,
+          "cancelBounded": true,
+          "previousFinalPreserved": true
+        }
+      }
+    },
+    "performanceContext": "Independent suites ran concurrently; wall times are observations, not throughput guarantees"
+  },
+  "combinedBaseline": {
+    "passed": true,
+    "decodedFrames": 150,
+    "sourceSha256": {
+      "pq": "b9549303e6f64aa625da6e4fa9d023204ada9d80940448e21ba940cca5e844ff",
+      "hlg": "e708f3def9e61851ae5217c7b3d91e6a3bf825146f49e3f72d12e2ffa6fb6606",
+      "sdr": "fe9e8a7244f81b4c18181501bb5f36417c5e6b64c12770c8fff900b867a43c5f"
+    },
+    "outputSha256": "8f54ae9d1779296229bc268c0a6dbc8bbca3789f2493b496c8a75a894afbd8a1",
+    "artifact": "/workspace/.onboarding/virtual-verify-20261003/combined-04/project/renders/c06ec6bb-a8e5-42ba-b184-e78a0217fe9d/video.mp4",
+    "fixture": {
+      "rotationDegrees": 90,
+      "pqBits": 10,
+      "vfrIntervalsSeconds": [
+        0.033,
+        0.1
+      ],
+      "containerStartSeconds": 2.0,
+      "audioDelaySeconds": 0.2280000000000002,
+      "masteringDisplayMetadata": true
+    },
+    "flashOnsetsSeconds": [
+      0.5,
+      2.0
+    ],
+    "toneOnsetsSeconds": [
+      0.5,
+      2.0
+    ],
+    "maxSyncErrorSeconds": 0.0,
+    "captionWhitePeaksRgb": [
+      255,
+      255,
+      255
+    ],
+    "mixedPqHlgSdr": true,
+    "originalsUnchanged": true,
+    "limitations": [
+      "Generated phone-like media; no real phone sensor, playback or appearance approval",
+      "Rec.709 SDR output only; no HDR-output or Dolby Vision qualification"
+    ]
+  },
+  "independentEditorTrial": {
+    "passed": true,
+    "version": "0.3.0",
+    "officialMcpSdk": true,
+    "evidenceFrame": "/workspace/.onboarding/virtual-verify-20261003/editor-02/project/analysis/aa5e48317b190af89ceeb29a39916f7d7f1f562f87f2ce3b5e215e2a9bdfab84.png",
+    "selectedTranscript": [
+      {
+        "assetId": "phone",
+        "cue": {
+          "endMs": 10000,
+          "id": "demonstration",
+          "startMs": 7000,
+          "text": "Product demonstration"
+        }
+      }
+    ],
+    "initialRevision": 15,
+    "frozenRevision": 18,
+    "finalRevision": 22,
+    "staleRevisionRejected": true,
+    "replayEquivalent": true,
+    "selectiveRestorePreservedFontSize": 20,
+    "independentSquareUnchanged": true,
+    "protectedOriginalUnchanged": true,
+    "backupReopened": true,
+    "artifacts": [
+      {
+        "bytes": 141076,
+        "jobId": "51bae197-c869-4c0f-880d-91b9e7420e7c",
+        "manifest": "/workspace/.onboarding/virtual-verify-20261003/editor-02/project/renders/51bae197-c869-4c0f-880d-91b9e7420e7c-1/manifest.json",
+        "mimeType": "video/mp4",
+        "path": "/workspace/.onboarding/virtual-verify-20261003/editor-02/project/renders/51bae197-c869-4c0f-880d-91b9e7420e7c-1/video.mp4",
+        "revision": 18,
+        "sha256": "11a9246cb02c4e7835497c477ce23d55c461aa627fc87570bc4cc5dc3e4fed80",
+        "verified": true
+      },
+      {
+        "bytes": 140853,
+        "jobId": "afcf1cda-a228-4b9e-bcfc-e5efbfb7f5d2",
+        "manifest": "/workspace/.onboarding/virtual-verify-20261003/editor-02/project/renders/afcf1cda-a228-4b9e-bcfc-e5efbfb7f5d2-1/manifest.json",
+        "mimeType": "video/mp4",
+        "path": "/workspace/.onboarding/virtual-verify-20261003/editor-02/project/renders/afcf1cda-a228-4b9e-bcfc-e5efbfb7f5d2-1/video.mp4",
+        "revision": 18,
+        "sha256": "01b5498403fb1cf3fa69565411892faa59c7db0e100254cd517c9d3d01aa7fe9",
+        "verified": true
+      }
+    ],
+    "restoredArtifact": {
+      "bytes": 138634,
+      "jobId": "6200c0cb-2d7b-4219-b09a-ae836ebe6518",
+      "manifest": "/workspace/.onboarding/virtual-verify-20261003/editor-02/project/renders/6200c0cb-2d7b-4219-b09a-ae836ebe6518-1/manifest.json",
+      "mimeType": "video/mp4",
+      "path": "/workspace/.onboarding/virtual-verify-20261003/editor-02/project/renders/6200c0cb-2d7b-4219-b09a-ae836ebe6518-1/video.mp4",
+      "revision": 22,
+      "sha256": "06058c93ebc8636c28d93434d498eead3db16ee8080866627515ab6cc79ef74b",
+      "verified": true
+    },
+    "review": "/workspace/.onboarding/virtual-verify-20261003/editor-02/review/index.html",
+    "restoredReview": "/workspace/.onboarding/virtual-verify-20261003/editor-02/restored-review/index.html",
+    "limits": [
+      "This trial is an agent-directed local MCP workflow on generated media; no hosted consumer account or physical phone used"
+    ]
+  },
+  "preparedMcpConfiguration": {
+    "preparedMcpConfigPassed": true,
+    "version": "0.3.0",
+    "revision": 15,
+    "hdrArtifactVerified": true,
+    "localAsrConfigured": true
+  },
+  "offlineUbuntu": {
+    "passed": true,
+    "imageDigest": "sha256:a853f94d226358a79c740cfc7bce0c289748f3fe3488d921d038ccd752c61b60",
+    "network": "none",
+    "rootFilesystem": "read-only",
+    "user": 1000,
+    "ambientBuildToolsAbsent": [
+      "cargo",
+      "rustc",
+      "node",
+      "npm",
+      "python3"
+    ],
+    "publishedArchiveSha256": "2b13609a8573c04511514cd24f59ba416960376b9b480e652b7c8261e9d6c038",
+    "doctor": {
+      "checks": [
+        "ffprobe",
+        "H.264/AAC encode",
+        "drawtext captions",
+        "required HDR/audio filters",
+        "full output decode"
+      ],
+      "ffmpeg": "ffmpeg version n8.0.1-48-g0592be14ff-20260116 Copyright (c) 2000-2025 the FFmpeg developers",
+      "optionalGpuRequired": false,
+      "ready": true
+    },
+    "decodedFrames": 90,
+    "outputSha256": "6a146ba114ccaca0ca0df03c16b247879190328878941a1ddea32fab83a62827"
+  },
+  "browserRegression": {
+    "baselineExpectedFailure": {
+      "passed": false,
+      "error": "Error: Responsive layout failed: {\"label\":\"phone\",\"requestedViewport\":{\"width\":390,\"height\":844},\"videos\":[{\"width\":360,\"height\":640,\"duration\":5,\"played\":true,\"seekTargetSeconds\":2,\"seekSeconds\":2,\"error\":null,\"displayedWidth\":360},{\"width\":360,\"height\":360,\"duration\":5,\"played\":true,\"seekTargetSeconds\":2,\"seekSeconds\":2,\"error\":null,\"displayedWidth\":360}],\"viewport\":980,\"pageWidth\":980,\"pageErrors\":[]}",
+      "results": [
+        {
+          "label": "desktop",
+          "requestedViewport": {
+            "width": 1280,
+            "height": 900
+          },
+          "videos": [
+            {
+              "width": 360,
+              "height": 640,
+              "duration": 5,
+              "played": true,
+              "seekTargetSeconds": 2,
+              "seekSeconds": 2,
+              "error": null,
+              "displayedWidth": 360
+            },
+            {
+              "width": 360,
+              "height": 360,
+              "duration": 5,
+              "played": true,
+              "seekTargetSeconds": 2,
+              "seekSeconds": 2,
+              "error": null,
+              "displayedWidth": 360
+            }
+          ],
+          "viewport": 1280,
+          "pageWidth": 1280,
+          "pageErrors": []
+        },
+        {
+          "label": "phone",
+          "requestedViewport": {
+            "width": 390,
+            "height": 844
+          },
+          "videos": [
+            {
+              "width": 360,
+              "height": 640,
+              "duration": 5,
+              "played": true,
+              "seekTargetSeconds": 2,
+              "seekSeconds": 2,
+              "error": null,
+              "displayedWidth": 360
+            },
+            {
+              "width": 360,
+              "height": 360,
+              "duration": 5,
+              "played": true,
+              "seekTargetSeconds": 2,
+              "seekSeconds": 2,
+              "error": null,
+              "displayedWidth": 360
+            }
+          ],
+          "viewport": 980,
+          "pageWidth": 980,
+          "pageErrors": []
+        }
+      ],
+      "requests": [
+        {
+          "path": "/",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/51bae197-c869-4c0f-880d-91b9e7420e7c/video.mp4",
+          "status": 206,
+          "range": "bytes=0-"
+        },
+        {
+          "path": "/afcf1cda-a228-4b9e-bcfc-e5efbfb7f5d2/video.mp4",
+          "status": 206,
+          "range": "bytes=0-"
+        },
+        {
+          "path": "/afcf1cda-a228-4b9e-bcfc-e5efbfb7f5d2/video.mp4",
+          "status": 206,
+          "range": "bytes=131072-"
+        },
+        {
+          "path": "/51bae197-c869-4c0f-880d-91b9e7420e7c/captions.vtt",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/51bae197-c869-4c0f-880d-91b9e7420e7c/manifest.json",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/afcf1cda-a228-4b9e-bcfc-e5efbfb7f5d2/captions.vtt",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/afcf1cda-a228-4b9e-bcfc-e5efbfb7f5d2/manifest.json",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/51bae197-c869-4c0f-880d-91b9e7420e7c/video.mp4",
+          "status": 206,
+          "range": "bytes=0-"
+        },
+        {
+          "path": "/afcf1cda-a228-4b9e-bcfc-e5efbfb7f5d2/video.mp4",
+          "status": 206,
+          "range": "bytes=0-"
+        },
+        {
+          "path": "/51bae197-c869-4c0f-880d-91b9e7420e7c/video.mp4",
+          "status": 206,
+          "range": "bytes=131072-"
+        },
+        {
+          "path": "/afcf1cda-a228-4b9e-bcfc-e5efbfb7f5d2/video.mp4",
+          "status": 206,
+          "range": "bytes=131072-"
+        }
+      ]
+    },
+    "patchedSdr": {
+      "passed": true,
+      "browser": "151.0.7922.173",
+      "results": [
+        {
+          "label": "desktop",
+          "requestedViewport": {
+            "width": 1280,
+            "height": 900
+          },
+          "videos": [
+            {
+              "width": 360,
+              "height": 640,
+              "duration": 6,
+              "played": true,
+              "seekTargetSeconds": 2,
+              "seekSeconds": 2,
+              "error": null,
+              "displayedWidth": 360
+            },
+            {
+              "width": 360,
+              "height": 360,
+              "duration": 6,
+              "played": true,
+              "seekTargetSeconds": 2,
+              "seekSeconds": 2,
+              "error": null,
+              "displayedWidth": 360
+            }
+          ],
+          "viewport": 1280,
+          "pageWidth": 1280,
+          "pageErrors": []
+        },
+        {
+          "label": "phone",
+          "requestedViewport": {
+            "width": 390,
+            "height": 844
+          },
+          "videos": [
+            {
+              "width": 360,
+              "height": 640,
+              "duration": 6,
+              "played": true,
+              "seekTargetSeconds": 2,
+              "seekSeconds": 2,
+              "error": null,
+              "displayedWidth": 358
+            },
+            {
+              "width": 360,
+              "height": 360,
+              "duration": 6,
+              "played": true,
+              "seekTargetSeconds": 2,
+              "seekSeconds": 2,
+              "error": null,
+              "displayedWidth": 358
+            }
+          ],
+          "viewport": 390,
+          "pageWidth": 390,
+          "pageErrors": []
+        },
+        {
+          "label": "small-phone",
+          "requestedViewport": {
+            "width": 320,
+            "height": 640
+          },
+          "videos": [
+            {
+              "width": 360,
+              "height": 640,
+              "duration": 6,
+              "played": true,
+              "seekTargetSeconds": 2,
+              "seekSeconds": 2,
+              "error": null,
+              "displayedWidth": 288
+            },
+            {
+              "width": 360,
+              "height": 360,
+              "duration": 6,
+              "played": true,
+              "seekTargetSeconds": 2,
+              "seekSeconds": 2,
+              "error": null,
+              "displayedWidth": 288
+            }
+          ],
+          "viewport": 320,
+          "pageWidth": 320,
+          "pageErrors": []
+        }
+      ],
+      "requests": [
+        {
+          "path": "/",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/dec13255-9a21-47b6-9f39-97976737c4b2/video.mp4",
+          "status": 206,
+          "range": "bytes=0-"
+        },
+        {
+          "path": "/784c9cdc-2ec6-4340-a9b0-68d9bc3f2317/video.mp4",
+          "status": 206,
+          "range": "bytes=0-"
+        },
+        {
+          "path": "/784c9cdc-2ec6-4340-a9b0-68d9bc3f2317/video.mp4",
+          "status": 206,
+          "range": "bytes=163840-"
+        },
+        {
+          "path": "/dec13255-9a21-47b6-9f39-97976737c4b2/captions.vtt",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/dec13255-9a21-47b6-9f39-97976737c4b2/manifest.json",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/784c9cdc-2ec6-4340-a9b0-68d9bc3f2317/captions.vtt",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/784c9cdc-2ec6-4340-a9b0-68d9bc3f2317/manifest.json",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/dec13255-9a21-47b6-9f39-97976737c4b2/video.mp4",
+          "status": 206,
+          "range": "bytes=0-"
+        },
+        {
+          "path": "/784c9cdc-2ec6-4340-a9b0-68d9bc3f2317/video.mp4",
+          "status": 206,
+          "range": "bytes=0-"
+        },
+        {
+          "path": "/dec13255-9a21-47b6-9f39-97976737c4b2/video.mp4",
+          "status": 206,
+          "range": "bytes=163840-"
+        },
+        {
+          "path": "/784c9cdc-2ec6-4340-a9b0-68d9bc3f2317/video.mp4",
+          "status": 206,
+          "range": "bytes=163840-"
+        },
+        {
+          "path": "/dec13255-9a21-47b6-9f39-97976737c4b2/captions.vtt",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/dec13255-9a21-47b6-9f39-97976737c4b2/manifest.json",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/784c9cdc-2ec6-4340-a9b0-68d9bc3f2317/captions.vtt",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/784c9cdc-2ec6-4340-a9b0-68d9bc3f2317/manifest.json",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/dec13255-9a21-47b6-9f39-97976737c4b2/video.mp4",
+          "status": 206,
+          "range": "bytes=0-"
+        },
+        {
+          "path": "/784c9cdc-2ec6-4340-a9b0-68d9bc3f2317/video.mp4",
+          "status": 206,
+          "range": "bytes=0-"
+        },
+        {
+          "path": "/dec13255-9a21-47b6-9f39-97976737c4b2/video.mp4",
+          "status": 206,
+          "range": "bytes=163840-"
+        },
+        {
+          "path": "/784c9cdc-2ec6-4340-a9b0-68d9bc3f2317/video.mp4",
+          "status": 206,
+          "range": "bytes=163840-"
+        },
+        {
+          "path": "/dec13255-9a21-47b6-9f39-97976737c4b2/captions.vtt",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/dec13255-9a21-47b6-9f39-97976737c4b2/manifest.json",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/784c9cdc-2ec6-4340-a9b0-68d9bc3f2317/captions.vtt",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/784c9cdc-2ec6-4340-a9b0-68d9bc3f2317/manifest.json",
+          "status": 200,
+          "range": null
+        }
+      ],
+      "limitations": [
+        "Chromium viewport emulation; no iOS Safari, physical phone, HDR display or real-camera appearance approval"
+      ]
+    },
+    "patchedHdr": {
+      "passed": true,
+      "browser": "151.0.7922.173",
+      "results": [
+        {
+          "label": "desktop",
+          "requestedViewport": {
+            "width": 1280,
+            "height": 900
+          },
+          "videos": [
+            {
+              "width": 360,
+              "height": 640,
+              "duration": 5,
+              "played": true,
+              "seekTargetSeconds": 2,
+              "seekSeconds": 2,
+              "error": null,
+              "displayedWidth": 360
+            }
+          ],
+          "viewport": 1280,
+          "pageWidth": 1280,
+          "pageErrors": []
+        },
+        {
+          "label": "phone",
+          "requestedViewport": {
+            "width": 390,
+            "height": 844
+          },
+          "videos": [
+            {
+              "width": 360,
+              "height": 640,
+              "duration": 5,
+              "played": true,
+              "seekTargetSeconds": 2,
+              "seekSeconds": 2,
+              "error": null,
+              "displayedWidth": 358
+            }
+          ],
+          "viewport": 390,
+          "pageWidth": 390,
+          "pageErrors": []
+        },
+        {
+          "label": "small-phone",
+          "requestedViewport": {
+            "width": 320,
+            "height": 640
+          },
+          "videos": [
+            {
+              "width": 360,
+              "height": 640,
+              "duration": 5,
+              "played": true,
+              "seekTargetSeconds": 2,
+              "seekSeconds": 2,
+              "error": null,
+              "displayedWidth": 288
+            }
+          ],
+          "viewport": 320,
+          "pageWidth": 320,
+          "pageErrors": []
+        }
+      ],
+      "requests": [
+        {
+          "path": "/",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/video.mp4",
+          "status": 206,
+          "range": "bytes=0-"
+        },
+        {
+          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/captions.vtt",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/manifest.json",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/video.mp4",
+          "status": 206,
+          "range": "bytes=0-"
+        },
+        {
+          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/video.mp4",
+          "status": 206,
+          "range": "bytes=65536-"
+        },
+        {
+          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/captions.vtt",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/manifest.json",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/video.mp4",
+          "status": 206,
+          "range": "bytes=0-"
+        },
+        {
+          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/video.mp4",
+          "status": 206,
+          "range": "bytes=65536-"
+        },
+        {
+          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/captions.vtt",
+          "status": 200,
+          "range": null
+        },
+        {
+          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/manifest.json",
+          "status": 200,
+          "range": null
+        }
+      ],
+      "limitations": [
+        "Chromium viewport emulation; no iOS Safari, physical phone, HDR display or real-camera appearance approval"
+      ]
+    }
+  },
+  "patch": {
+    "version": "0.3.1",
+    "localStrictRust": {
+      "rust": "1.99.0",
+      "rustfmt": true,
+      "clippyDenyWarnings": true,
+      "testsPassed": 30,
+      "testsIgnored": 0,
+      "schemaMatches": true
+    },
+    "combined": {
+      "passed": true,
+      "decodedFrames": 150,
+      "sourceSha256": {
+        "pq": "b9549303e6f64aa625da6e4fa9d023204ada9d80940448e21ba940cca5e844ff",
+        "hlg": "e708f3def9e61851ae5217c7b3d91e6a3bf825146f49e3f72d12e2ffa6fb6606",
+        "sdr": "c4432289e217a28372dd6b70d87eb9a17c6f02df9e715748b48d042884dbae15"
+      },
+      "outputSha256": "6dfb68f296199df0d05257a318249cf1f1de45c6804369aa6f13672e0118c5c4",
+      "artifact": "/workspace/.onboarding/virtual-verify-20261003/combined-final-03/project/renders/8d795255-bde8-4091-91a6-b6e364f093aa/video.mp4",
+      "fixture": {
+        "rotationDegrees": 90,
+        "pqBits": 10,
+        "vfrIntervalsSeconds": [
+          0.033,
+          0.1
+        ],
+        "containerStartSeconds": 2.0,
+        "audioDelaySeconds": 0.2280000000000002,
+        "masteringDisplayMetadata": true
+      },
+      "flashOnsetsSeconds": [
+        0.5,
+        2.0
+      ],
+      "toneOnsetsSeconds": [
+        0.5,
+        2.0
+      ],
+      "maxSyncErrorSeconds": 0.0,
+      "captionWhitePeaksRgb": [
+        255,
+        255,
+        255
+      ],
+      "mixedPqHlgSdr": true,
+      "originalsUnchanged": true,
+      "unsupportedPathsRejected": [
+        "HDR-output request",
+        "unqualified BT.2020 transform",
+        "basic white-balance parameter"
+      ],
+      "priorVerifiedDeliveryRetained": true,
+      "limitations": [
+        "Generated phone-like media; no real phone sensor, playback or appearance approval",
+        "Rec.709 SDR output only; no HDR-output or Dolby Vision qualification"
+      ]
+    }
+  },
+  "limitations": [
+    "Generated media and Chromium viewport emulation do not certify physical phone appearance, iOS Safari or actual camera capture",
+    "HDR-output masters and Dolby Vision/Log transforms are not implemented/qualified by these tests",
+    "No usable macOS/Windows guest, Wine, QEMU or KVM was available; native Linux x86_64/ARM64 is the supported route",
+    "Official local MCP SDK is exercised; no unspecified hosted consumer-agent account trial"
+  ]
+}

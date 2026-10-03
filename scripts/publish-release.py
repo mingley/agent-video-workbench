@@ -34,9 +34,16 @@ def main():
     for arch in ('x86_64', 'aarch64'):
         native = output / arch
         run('gh', 'run', 'download', run_id, '--name', f'qualified-native-{arch}-bundle', '--dir', native)
-        summaries = list(native.glob('*/summary.json'))
-        if len(summaries) != 10 or any(json.loads(p.read_text()).get('passed') is not True for p in summaries):
-            raise ValueError('all ten native workflow summaries must pass')
+        required = {'application', 'jobs', 'matrix', 'agent', 'studio', 'audio',
+                    'transfer', 'analysis', 'highres', 'timeline'}
+        if tag != 'v0.3.0':
+            required.add('combined')
+            if arch == 'x86_64':
+                required.add('browser')
+        summaries = {p.parent.name: p for p in native.glob('*/summary.json')}
+        if set(summaries) != required or any(
+                json.loads(p.read_text()).get('passed') is not True for p in summaries.values()):
+            raise ValueError('every required native workflow summary must pass')
         archive = native / 'release' / f'avw-{tag[1:]}-linux-{arch}.tar.gz'
         actual = hashlib.sha256(archive.read_bytes()).hexdigest()
         expected = (native / 'release/SHA256SUMS').read_text().split()

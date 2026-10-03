@@ -6,10 +6,14 @@ The 0.3 application checks and exact commands are in
 [service qualification results](service-results/qualification.json).
 `application_smoke.py`, `job_smoke.py`, `media_matrix.py`, `agent_smoke.mjs`,
 `asr_smoke.py`, `long_input.py`, `studio_smoke.py`, `audio_smoke.py`,
-`transfer_smoke.py`, `analysis_smoke.py`, `timeline_smoke.py` and `highres_smoke.py` drive the Rust application with generated
+`transfer_smoke.py`, `analysis_smoke.py`, `timeline_smoke.py`, `highres_smoke.py`
+and `combined_media_smoke.py` drive the Rust application with generated
 media. New output directories must be outside Git; model weights and private
 footage must never be checked in. Node and the locked official MCP SDK are test
-clients, not application runtime dependencies.
+clients, not application runtime dependencies. `browser_smoke.mjs` uses locked
+Playwright and an installed Chromium to verify the delivered HTML's playback,
+seeking, links and desktop/phone layouts. This is viewport emulation, not physical
+phone or iOS Safari qualification.
 
 The rest of this document records a separate historical candidate comparison.
 Its media, assertions and known failures do not describe 0.3 application

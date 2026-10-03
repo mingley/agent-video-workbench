@@ -147,7 +147,13 @@ pub fn package(root: &Path, id: &str, destination: &Path) -> Result<Value> {
     )?;
     let mut items = Vec::new();
     let mut html = String::from(
-        "<!doctype html><meta charset=utf-8><title>Video review</title><h1>Video review</h1>",
+        "<!doctype html><html lang=en><meta charset=utf-8>\
+         <meta name=viewport content='width=device-width, initial-scale=1'>\
+         <title>Video review</title><style>\
+         body{font-family:system-ui,sans-serif;margin:1rem auto;padding:0 1rem;max-width:60rem}\
+         section{margin:0 0 2rem}video{display:block;width:360px;max-width:100%;height:auto}\
+         a{overflow-wrap:anywhere}\
+         </style><body><main><h1>Video review</h1>",
     );
     for id in ids {
         let item = store.job(&id)?;
@@ -210,6 +216,7 @@ pub fn package(root: &Path, id: &str, destination: &Path) -> Result<Value> {
         html.push_str(&format!("<section><video controls width=360 src='{id}/video.mp4'></video><p><a href='{id}/captions.vtt'>Captions</a> · <a href='{id}/manifest.json'>Manifest</a></p></section>"));
         items.push(json!({"jobId":id,"state":"succeeded","revision":item.revision,"sequenceId":manifest["sequenceId"],"files":files,"review":"pending"}));
     }
+    html.push_str("</main></body></html>");
     let report = json!({"schemaVersion":1,"batchId":job.id,"frozenRevision":job.revision,"items":items,"reviews":store.project()?.extensions.get("avw.reviews"),"editorialReview":"pending"});
     for (name, bytes) in [
         ("manifest.json", serde_json::to_vec_pretty(&report)?),

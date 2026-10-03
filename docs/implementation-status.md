@@ -56,6 +56,8 @@ qualified generated-fixture font; local ASR uses whisper.cpp v1.9.4 and tiny.en.
 | long_input.py | One-hour 256×144/10fps source, five-second output from 59:00; source seek at 3540s; 150 decoded frames; about 1.1s render and 139MiB sampled process-tree RSS locally | Not one-hour 4K or a host memory reservation |
 | highres_smoke.py | 3840×2160/60fps source to 1080×1920/30fps full decode, original unchanged; about 2.3s render locally | Two-second generated SDR source |
 | Native CI/install | Actual Ubuntu x86_64 and ARM64 runners pass Rust/schema and media/creator/transfer/analysis/official-MCP checks; each installs its native archive without Cargo | Linux glibc route; no macOS/Windows claim |
+| combined_media_smoke.py | Rotated offset HDR10/VFR with delayed audio; measured paired light/audio burst sync, mixed PQ/HLG/SDR captions; unsafe color/grade/HDR-output requests refuse | Generated camera-like media; no real phone approval |
+| browser_smoke.mjs | Actual Chromium playback, seeking and sidecar links at 1280/390/320px; regression reproduces 0.3.0 viewport failure and verifies the 0.3.1 fix | Chromium emulation, not iOS Safari or a physical phone |
 
 [Qualification JSON](../evaluation/service-results/qualification.json) records
 current summaries and provenance. Actions artifacts carry their own source
@@ -63,6 +65,11 @@ commit/platform manifests; successful workflow execution is observed before
 release publication. Local ASR and one-hour measurements are separate checks.
 Generated footage, model weights and project databases stay outside Git.
 Historical candidate research evidence is separate from this release.
+
+[Fresh virtual verification](virtual-verification.md) also exercised the actual
+published archive in an offline Ubuntu container and an independent MCP edit
+trial on a copy of the user demo. It records the mobile review fix in 0.3.1 and
+the measurements separately from real-camera/display/platform qualification.
 
 [0.3.0 is published](https://github.com/mingley/agent-video-workbench/releases/tag/v0.3.0)
 with native archives, combined checksums and dependency setup helpers.

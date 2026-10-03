@@ -4,7 +4,7 @@ if [[ $# -lt 1 || $# -gt 2 ]]; then
   echo 'Usage: scripts/install-release.sh NEW_BIN_DIRECTORY [VERSION]' >&2
   exit 2
 fi
-version=${2:-0.3.0}
+version=${2:-0.3.1}
 if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || "$(uname -s)" != Linux ]]; then
   echo 'Choose a stable version and a supported Linux host' >&2
   exit 2

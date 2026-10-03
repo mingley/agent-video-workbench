@@ -1,0 +1,33 @@
+# Virtual verification — October 3, 2026
+
+Fresh tests used the **published 0.3.0 binary**, verified against its release
+checksum, with generated media in new projects outside the checkout. All twelve
+existing CLI/MCP/media/ASR/recovery suites passed. The user demo remained at
+revision 15. [Machine-readable evidence](../evaluation/service-results/virtual-verification.json)
+records input/output hashes, measured outcomes, command provenance and limits.
+
+| Trial | Observed result |
+| --- | --- |
+| HDR and clocks together | 90° rotated 10-bit PQ HEVC with HDR10 mastering metadata; 2s container start; 228ms encoded audio delay; 33/100ms VFR intervals; mixed PQ/HLG/SDR output decoded to 150 frames |
+| Independent A/V measurement | Source light flashes and audio bursts both appeared at output 0.5s and 2s; no observed onset difference at 30fps video/10ms audio measurement resolution |
+| SDR compositing | Burned white caption peak was RGB 255 on PQ, HLG and SDR branches; output was limited-range BT.709 H.264; original hashes stayed unchanged |
+| Agent editing trial | Official MCP SDK on a verified copy of the prepared project; evidence inspection, new vertical/square outputs, replay/conflict, frozen batch at revision 18, later omission/style/restore to revision 22, unchanged protected original and independent square, backup reopen |
+| Isolated runtime | Fresh public archive installed as UID 1000 in Ubuntu 24.04 with network disabled and read-only root; no Cargo/Rust/Node/npm/Python present; readiness, HDR render and complete 90-frame decode passed |
+| Browser | Actual Chromium 151 playback and seeking, working VTT/manifest links; desktop and 390/320px phone viewports; visual inspection of generated sheets and phone screenshot |
+| Refused paths | Strict schema rejects an HDR-output option; unqualified BT.2020 transform and unsupported white-balance grade refuse rendering; earlier verified delivery remains retrievable |
+| Rust | Stable 1.99.0, rustfmt, strict Clippy `-D warnings`, 30 tests passed, zero ignored; generated request schema matches |
+
+Browser emulation found a review-page defect in 0.3.0: a requested 390px phone
+used a 980px desktop viewport. **0.3.1** adds the device viewport and responsive
+video width. The new regression reproduces the old failure and passes on the fix,
+including accurate seeking to 2s and both vertical/square/HDR review bundles.
+The native CI workflow now includes the combined-media fixture on both
+architectures and browser qualification on x86_64. Patch publication requires
+those jobs to succeed before archives can be uploaded.
+
+These are generated camera-like fixtures and Chromium viewport emulation.
+They do not certify physical phone playback, iOS Safari, real camera appearance,
+Dolby Vision/Log transforms, HDR-output masters, macOS/Windows or unspecified
+hosted agent accounts. The environment provides a Linux container runtime;
+no usable additional OS guest was present. The qualified delivery contract
+remains Linux x86_64/ARM64, Rec.709 SDR H.264/AAC.

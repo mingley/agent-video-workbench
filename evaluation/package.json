@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.2.0",
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "1.32.0"
+    "@modelcontextprotocol/sdk": "1.32.0",
+    "playwright": "1.63.0"
   }
 }
