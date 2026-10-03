@@ -124,7 +124,7 @@ fn migrates_old_schema_with_recoverable_consistent_backup() {
     let path = temp.path().join("p");
     drop(Store::create(&path, "original").unwrap());
     let conn = rusqlite::Connection::open(path.join("project.sqlite")).unwrap();
-    conn.execute_batch("DROP TABLE jobs; PRAGMA user_version=1;")
+    conn.execute_batch("DROP TABLE job_requests; DROP TABLE jobs; PRAGMA user_version=1;")
         .unwrap();
     drop(conn);
     let store = Store::open(&path).unwrap();

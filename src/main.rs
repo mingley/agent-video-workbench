@@ -22,6 +22,34 @@ struct Cli {
 #[derive(Subcommand)]
 enum Action {
     Doctor,
+    Worker {
+        project: PathBuf,
+        #[arg(long, default_value_t = 0)]
+        idle_seconds: u64,
+    },
+    RenderStart {
+        project: PathBuf,
+        #[arg(long, default_value = "seq_main")]
+        sequence: String,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        no_launch: bool,
+    },
+    JobStatus {
+        project: PathBuf,
+        id: String,
+    },
+    JobCancel {
+        project: PathBuf,
+        id: String,
+    },
+    JobRetry {
+        project: PathBuf,
+        id: String,
+    },
     Jobs {
         project: PathBuf,
     },
@@ -96,6 +124,46 @@ enum Action {
 fn execute(cli: Cli) -> Result<Value> {
     let backend = agent_video_workbench::media::backend(cli.ffmpeg, cli.ffprobe);
     match cli.command {
+        Action::Worker {
+            project,
+            idle_seconds,
+        } => {
+            let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let signal = stop.clone();
+            ctrlc::set_handler(move || signal.store(true, std::sync::atomic::Ordering::Relaxed))
+                .map_err(|e| agent_video_workbench::Error::Invalid(e.to_string()))?;
+            agent_video_workbench::jobs::worker(&project, stop, idle_seconds)
+        }
+        Action::RenderStart {
+            project,
+            sequence,
+            expected_revision,
+            key,
+            no_launch,
+        } => {
+            let job = Store::open(&project)?.enqueue(
+                &key,
+                &agent_video_workbench::jobs::RenderInput {
+                    sequence,
+                    expected_revision,
+                    ffmpeg: backend.ffmpeg_path().into(),
+                    ffprobe: backend.ffprobe_path().into(),
+                },
+            )?;
+            if !no_launch && job.state == "queued" {
+                agent_video_workbench::jobs::launch(&project, &std::env::current_exe()?)?;
+            }
+            Ok(serde_json::to_value(job)?)
+        }
+        Action::JobStatus { project, id } => {
+            Ok(serde_json::to_value(Store::open(&project)?.job(&id)?)?)
+        }
+        Action::JobCancel { project, id } => Ok(serde_json::to_value(
+            Store::open(&project)?.cancel_job(&id)?,
+        )?),
+        Action::JobRetry { project, id } => Ok(serde_json::to_value(
+            Store::open(&project)?.retry_job(&id)?,
+        )?),
         Action::Jobs { project } => Ok(json!(Store::open(&project)?.jobs()?)),
         Action::Backup {
             project,
@@ -107,7 +175,7 @@ fn execute(cli: Cli) -> Result<Value> {
             expected_revision,
             key,
         } => {
-            let range = serde_json::from_slice(&std::fs::read(request)?)?;
+            let range = agent_video_workbench::json::read(&request)?;
             Ok(serde_json::to_value(Store::open(&project)?.protect(
                 range,
                 expected_revision,
@@ -146,7 +214,7 @@ fn execute(cli: Cli) -> Result<Value> {
             request,
             dry_run,
         } => {
-            let batch: OperationBatch = serde_json::from_slice(&std::fs::read(request)?)?;
+            let batch: OperationBatch = agent_video_workbench::json::read(&request)?;
             Ok(serde_json::to_value(
                 Store::open(&project)?.apply(&batch, dry_run)?,
             )?)

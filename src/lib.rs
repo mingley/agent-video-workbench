@@ -1,11 +1,20 @@
+pub mod jobs;
+pub mod json;
 pub mod media;
 pub mod policy;
+pub mod process;
 pub mod store;
 
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("job cancelled")]
+    Cancelled,
+    #[error("subprocess deadline exceeded")]
+    Timeout,
+    #[error("{message}: {details}")]
+    Execution { message: String, details: String },
     #[error("{0}")]
     Invalid(String),
     #[error("revision conflict: expected {expected}, current {current}")]
@@ -25,6 +34,9 @@ pub enum Error {
 impl Error {
     pub fn code(&self) -> &str {
         match self {
+            Self::Cancelled => "E_JOB_CANCELLED",
+            Self::Timeout => "E_JOB_TIMEOUT",
+            Self::Execution { .. } => "E_EXECUTION_FAILED",
             Self::Invalid(_) => "E_INVALID_REQUEST",
             Self::Conflict { .. } => "E_REVISION_CONFLICT",
             Self::KeyConflict => "E_IDEMPOTENCY_CONFLICT",

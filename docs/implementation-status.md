@@ -1,3 +1,21 @@
+# Current implementation evidence
+
+The 0.2 service work now adds `render-start`, `worker`, `job-status`,
+`job-cancel` and `job-retry`. Schema 3 stores frozen input, attempts, generation,
+cancellation and heartbeat. An OS owner lock permits one worker per project;
+reacquisition marks abandoned attempts interrupted. Retry is explicit and writes
+an immutable new attempt. Idempotent starts cannot duplicate a logical job.
+The Linux process runner bounds diagnostics, imposes deadlines, kills owned
+process groups and stops FFmpeg when its worker dies.
+
+Evidence: 13 Rust tests and `evaluation/job_smoke.py` through actual CLI/worker
+processes, including SIGKILL/reopen/retry, bounded cancellation and preservation
+of the earlier verified output. The application media regression also passes
+with the bounded runner. Real phone/host qualification remains open.
+
+The inventory below records the preceding prototype baseline; it will be
+replaced with the service acceptance matrix once agent integration is validated.
+
 # Implementation status
 
 Source baseline: commit `21cba27`, October 2, 2026. This inventory describes code

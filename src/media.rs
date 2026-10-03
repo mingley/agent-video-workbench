@@ -4,7 +4,7 @@ use crate::{
 };
 use agentcut_core::{FingerprintStrategy, OperationBatch, Project};
 use agentcut_render::{
-    CancelToken, FfmpegBackend,
+    FfmpegBackend,
     probe::{detect_kind, fingerprint},
 };
 use serde_json::{Value, json};
@@ -74,7 +74,33 @@ pub fn import(
             std::fs::hard_link(&staged, &destination)?;
             File::open(root.join("originals"))?.sync_all()?;
         }
-        let metadata = backend.prober().probe(&staged)?;
+        let metadata = if matches!(
+            staged.extension().and_then(|v| v.to_str()),
+            Some("ttf" | "otf" | "ttc" | "otc" | "cube" | "3dl")
+        ) {
+            if std::fs::metadata(&staged)?.len() > 32 * 1024 * 1024 {
+                return Err(Error::Invalid("font/LUT exceeds 32 MiB".into()));
+            }
+            backend.prober().probe(&staged)?
+        } else {
+            let result = crate::process::run(
+                Command::new(backend.ffprobe_path())
+                    .args([
+                        "-v",
+                        "error",
+                        "-protocol_whitelist",
+                        "file",
+                        "-show_format",
+                        "-show_streams",
+                        "-of",
+                        "json",
+                    ])
+                    .arg(&staged),
+                std::time::Duration::from_secs(60),
+                &mut crate::process::Uncontrolled,
+            )?;
+            agentcut_render::probe::normalize_probe_json(&serde_json::from_slice(&result.stdout)?)?
+        };
         if let Some(video) = &metadata.video
             && (matches!(
                 video.color_transfer.as_deref(),
@@ -121,11 +147,27 @@ pub fn verify_assets(root: &Path, project: &Project) -> Result<()> {
 
 /// Publish only a completely decoded, measured artifact; prior outputs stay intact.
 pub fn render(root: &Path, sequence: &str, backend: &FfmpegBackend) -> Result<Value> {
+    let lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(root.join("worker.lock"))?;
+    lock.try_lock().map_err(|_| {
+        Error::Invalid("worker is active; use render-start to queue the job".into())
+    })?;
     let store = Store::open(root)?;
     let project = store.project()?;
     let id = uuid::Uuid::new_v4().to_string();
     store.start_job(&id, project.revision)?;
-    let result = render_job(root, sequence, backend, &project, &id);
+    let result = render_attempt(
+        root,
+        sequence,
+        backend,
+        &project,
+        &id,
+        &mut crate::process::Uncontrolled,
+    );
     match &result {
         Ok(manifest) => store.finish_job(&id, manifest)?,
         Err(error) => store.fail_job(&id, &error.to_string())?,
@@ -133,21 +175,54 @@ pub fn render(root: &Path, sequence: &str, backend: &FfmpegBackend) -> Result<Va
     result
 }
 
-fn render_job(
+pub(crate) fn render_attempt(
     root: &Path,
     sequence: &str,
     backend: &FfmpegBackend,
     project: &Project,
     id: &str,
+    control: &mut dyn crate::process::Control,
 ) -> Result<Value> {
+    control.check()?;
     verify_assets(root, project)?;
     let directory = root.join("renders").join(id);
     std::fs::create_dir(&directory)?;
     let staged = directory.join("unverified.mp4");
-    let mut plan = backend.plan(project, root, sequence, "h264-mp4", &staged, None)?;
+    let preset = agentcut_render::preset::require("h264-mp4")?;
+    let normalized = agentcut_core::normalize::normalize_sequence(project, sequence)?;
+    let ir = agentcut_render::ir::build(project, &normalized, root, preset, &staged, None, false)?;
+    let info = crate::process::run(
+        Command::new(backend.ffmpeg_path()).arg("-version"),
+        std::time::Duration::from_secs(10),
+        control,
+    )?;
+    let toolchain = String::from_utf8_lossy(&info.stdout)
+        .lines()
+        .next()
+        .unwrap_or("unknown")
+        .to_owned();
+    let mut plan = agentcut_render::compile::compile(&ir, backend.ffmpeg_path(), &toolchain)?;
+    if plan.duration_seconds > 3600.0 {
+        return Err(Error::Invalid(
+            "output exceeds the one-hour worker limit".into(),
+        ));
+    }
+    let reserve = (plan.duration_seconds * 512_000.0) as u64 + 128 * 1024 * 1024;
+    if crate::jobs::free_space(root)? < reserve {
+        return Err(Error::Invalid(
+            "insufficient scratch space for this render".into(),
+        ));
+    }
+
     // Upstream already compiles display-matrix transforms. Disable FFmpeg's
     // implicit autorotation so each input is rotated exactly once.
-    let mut args = Vec::new();
+    let mut args = vec![
+        "-nostdin".into(),
+        "-v".into(),
+        "error".into(),
+        "-filter_complex_threads".into(),
+        "2".into(),
+    ];
     for arg in &plan.args {
         if arg == "-i" {
             args.push("-noautorotate".into());
@@ -161,6 +236,8 @@ fn render_job(
     args.splice(
         output_index..output_index,
         [
+            "-threads",
+            "2",
             "-x264-params",
             "colorprim=bt709:transfer=bt709:colormatrix=bt709",
             "-color_primaries",
@@ -185,15 +262,43 @@ fn render_job(
         directory.join("plan.json"),
         serde_json::to_vec_pretty(&plan)?,
     )?;
-    agentcut_render::run(&plan, false, &CancelToken::new(), &mut |_| {})?;
-    let verified = verify(&staged, backend, plan.frame_count, project, sequence)?;
+    let mut side_paths = Vec::new();
+    for side in &plan.side_files {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&side.path)?;
+        file.write_all(&side.contents)?;
+        side_paths.push(side.path.clone());
+    }
+    let execution = crate::process::run(
+        Command::new(&plan.program).args(&plan.args),
+        std::time::Duration::from_secs(8 * 3600),
+        control,
+    );
+    for path in side_paths {
+        let _ = std::fs::remove_file(path);
+    }
+    let output = execution?;
+    std::fs::write(directory.join("stderr.log"), &output.stderr)?;
+    std::fs::rename(&plan.temporary_output, &staged)?;
+    control.stage("verifying")?;
+    let verified = verify(
+        &staged,
+        backend,
+        plan.frame_count,
+        project,
+        sequence,
+        control,
+    )?;
     let final_path = directory.join("video.mp4");
-    let sheet = contact_sheet(&staged, &directory, backend, plan.frame_count)?;
+    let sheet = contact_sheet(&staged, &directory, backend, plan.frame_count, control)?;
     let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":project});
     let mut manifest_file = File::create(directory.join("manifest.json"))?;
     manifest_file.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
     manifest_file.sync_all()?;
     File::open(&staged)?.sync_all()?;
+    control.check()?;
     std::fs::rename(staged, &final_path)?;
     File::open(&directory)?.sync_all()?;
     Ok(
@@ -207,33 +312,31 @@ fn verify(
     frames: i64,
     project: &Project,
     sequence: &str,
+    control: &mut dyn crate::process::Control,
 ) -> Result<Value> {
-    let decoded = Command::new(backend.ffmpeg_path())
-        .args(["-v", "error", "-i"])
-        .arg(path)
-        .args(["-f", "null", "-"])
-        .output()?;
-    if !decoded.status.success() {
-        return Err(Error::Invalid(format!(
-            "decode failed: {}",
-            String::from_utf8_lossy(&decoded.stderr)
-        )));
-    }
-    let probe = Command::new(backend.ffprobe_path())
-        .args([
-            "-v",
-            "error",
-            "-count_frames",
-            "-show_streams",
-            "-show_format",
-            "-of",
-            "json",
-        ])
-        .arg(path)
-        .output()?;
-    if !probe.status.success() {
-        return Err(Error::Invalid("output probe failed".into()));
-    }
+    crate::process::run(
+        Command::new(backend.ffmpeg_path())
+            .args(["-v", "error", "-xerror", "-i"])
+            .arg(path)
+            .args(["-f", "null", "-"]),
+        std::time::Duration::from_secs(4 * 3600),
+        control,
+    )?;
+    let probe = crate::process::run(
+        Command::new(backend.ffprobe_path())
+            .args([
+                "-v",
+                "error",
+                "-count_frames",
+                "-show_streams",
+                "-show_format",
+                "-of",
+                "json",
+            ])
+            .arg(path),
+        std::time::Duration::from_secs(4 * 3600),
+        control,
+    )?;
     let metadata: Value = serde_json::from_slice(&probe.stdout)?;
     let streams = metadata["streams"]
         .as_array()
@@ -304,21 +407,19 @@ fn contact_sheet(
     directory: &Path,
     backend: &FfmpegBackend,
     frames: i64,
+    control: &mut dyn crate::process::Control,
 ) -> Result<Value> {
     let step = (frames / 4).max(1);
     let filter = format!("select='not(mod(n,{step}))',scale=180:320,tile=4x1");
-    let result = Command::new(backend.ffmpeg_path())
-        .args(["-v", "error", "-i"])
-        .arg(path)
-        .args(["-vf", &filter, "-frames:v", "1"])
-        .arg(directory.join("sheet.png"))
-        .output()?;
-    if !result.status.success() {
-        return Err(Error::Invalid(format!(
-            "contact sheet failed: {}",
-            String::from_utf8_lossy(&result.stderr)
-        )));
-    }
+    crate::process::run(
+        Command::new(backend.ffmpeg_path())
+            .args(["-v", "error", "-i"])
+            .arg(path)
+            .args(["-vf", &filter, "-frames:v", "1"])
+            .arg(directory.join("sheet.png")),
+        std::time::Duration::from_secs(4 * 3600),
+        control,
+    )?;
     Ok(
         json!({"path":"sheet.png","outputFrames":[0,step,step*2,step*3],"tileWidth":180,"tileHeight":320}),
     )

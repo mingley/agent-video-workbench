@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use std::{path::Path, time::Duration};
 
 pub struct Store {
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -41,7 +41,13 @@ impl Store {
              CREATE TABLE head(singleton INTEGER PRIMARY KEY CHECK(singleton=1), revision INTEGER NOT NULL REFERENCES revisions(id));
              CREATE TABLE requests(key TEXT PRIMARY KEY, hash TEXT NOT NULL, outcome TEXT NOT NULL);
              CREATE TABLE jobs(id TEXT PRIMARY KEY, revision INTEGER NOT NULL REFERENCES revisions(id), state TEXT NOT NULL, result TEXT, error TEXT);
-             PRAGMA user_version=2;",
+             ALTER TABLE jobs ADD COLUMN input TEXT;
+             ALTER TABLE jobs ADD COLUMN attempt INTEGER NOT NULL DEFAULT 0;
+             ALTER TABLE jobs ADD COLUMN generation INTEGER NOT NULL DEFAULT 0;
+             ALTER TABLE jobs ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0;
+             ALTER TABLE jobs ADD COLUMN updated INTEGER NOT NULL DEFAULT 0;
+             CREATE TABLE job_requests(key TEXT PRIMARY KEY, hash TEXT NOT NULL, job_id TEXT NOT NULL REFERENCES jobs(id));
+             PRAGMA user_version=3;",
         )?;
         let project = Project::new(
             "",
@@ -80,16 +86,29 @@ impl Store {
         let version: u32 = store
             .conn
             .pragma_query_value(None, "user_version", |row| row.get(0))?;
-        if version == 1 {
-            // Keep a consistent pre-migration copy. Never overwrite a user's backup.
-            let backup = path.join(format!("schema1-{}.sqlite", uuid::Uuid::new_v4()));
+        if version == 1 || version == 2 {
+            let backup = path.join(format!("schema{version}-{}.sqlite", uuid::Uuid::new_v4()));
             store.backup(&backup)?;
             let tx = store
                 .conn
                 .transaction_with_behavior(TransactionBehavior::Immediate)?;
-            tx.execute_batch("CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, revision INTEGER NOT NULL REFERENCES revisions(id), state TEXT NOT NULL, result TEXT, error TEXT); PRAGMA user_version=2;")?;
+            let actual: u32 = tx.pragma_query_value(None, "user_version", |row| row.get(0))?;
+            if actual == 1 {
+                tx.execute_batch("CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, revision INTEGER NOT NULL REFERENCES revisions(id), state TEXT NOT NULL, result TEXT, error TEXT);")?;
+            }
+            if actual == 1 || actual == 2 {
+                tx.execute_batch("ALTER TABLE jobs ADD COLUMN input TEXT;
+                    ALTER TABLE jobs ADD COLUMN attempt INTEGER NOT NULL DEFAULT 0;
+                    ALTER TABLE jobs ADD COLUMN generation INTEGER NOT NULL DEFAULT 0;
+                    ALTER TABLE jobs ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0;
+                    ALTER TABLE jobs ADD COLUMN updated INTEGER NOT NULL DEFAULT 0;
+                    CREATE TABLE job_requests(key TEXT PRIMARY KEY,hash TEXT NOT NULL,job_id TEXT NOT NULL REFERENCES jobs(id));
+                    PRAGMA user_version=3;")?;
+            } else if actual != 3 {
+                return Err(Error::Invalid(format!("unsupported store schema {actual}")));
+            }
             tx.commit()?;
-        } else if version != 2 {
+        } else if version != 3 {
             return Err(Error::Invalid(format!(
                 "unsupported store schema {version}"
             )));
