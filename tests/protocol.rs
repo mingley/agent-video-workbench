@@ -50,3 +50,23 @@ fn scoped_service_rejects_escape_and_produces_equivalent_mcp_and_cli_errors() {
     assert_eq!(reply["result"]["isError"], true);
     assert_eq!(expected["error"]["code"], "E_REVISION_CONFLICT");
 }
+
+#[test]
+fn every_advertised_edit_has_actionable_discovery() {
+    let service = Service {
+        root: None,
+        backend: media::backend("ffmpeg".into(), "ffprobe".into()),
+        executable: "avw".into(),
+        asr: None,
+    };
+    let capabilities = service.execute(Request::Capabilities {}).unwrap();
+    for operation in capabilities["editOperations"].as_array().unwrap() {
+        let description = service
+            .execute(Request::Describe {
+                capability: operation.as_str().unwrap().into(),
+            })
+            .unwrap();
+        assert_eq!(description["example"]["op"], *operation);
+        assert!(description["example"]["params"].is_object());
+    }
+}

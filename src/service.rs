@@ -249,7 +249,7 @@ impl Service {
                         "operation is outside the supported editing surface".into(),
                     ));
                 }
-                Ok(agentcut_core::capabilities::describe(&capability)?)
+                operation_description(&capability)
             }
             Request::Create { project, name } => {
                 let path = self.path(&project)?;
@@ -634,6 +634,45 @@ fn semantic_diff(from: &Value, to: &Value) -> Result<Value> {
         json!({"fromRevision":from["revision"],"toRevision":to["revision"],"name":{"from":from["name"],"to":to["name"]},"createdIds":created,"removedIds":removed,"changedIds":changed}),
     )
 }
+fn operation_description(operation: &str) -> Result<Value> {
+    let time = json!({"value":30,"rate":{"numerator":30,"denominator":1}});
+    let params = match operation {
+        "project.rename" => json!({"name":"New name"}),
+        "sequence.add" => {
+            json!({"id":"output","name":"Output","width":1080,"height":1920,"frameRate":{"numerator":30,"denominator":1}})
+        }
+        "sequence.set" => json!({"name":"Updated output"}),
+        "track.add" => json!({"id":"video","sequence":"output","type":"video"}),
+        "track.set" => json!({"enabled":true,"muted":false}),
+        "clip.add" => {
+            json!({"id":"clip","asset":"source","track":"video","at":time,"sourceIn":time,"duration":time,"fit":"cover"})
+        }
+        "item.set" => json!({"property":"text.style.fontSize","value":48}),
+        "item.move" => json!({"to":time,"collision":"reject"}),
+        "item.remove" => json!({"ripple":"none"}),
+        "text.add" | "caption.add" => {
+            json!({"id":"caption","track":"captions","at":time,"duration":time,"text":"Literal caption"})
+        }
+        _ => return Err(Error::Invalid("unsupported operation".into())),
+    };
+    let target_required = matches!(
+        operation,
+        "sequence.set" | "track.set" | "item.set" | "item.move" | "item.remove"
+    );
+    let mut example = json!({"id":"edit-1","op":operation,"params":params});
+    if target_required {
+        example["target"] = json!("existing-entity-id");
+    }
+    let properties: Value = if operation == "item.set" {
+        serde_json::to_value(agentcut_core::capabilities::property_registry())?
+    } else {
+        json!([])
+    };
+    Ok(
+        json!({"operation":operation,"targetRequired":target_required,"example":example,"itemProperties":properties,"validation":"The pinned domain engine validates parameters, IDs, time ranges, collisions and media references. Use apply dryRun against the current revision before committing unfamiliar edits.","coreRevision":"20ecdffc9d770bc280b294ee00414cafe4ce36ed"}),
+    )
+}
+
 fn doctor(backend: &FfmpegBackend) -> Result<Value> {
     let version = crate::process::run(
         Command::new(backend.ffmpeg_path()).arg("-version"),

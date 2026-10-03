@@ -56,6 +56,41 @@ fn height() -> u32 {
 fn size() -> u32 {
     48
 }
+
+/// Preserve every word while fitting the creator caption safe width.
+pub fn wrap_caption(text: &str, width: f64, measure: impl Fn(&str) -> f64) -> Result<String> {
+    let mut lines = Vec::new();
+    for paragraph in text.lines() {
+        let mut line = String::new();
+        for word in paragraph.split_whitespace() {
+            if measure(word) > width {
+                return Err(Error::Invalid(
+                    "caption word exceeds the safe width; reduce fontSize or review the cue".into(),
+                ));
+            }
+            let candidate = if line.is_empty() {
+                word.to_owned()
+            } else {
+                format!("{line} {word}")
+            };
+            if measure(&candidate) > width {
+                lines.push(line);
+                line = word.to_owned();
+            } else {
+                line = candidate;
+            }
+        }
+        if !line.is_empty() {
+            lines.push(line);
+        }
+    }
+    if lines.len() > 3 {
+        return Err(Error::Invalid(
+            "caption exceeds three lines; split the source cue or reduce fontSize".into(),
+        ));
+    }
+    Ok(lines.join("\n"))
+}
 fn id(value: &str) -> Result<()> {
     if value.is_empty()
         || value.len() > 80
@@ -169,9 +204,12 @@ impl Store {
         }
         // Build inside the revision transaction. A retry hashes original intent,
         // so imported transcript updates cannot change a committed request identity.
+        let root = self.root.clone();
         self.change(key,expected,json!({"kind":"compose","compose":compose,"expectedRevision":expected}),dry_run,|project|{
             let font=project.require_asset(&compose.font_asset_id)?;
             if font.kind!=agentcut_core::AssetKind::Font{return Err(Error::Invalid("fontAssetId must name an imported font".into()));}
+            crate::media::verify_asset(&root, font)?;
+            let metrics=agentcut_render::probe::font_metrics(&root.join(&font.uri)).ok_or_else(||Error::Invalid("caption font has no readable width metrics".into()))?;
             let vtrack=format!("{}_video",compose.output_id);let ctrack=format!("{}_captions",compose.output_id);
             let mut ops=vec![json!({"op":"sequence.add","params":{"id":compose.output_id,"name":compose.name,"width":compose.width,"height":compose.height,"frameRate":{"numerator":30,"denominator":1}}}),
                 json!({"op":"track.add","params":{"id":vtrack,"sequence":compose.output_id,"type":"video"}}),
@@ -195,7 +233,9 @@ impl Store {
                         let cue_duration=end.checked_sub(local)?;
                         if cue_duration.is_zero(){continue;}
                         let cue_id=format!("{}_{}_{}",compose.output_id,cut.id,cue.id);
-                        ops.push(json!({"op":"caption.add","params":{"id":cue_id,"track":ctrack,"at":at.checked_add(local)?,"duration":cue_duration,"text":cue.text}}));
+                        let text=wrap_caption(&cue.text,compose.width as f64 * 0.8,|line|metrics.run_width(line,compose.font_size as f64,0.0))?;
+                        if text.lines().count() as f64 * compose.font_size as f64 * 1.2 > compose.height as f64 * 0.3 {return Err(Error::Invalid("caption exceeds the safe height; reduce fontSize".into()));}
+                        ops.push(json!({"op":"caption.add","params":{"id":cue_id,"track":ctrack,"at":at.checked_add(local)?,"duration":cue_duration,"text":text}}));
                         ops.push(json!({"op":"item.set","target":cue_id,"params":{"property":"text.style.fontAssetId","value":compose.font_asset_id}}));
                         ops.push(json!({"op":"item.set","target":cue_id,"params":{"property":"text.style.fontSize","value":compose.font_size}}));
                     }
@@ -206,7 +246,7 @@ impl Store {
             for (n,op) in ops.iter_mut().enumerate(){op["id"]=json!(format!("compose-{n}"));}
             let batch:OperationBatch=serde_json::from_value(json!({"schemaVersion":"1.0.0","projectId":project.project_id,"baseRevision":expected,"idempotencyKey":key,"description":format!("Compose {}",compose.name),"operations":ops}))?;
             let mut next=agentcut_core::apply_batch(project,&batch)?.project;
-            next.extensions.insert(format!("avw.output.{}",compose.output_id),json!({"cuts":compose.cuts,"fontAssetId":compose.font_asset_id,"fontSize":compose.font_size,"captionMapping":"source cue intersections; cut-boundary cues may require review"}));
+            next.extensions.insert(format!("avw.output.{}",compose.output_id),json!({"cuts":compose.cuts,"fontAssetId":compose.font_asset_id,"fontSize":compose.font_size,"captionSafeWidthFraction":0.8,"captionMaxLines":3,"captionMapping":"source cue intersections; cut-boundary cues may require review"}));
             Ok(next)
         })
     }

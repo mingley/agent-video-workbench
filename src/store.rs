@@ -8,6 +8,7 @@ use std::{path::Path, time::Duration};
 
 pub struct Store {
     pub(crate) conn: Connection,
+    pub(crate) root: std::path::PathBuf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -29,7 +30,10 @@ impl Store {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "FULL")?;
-        Ok(Self { conn })
+        Ok(Self {
+            conn,
+            root: path.canonicalize()?,
+        })
     }
 
     pub fn create(path: &Path, name: &str) -> Result<Self> {
