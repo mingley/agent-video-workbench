@@ -6,6 +6,7 @@ pub mod inspect;
 pub mod interchange;
 pub mod jobs;
 pub mod json;
+pub mod library;
 pub mod mcp;
 pub mod media;
 pub mod policy;
@@ -14,6 +15,7 @@ pub mod service;
 pub mod storage;
 pub mod store;
 pub mod studio;
+pub mod transfer;
 pub mod workflow;
 
 use thiserror::Error;

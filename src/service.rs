@@ -201,6 +201,30 @@ pub enum Request {
         project: PathBuf,
         destination: PathBuf,
     },
+    LibraryExport {
+        project: PathBuf,
+        destination: PathBuf,
+    },
+    LibraryImport {
+        project: PathBuf,
+        source: PathBuf,
+        prefix: String,
+        expected_revision: u64,
+        key: String,
+        #[serde(default)]
+        dry_run: bool,
+    },
+    ImportUrl {
+        project: PathBuf,
+        url: String,
+        id: String,
+        expected_revision: u64,
+        key: String,
+        #[serde(default)]
+        sha256: Option<String>,
+        #[serde(default = "download_bytes")]
+        max_bytes: u64,
+    },
     InterchangeExport {
         project: PathBuf,
         sequence: String,
@@ -278,6 +302,9 @@ pub enum Request {
         capability: String,
     },
 }
+fn download_bytes() -> u64 {
+    8 * 1024 * 1024 * 1024
+}
 fn yes() -> bool {
     true
 }
@@ -295,6 +322,7 @@ pub struct Service {
     pub backend: FfmpegBackend,
     pub executable: PathBuf,
     pub asr: Option<crate::asr::Config>,
+    pub downloads: crate::transfer::Policy,
 }
 impl Service {
     fn path(&self, path: &Path) -> Result<PathBuf> {
@@ -333,6 +361,47 @@ impl Service {
     }
     pub fn execute(&self, request: Request) -> Result<Value> {
         match request {
+            Request::LibraryExport {
+                project,
+                destination,
+            } => crate::library::export(&self.path(&project)?, &self.path(&destination)?),
+            Request::LibraryImport {
+                project,
+                source,
+                prefix,
+                expected_revision,
+                key,
+                dry_run,
+            } => Ok(serde_json::to_value(
+                Store::open(&self.path(&project)?)?.library_import(
+                    &self.path(&source)?,
+                    &prefix,
+                    expected_revision,
+                    &key,
+                    dry_run,
+                )?,
+            )?),
+            Request::ImportUrl {
+                project,
+                url,
+                id,
+                expected_revision,
+                key,
+                sha256,
+                max_bytes,
+            } => crate::transfer::import(
+                &self.path(&project)?,
+                crate::transfer::Input {
+                    url: &url,
+                    id: &id,
+                    expected: expected_revision,
+                    key: &key,
+                    sha256: sha256.as_deref(),
+                    max_bytes,
+                },
+                &self.downloads,
+                &self.backend,
+            ),
             Request::InterchangeExport { project, sequence } => crate::interchange::export(
                 &Store::open(&self.path(&project)?)?.project()?,
                 &sequence,
@@ -430,7 +499,7 @@ impl Service {
             ),
             Request::Schema {} => Ok(serde_json::to_value(schemars::schema_for!(Request))?),
             Request::Capabilities {} => Ok(
-                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"SDR H.264/AAC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"PQ/HLG tone mapped per source to Rec.709; Dolby Vision compatible profile 8 base layer only","asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
+                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"SDR H.264/AAC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"PQ/HLG tone mapped per source to Rec.709; Dolby Vision compatible profile 8 base layer only","asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
             ),
             Request::AgentGuide {} => Ok(json!({"guide":include_str!("../AGENT_GUIDE.md")})),
             Request::Doctor {} => doctor(&self.backend),

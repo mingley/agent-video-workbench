@@ -72,6 +72,18 @@ pub fn run(command: &mut Command, timeout: Duration, control: &mut dyn Control) 
     // The parent check closes the race where the worker died before prctl ran.
     unsafe {
         command.pre_exec(move || {
+            nix::sys::resource::setrlimit(
+                nix::sys::resource::Resource::RLIMIT_AS,
+                4 * 1024 * 1024 * 1024,
+                4 * 1024 * 1024 * 1024,
+            )
+            .map_err(std::io::Error::from)?;
+            nix::sys::resource::setrlimit(
+                nix::sys::resource::Resource::RLIMIT_FSIZE,
+                32 * 1024 * 1024 * 1024,
+                32 * 1024 * 1024 * 1024,
+            )
+            .map_err(std::io::Error::from)?;
             nix::sys::prctl::set_pdeathsig(Some(Signal::SIGKILL)).map_err(std::io::Error::from)?;
             if getppid() != owner {
                 return Err(std::io::Error::other("execution owner exited"));

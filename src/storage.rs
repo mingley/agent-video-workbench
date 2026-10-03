@@ -140,6 +140,15 @@ pub fn gc(root: &Path, grace_seconds: u64, dry_run: bool) -> Result<Value> {
     ingest
         .try_lock()
         .map_err(|_| Error::Invalid("active import prevents collection".into()))?;
+    let transfer_lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(root.join("transfer.lock"))?;
+    transfer_lock
+        .try_lock()
+        .map_err(|_| Error::Invalid("active transfer prevents collection".into()))?;
     let analysis_lock = OpenOptions::new()
         .create(true)
         .truncate(false)

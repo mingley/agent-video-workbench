@@ -22,6 +22,7 @@ fn scoped_service_rejects_escape_and_produces_equivalent_mcp_and_cli_errors() {
         backend: media::backend("ffmpeg".into(), "ffprobe".into()),
         executable: "avw".into(),
         asr: None,
+        downloads: Default::default(),
     };
     assert!(
         !envelope(service.execute(Request::Create {
@@ -58,6 +59,7 @@ fn every_advertised_edit_has_actionable_discovery() {
         backend: media::backend("ffmpeg".into(), "ffprobe".into()),
         executable: "avw".into(),
         asr: None,
+        downloads: Default::default(),
     };
     let capabilities = service.execute(Request::Capabilities {}).unwrap();
     for operation in capabilities["editOperations"].as_array().unwrap() {

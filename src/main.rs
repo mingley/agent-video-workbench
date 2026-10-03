@@ -28,6 +28,10 @@ struct Cli {
     whisper_model_sha256: Option<String>,
     #[arg(long, global = true, default_value = "en")]
     whisper_language: String,
+    #[arg(long, global = true)]
+    download_host: Vec<String>,
+    #[arg(long, global = true)]
+    download_loopback_http: bool,
     #[command(subcommand)]
     command: Action,
 }
@@ -304,6 +308,10 @@ fn execute(cli: Cli) -> Result<Value> {
         backend: agent_video_workbench::media::backend(cli.ffmpeg.clone(), cli.ffprobe.clone()),
         executable: std::env::current_exe()?,
         asr,
+        downloads: agent_video_workbench::transfer::Policy {
+            hosts: cli.download_host.clone(),
+            allow_loopback_http: cli.download_loopback_http,
+        },
     };
     let request = match cli.command {
         Action::Worker {
@@ -417,6 +425,10 @@ fn main() {
                 ),
                 executable: std::env::current_exe()?,
                 asr,
+                downloads: agent_video_workbench::transfer::Policy {
+                    hosts: cli.download_host.clone(),
+                    allow_loopback_http: cli.download_loopback_http,
+                },
             };
             agent_video_workbench::mcp::serve(
                 &service,

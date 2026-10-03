@@ -92,7 +92,7 @@ omissions with selective ripple restoration, visual-only B-roll replacement,
 transcript corrections retained across reanalysis, artifact-anchored review and
 source-based remapping. Raw edit discovery includes trim/split, effects, buses,
 keyframes and transitions. Audio profiles use measured two-pass loudness and
-peak QC. Sidechain ducking is implemented; its separate audible test is pending.
+peak QC. Sidechain ducking passes a separate frequency/amplitude test: music attenuates during speech, stays present in silence, dialogue amplitude remains stable, and undo restores the unprocessed mix.
 Every render includes SRT/VTT, a cover, aspect-preserving contact sheet and hashes.
 Batch enqueue freezes all outputs atomically; independent jobs can be packaged
 into a static local review bundle. Catalog, conservative cache collection,
@@ -105,3 +105,20 @@ across B-roll replacement, measured loudness, vertical/square/Spanish-caption
 landscape frozen exports, package hashes, backup restore, relinking and catalog.
 The existing remaining-scope table above describes the prior 0.2 release and
 will be replaced by the final qualification matrix after the integration checks.
+
+
+## October 3: Transfer and reusable libraries
+
+`import-url` scopes HTTPS hosts and every redirect to operator configuration,
+checks remote byte/space limits, resumes against a strong unchanged ETag, restarts
+changed identities, and verifies an optional supplied SHA-256 before managed
+import. URLs/credentials do not enter SQLite or portable history. Interrupted
+partials are retained for retry. Loopback HTTP is an explicit development-only
+flag used by the local transfer fixture. `evaluation/transfer_smoke.py` passes
+interrupted resume, changed validator, checksum failure, redirect/host scope and
+URL exclusion. Profile/template libraries export font objects and validated
+settings without footage; another project can import them with independent IDs.
+The creator fixture also passes reusable library import and OTIO cut roundtrip.
+Native Linux aarch64 qualification has been added to CI alongside x86_64; its
+successful execution must be observed before publishing a supported ARM release.
+Child media processes now have 4-GiB address-space and 32-GiB file-size limits.

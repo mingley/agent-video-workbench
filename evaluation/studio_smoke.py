@@ -133,6 +133,17 @@ def main():
         folder = root / 'delivery' / item['jobId']
         for file in item['files']:
             assert hashlib.sha256((folder / file['path']).read_bytes()).hexdigest() == file['sha256']
+    library = call('library-export', project=str(project), destination=str(root / 'library'))
+    assert not library['privateFootageIncluded']
+    new_project = root / 'new_project'
+    call('create', project=str(new_project), name='Reused brand')
+    call('library-import', project=str(new_project), source=str(root / 'library'), prefix='usual',
+         expectedRevision=0, key='import-brand-library')
+    assert call('studio-state', project=str(new_project))['decisions']['avw.profile.usual_brand.1']['fontAssetId']
+    otio = call('interchange-export', project=str(project), sequence='creator')
+    assert otio['lossReport'], 'Caption/effect loss must be reported'
+    call('interchange-import', project=str(project), document=otio['document'], id='roundtrip',
+         expectedRevision=state()['revision'], key='import-otio-roundtrip')
     call('backup', project=str(project), destination=str(root / 'backup'))
     call('backup-restore', source=str(root / 'backup'), destination=str(root / 'restored'))
     assert call('verify-project', project=str(root / 'restored'))['complete']
@@ -148,7 +159,7 @@ def main():
         'review source remap', 'B-roll preserves dialogue samples', 'measured loudness',
         'versioned profile/template', 'frozen batch in three formats with Spanish captions',
         'sidecars/covers/hash-verified review package', 'verified backup restore and relink',
-        'catalog and safe cache planning']}, indent=2))
+        'catalog and safe cache planning', 'portable reusable font/profile library', 'OTIO supported cut roundtrip with loss report']}, indent=2))
     print('Creator workflow passed:', root / 'summary.json')
 
 
