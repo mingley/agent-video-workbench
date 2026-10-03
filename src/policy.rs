@@ -73,8 +73,12 @@ pub fn validate(current: &Project, next: &Project) -> Result<()> {
         }
         let sequence = next.require_sequence(&range.sequence_id)?;
         let mut intervals = Vec::new();
+        let solo = sequence
+            .tracks
+            .iter()
+            .any(|t| t.enabled && t.track_type == TrackType::Video && t.solo);
         for track in &sequence.tracks {
-            if !track.enabled || track.track_type != TrackType::Video {
+            if !track.enabled || track.track_type != TrackType::Video || (solo && !track.solo) {
                 continue;
             }
             for item in &track.items {
@@ -84,6 +88,7 @@ pub fn validate(current: &Project, next: &Project) -> Result<()> {
                 if let ItemPayload::Clip(clip) = &item.payload
                     && clip.asset_id == range.asset_id
                     && clip.opacity > 0.0
+                    && clip.video.speed.is_normal()
                 {
                     let start = clip.source_range.start;
                     let end = clip.source_range.end_exclusive()?;
@@ -113,5 +118,18 @@ pub fn validate(current: &Project, next: &Project) -> Result<()> {
             )));
         }
     }
+    Ok(())
+}
+
+pub fn remove(project: &mut Project, id: &str) -> Result<()> {
+    let mut list = ranges(project)?;
+    let previous = list.len();
+    list.retain(|r| r.id != id);
+    if list.len() == previous {
+        return Err(Error::Invalid("protected range ID does not exist".into()));
+    }
+    project
+        .extensions
+        .insert(KEY.into(), serde_json::to_value(list)?);
     Ok(())
 }

@@ -20,6 +20,12 @@ struct Cli {
     ffprobe: PathBuf,
     #[arg(long, global = true)]
     workspace: Option<PathBuf>,
+    #[arg(long, global=true, requires_all=["whisper_model","whisper_model_sha256"])]
+    whisper: Option<PathBuf>,
+    #[arg(long, global = true, requires = "whisper")]
+    whisper_model: Option<PathBuf>,
+    #[arg(long, global = true, requires = "whisper")]
+    whisper_model_sha256: Option<String>,
     #[command(subcommand)]
     command: Action,
 }
@@ -58,6 +64,17 @@ enum Action {
         key: String,
         #[arg(long)]
         dry_run: bool,
+    },
+    TranscribeStart {
+        project: PathBuf,
+        #[arg(long)]
+        asset_id: String,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        no_launch: bool,
     },
     TranscriptImport {
         project: PathBuf,
@@ -128,12 +145,23 @@ enum Action {
         #[arg(long)]
         no_launch: bool,
     },
+    Imports {
+        project: PathBuf,
+    },
     Jobs {
         project: PathBuf,
     },
     Backup {
         project: PathBuf,
         destination: PathBuf,
+    },
+    Unprotect {
+        project: PathBuf,
+        id: String,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
     },
     Protect {
         project: PathBuf,
@@ -200,10 +228,12 @@ enum Action {
 }
 
 fn execute(cli: Cli) -> Result<Value> {
+    let asr = asr_config(&cli)?;
     let service = Service {
         root: cli.workspace,
-        backend: agent_video_workbench::media::backend(cli.ffmpeg, cli.ffprobe),
+        backend: agent_video_workbench::media::backend(cli.ffmpeg.clone(), cli.ffprobe.clone()),
         executable: std::env::current_exe()?,
+        asr,
     };
     let request = match cli.command {
         Action::Worker {
@@ -295,10 +325,15 @@ fn main() {
     if let Action::Mcp { root } = &cli.command {
         let result = (|| {
             std::fs::create_dir_all(root)?;
+            let asr = asr_config(&cli)?;
             let service = Service {
                 root: Some(root.canonicalize()?),
-                backend: agent_video_workbench::media::backend(cli.ffmpeg, cli.ffprobe),
+                backend: agent_video_workbench::media::backend(
+                    cli.ffmpeg.clone(),
+                    cli.ffprobe.clone(),
+                ),
                 executable: std::env::current_exe()?,
+                asr,
             };
             agent_video_workbench::mcp::serve(
                 &service,
@@ -317,4 +352,25 @@ fn main() {
     if result["ok"] == false {
         std::process::exit(1);
     }
+}
+
+fn asr_config(cli: &Cli) -> Result<Option<agent_video_workbench::asr::Config>> {
+    let Some(program) = &cli.whisper else {
+        return Ok(None);
+    };
+    let model = cli
+        .whisper_model
+        .as_ref()
+        .ok_or_else(|| agent_video_workbench::Error::Invalid("ASR model path missing".into()))?;
+    let hash = cli
+        .whisper_model_sha256
+        .clone()
+        .ok_or_else(|| agent_video_workbench::Error::Invalid("ASR model hash missing".into()))?;
+    Ok(Some(agent_video_workbench::asr::Config {
+        program: program.canonicalize()?,
+        program_sha256: agent_video_workbench::media::hash_file(program)?,
+        model: model.canonicalize()?,
+        model_sha256: hash,
+        language: "en".into(),
+    }))
 }

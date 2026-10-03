@@ -62,10 +62,39 @@ fn exact_cross_rate_union_accepts_reordering_but_rejects_source_gap() {
         clip.source_range.duration = time(14, 30);
     }
     assert!(policy::validate(&p, &reordered).is_err());
+    let mut frozen = p.clone();
+    if let ItemPayload::Clip(clip) = &mut frozen.sequences[0].tracks[0].items[0].payload {
+        clip.video.speed.mode = agentcut_core::SpeedMode::Freeze;
+    }
+    assert!(policy::validate(&p, &frozen).is_err());
     let mut removed = p.clone();
     removed.extensions.clear();
     assert!(policy::validate(&p, &removed).is_err());
     let mut muted = p.clone();
     muted.sequences[0].tracks[0].enabled = false;
     assert!(policy::validate(&p, &muted).is_err());
+}
+
+#[test]
+fn protection_removal_is_explicit_and_revalidates_remaining_ranges() {
+    let mut project = fixture();
+    for id in ["demo", "keep"] {
+        policy::add(
+            &mut project,
+            ProtectedRange {
+                id: id.into(),
+                asset_id: "source".into(),
+                sequence_id: "seq_main".into(),
+                start: time(30, 30),
+                end: time(60, 30),
+            },
+        )
+        .unwrap();
+    }
+    let before = project.clone();
+    policy::remove(&mut project, "demo").unwrap();
+    assert!(policy::validate(&before, &project).is_err());
+    policy::validate(&project, &project).unwrap();
+    assert_eq!(policy::ranges(&project).unwrap()[0].id, "keep");
+    assert!(policy::remove(&mut project, "missing").is_err());
 }

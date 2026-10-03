@@ -17,10 +17,19 @@ use std::{
 };
 
 pub fn hash_file(path: &Path) -> Result<String> {
+    hash_file_controlled(path, &mut crate::process::Uncontrolled)
+}
+
+pub fn hash_file_controlled(
+    path: &Path,
+    control: &mut dyn crate::process::Control,
+) -> Result<String> {
+    control.check()?;
     let mut file = File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buffer = [0_u8; 65536];
     loop {
+        control.check()?;
         let count = file.read(&mut buffer)?;
         if count == 0 {
             break;
@@ -39,17 +48,50 @@ pub fn import(
     key: &str,
     backend: &FfmpegBackend,
 ) -> Result<Outcome> {
+    let lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(root.join("import.lock"))?;
+    lock.try_lock().map_err(|_| {
+        Error::Invalid("another import owns this project; retry after it finishes".into())
+    })?;
     let mut store = Store::open(root)?;
+    store.recover_imports(root)?;
+    let source_metadata = std::fs::metadata(source)?;
+    if !source_metadata.is_file() {
+        return Err(Error::Invalid(
+            "import source must be a regular file".into(),
+        ));
+    }
+    if source_metadata.len() > crate::jobs::free_space(root)?.saturating_sub(128 * 1024 * 1024) {
+        return Err(Error::Invalid(
+            "insufficient space to stage the original".into(),
+        ));
+    }
     let mut input = File::open(source)?;
+    let import_id = uuid::Uuid::new_v4().to_string();
     let staged = root.join("cache").join(format!(
         "import-{}.{}",
-        uuid::Uuid::new_v4(),
+        import_id,
         source
             .extension()
             .and_then(|s| s.to_str())
             .filter(|s| s.len() <= 12 && s.chars().all(|c| c.is_ascii_alphanumeric()))
             .unwrap_or("media")
     ));
+    store.begin_import(
+        &import_id,
+        id,
+        &format!(
+            "cache/{}",
+            staged
+                .file_name()
+                .ok_or_else(|| Error::Invalid("staging filename missing".into()))?
+                .to_string_lossy()
+        ),
+    )?;
     let result = (|| {
         let mut output = OpenOptions::new()
             .write(true)
@@ -57,6 +99,7 @@ pub fn import(
             .open(&staged)?;
         std::io::copy(&mut input, &mut output)?;
         output.sync_all()?;
+        store.import_state(&import_id, "verifying", None)?;
         let mut fp = fingerprint(&staged, FingerprintStrategy::Sha256)?;
         fp.modified_unix_ns = None;
         let hash = fp
@@ -65,15 +108,6 @@ pub fn import(
             .ok_or_else(|| Error::Invalid("missing content hash".into()))?;
         let relative = format!("originals/{hash}");
         let destination = root.join(&relative);
-        if destination.exists() {
-            if hash_file(&destination)? != *hash {
-                return Err(Error::Invalid("existing original is corrupt".into()));
-            }
-        } else {
-            // hard_link atomically publishes without replacing an existing original.
-            std::fs::hard_link(&staged, &destination)?;
-            File::open(root.join("originals"))?.sync_all()?;
-        }
         let metadata = if matches!(
             staged.extension().and_then(|v| v.to_str()),
             Some("ttf" | "otf" | "ttc" | "otc" | "cube" | "3dl")
@@ -99,7 +133,32 @@ pub fn import(
                 std::time::Duration::from_secs(60),
                 &mut crate::process::Uncontrolled,
             )?;
-            agentcut_render::probe::normalize_probe_json(&serde_json::from_slice(&result.stdout)?)?
+            {
+                let raw: Value = serde_json::from_slice(&result.stdout)?;
+                if let Some(streams) = raw["streams"].as_array() {
+                    for stream in streams {
+                        if let Some(side) = stream["side_data_list"].as_array()
+                            && side.iter().any(|v| {
+                                v["side_data_type"]
+                                    .as_str()
+                                    .is_some_and(|s| s.to_ascii_lowercase().contains("dovi"))
+                            })
+                        {
+                            return Err(Error::Invalid(
+                                "Dolby Vision ingest is unsupported".into(),
+                            ));
+                        }
+                        if let Some(start) = stream["start_time"]
+                            .as_str()
+                            .and_then(|s| s.parse::<f64>().ok())
+                            && start.abs() > 0.001
+                        {
+                            return Err(Error::Invalid("nonzero stream start is not qualified; normalize an SDR working derivative explicitly".into()));
+                        }
+                    }
+                }
+                agentcut_render::probe::normalize_probe_json(&raw)?
+            }
         };
         if let Some(video) = &metadata.video
             && (matches!(
@@ -114,6 +173,16 @@ pub fn import(
                 "HDR ingest is unsupported; supply an explicitly tone-mapped SDR derivative".into(),
             ));
         }
+        if destination.exists() {
+            if hash_file(&destination)? != *hash {
+                return Err(Error::Invalid("existing original is corrupt".into()));
+            }
+        } else {
+            // hard_link atomically publishes without replacing an existing original.
+            std::fs::hard_link(&staged, &destination)?;
+            File::open(root.join("originals"))?.sync_all()?;
+        }
+        store.import_state(&import_id, "ready", None)?;
         let project = store.project()?;
         let batch: OperationBatch = serde_json::from_value(json!({
             "schemaVersion":"1.0.0", "projectId":project.project_id,"baseRevision":expected,"idempotencyKey":key,
@@ -122,6 +191,15 @@ pub fn import(
         store.apply(&batch, false)
     })();
     let _ = std::fs::remove_file(&staged);
+    store.import_state(
+        &import_id,
+        if result.is_ok() {
+            "committed"
+        } else {
+            "failed"
+        },
+        result.as_ref().err().map(ToString::to_string),
+    )?;
     result
 }
 
@@ -133,6 +211,14 @@ pub fn verify_assets(root: &Path, project: &Project) -> Result<()> {
 }
 
 pub fn verify_asset(root: &Path, asset: &agentcut_core::Asset) -> Result<()> {
+    verify_asset_controlled(root, asset, &mut crate::process::Uncontrolled)
+}
+
+pub(crate) fn verify_asset_controlled(
+    root: &Path,
+    asset: &agentcut_core::Asset,
+    control: &mut dyn crate::process::Control,
+) -> Result<()> {
     let expected = asset
         .fingerprint
         .sha256
@@ -142,9 +228,9 @@ pub fn verify_asset(root: &Path, asset: &agentcut_core::Asset) -> Result<()> {
         return Err(Error::Invalid("invalid asset content identity".into()));
     }
     let target = root.join(&asset.uri);
-    if std::fs::symlink_metadata(&target)?.file_type().is_symlink() {
+    if !std::fs::symlink_metadata(&target)?.file_type().is_file() {
         return Err(Error::Invalid(
-            "managed originals cannot be symbolic links".into(),
+            "managed originals must be regular files".into(),
         ));
     }
     if asset.uri != format!("originals/{expected}") {
@@ -153,7 +239,7 @@ pub fn verify_asset(root: &Path, asset: &agentcut_core::Asset) -> Result<()> {
             asset.id
         )));
     }
-    if hash_file(&root.join(&asset.uri))? != expected {
+    if hash_file_controlled(&root.join(&asset.uri), control)? != expected {
         return Err(Error::Invalid(format!("asset {} bytes changed", asset.id)));
     }
     Ok(())
@@ -198,12 +284,15 @@ pub(crate) fn render_attempt(
     control: &mut dyn crate::process::Control,
 ) -> Result<Value> {
     control.check()?;
-    verify_assets(root, project)?;
+    for asset in &project.assets {
+        verify_asset_controlled(root, asset, control)?;
+    }
     let directory = root.join("renders").join(id);
     std::fs::create_dir(&directory)?;
     let staged = directory.join("unverified.mp4");
     let preset = agentcut_render::preset::require("h264-mp4")?;
-    let normalized = agentcut_core::normalize::normalize_sequence(project, sequence)?;
+    let (prepared, seeks) = seek_project(project, sequence)?;
+    let normalized = agentcut_core::normalize::normalize_sequence(&prepared, sequence)?;
     let ir = agentcut_render::ir::build(project, &normalized, root, preset, &staged, None, false)?;
     let info = crate::process::run(
         Command::new(backend.ffmpeg_path()).arg("-version"),
@@ -237,8 +326,20 @@ pub(crate) fn render_attempt(
         "-filter_complex_threads".into(),
         "2".into(),
     ];
-    for arg in &plan.args {
+    for (index, arg) in plan.args.iter().enumerate() {
         if arg == "-i" {
+            let path = plan
+                .args
+                .get(index + 1)
+                .ok_or_else(|| Error::Invalid("input path missing".into()))?;
+            if let Some(input) = plan
+                .inputs
+                .iter()
+                .find(|input| input.path.to_string_lossy() == *path)
+                && let Some(seconds) = seeks.get(&input.asset_id)
+            {
+                args.extend(["-ss".into(), seconds.to_string()]);
+            }
             args.push("-noautorotate".into());
         }
         args.push(arg.clone());
@@ -269,7 +370,7 @@ pub(crate) fn render_attempt(
     plan.plan_hash = format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(
-            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":1})
+            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":2,"inputSeeksSeconds":seeks})
         )?)
     );
     std::fs::write(
@@ -307,7 +408,7 @@ pub(crate) fn render_attempt(
     )?;
     let final_path = directory.join("video.mp4");
     let sheet = contact_sheet(&staged, &directory, backend, plan.frame_count, control)?;
-    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":project});
+    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":project,"inputSeeksSeconds":seeks});
     let mut manifest_file = File::create(directory.join("manifest.json"))?;
     manifest_file.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
     manifest_file.sync_all()?;
@@ -409,7 +510,9 @@ fn verify(
             ));
         }
     }
-    Ok(json!({"decoded":true,"expectedFrames":frames,"sha256":hash_file(path)?,"probe":metadata}))
+    Ok(
+        json!({"decoded":true,"expectedFrames":frames,"sha256":hash_file_controlled(path, control)?,"probe":metadata}),
+    )
 }
 
 pub fn backend(ffmpeg: PathBuf, ffprobe: PathBuf) -> FfmpegBackend {
@@ -479,4 +582,70 @@ pub fn backup(root: &Path, destination: &Path) -> Result<Value> {
     Ok(
         json!({"path":destination,"originalCount":hashes.len(),"revision":copied.project()?.revision,"derivedArtifactsIncluded":false}),
     )
+}
+
+fn seek_project(
+    project: &Project,
+    sequence: &str,
+) -> Result<(Project, std::collections::BTreeMap<String, i64>)> {
+    use agentcut_core::{AssetKind, ItemPayload, RationalRate, RationalTime};
+    let seq = project.require_sequence(sequence)?;
+    if seq
+        .tracks
+        .iter()
+        .flat_map(|t| &t.items)
+        .any(|item| matches!(item.payload, ItemPayload::Sequence(_)))
+    {
+        return Ok((project.clone(), std::collections::BTreeMap::new()));
+    }
+    let mut starts = std::collections::BTreeMap::new();
+    let mut disabled = std::collections::BTreeSet::new();
+    for item in seq.tracks.iter().flat_map(|t| &t.items) {
+        if let ItemPayload::Clip(clip) = &item.payload {
+            if !clip.video.speed.is_normal() {
+                disabled.insert(clip.asset_id.clone());
+            }
+            if matches!(
+                project.require_asset(&clip.asset_id)?.kind,
+                AssetKind::Video | AssetKind::Audio
+            ) {
+                let entry = starts
+                    .entry(clip.asset_id.clone())
+                    .or_insert(clip.source_range.start);
+                if clip.source_range.start.checked_cmp(*entry)?.is_lt() {
+                    *entry = clip.source_range.start;
+                }
+            }
+        }
+    }
+    let seeks: std::collections::BTreeMap<_, _> = starts
+        .into_iter()
+        .filter(|(id, _)| !disabled.contains(id))
+        .filter_map(|(id, time)| {
+            let seconds = time.as_seconds();
+            let whole = seconds.numerator / seconds.denominator;
+            i64::try_from(whole)
+                .ok()
+                .filter(|s| *s > 0)
+                .map(|s| (id, s))
+        })
+        .collect();
+    let mut prepared = project.clone();
+    let seq = prepared
+        .sequence_mut(sequence)
+        .ok_or_else(|| Error::Invalid("sequence missing".into()))?;
+    for item in seq.tracks.iter_mut().flat_map(|t| &mut t.items) {
+        if let ItemPayload::Clip(clip) = &mut item.payload
+            && let Some(&seconds) = seeks.get(&clip.asset_id)
+        {
+            clip.source_range.start = clip.source_range.start.checked_sub(RationalTime::new(
+                seconds,
+                RationalRate {
+                    numerator: 1,
+                    denominator: 1,
+                },
+            ))?;
+        }
+    }
+    Ok((prepared, seeks))
 }

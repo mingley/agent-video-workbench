@@ -51,7 +51,8 @@ impl Store {
              ALTER TABLE jobs ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0;
              ALTER TABLE jobs ADD COLUMN updated INTEGER NOT NULL DEFAULT 0;
              CREATE TABLE job_requests(key TEXT PRIMARY KEY, hash TEXT NOT NULL, job_id TEXT NOT NULL REFERENCES jobs(id));
-             PRAGMA user_version=3;",
+             CREATE TABLE imports(id TEXT PRIMARY KEY,asset_id TEXT NOT NULL,staged TEXT NOT NULL,state TEXT NOT NULL,error TEXT);
+             PRAGMA user_version=4;",
         )?;
         let project = Project::new(
             "",
@@ -90,7 +91,7 @@ impl Store {
         let version: u32 = store
             .conn
             .pragma_query_value(None, "user_version", |row| row.get(0))?;
-        if version == 1 || version == 2 {
+        if (1..=3).contains(&version) {
             let backup = path.join(format!("schema{version}-{}.sqlite", uuid::Uuid::new_v4()));
             store.backup(&backup)?;
             let tx = store
@@ -108,11 +109,14 @@ impl Store {
                     ALTER TABLE jobs ADD COLUMN updated INTEGER NOT NULL DEFAULT 0;
                     CREATE TABLE job_requests(key TEXT PRIMARY KEY,hash TEXT NOT NULL,job_id TEXT NOT NULL REFERENCES jobs(id));
                     PRAGMA user_version=3;")?;
-            } else if actual != 3 {
+            } else if actual != 3 && actual != 4 {
                 return Err(Error::Invalid(format!("unsupported store schema {actual}")));
             }
+            if actual <= 3 {
+                tx.execute_batch("CREATE TABLE imports(id TEXT PRIMARY KEY,asset_id TEXT NOT NULL,staged TEXT NOT NULL,state TEXT NOT NULL,error TEXT); PRAGMA user_version=4;")?;
+            }
             tx.commit()?;
-        } else if version != 3 {
+        } else if version != 4 {
             return Err(Error::Invalid(format!(
                 "unsupported store schema {version}"
             )));
@@ -184,6 +188,20 @@ impl Store {
         })
     }
 
+    pub fn unprotect(&mut self, id: &str, expected: u64, key: &str) -> Result<Outcome> {
+        self.change(
+            key,
+            expected,
+            json!({"kind":"protection.remove","id":id,"expectedRevision":expected}),
+            false,
+            |current| {
+                let mut next = current.clone();
+                crate::policy::remove(&mut next, id)?;
+                Ok(next)
+            },
+        )
+    }
+
     pub fn restore(&mut self, revision: u64, expected: u64, key: &str) -> Result<Outcome> {
         let target = self.revision(revision)?;
         self.change(
@@ -244,7 +262,11 @@ impl Store {
             });
         }
         let mut next = change(&current)?;
-        crate::policy::validate(&current, &next)?;
+        if request["kind"] == "protection.remove" {
+            crate::policy::validate(&next, &next)?;
+        } else {
+            crate::policy::validate(&current, &next)?;
+        }
         next.revision = current
             .revision
             .checked_add(1)
@@ -337,6 +359,54 @@ impl Store {
             Ok(json!({"id":id,"revision":revision,"state":state,"result":result,"error":error}))
         })
         .collect()
+    }
+
+    pub(crate) fn begin_import(&self, id: &str, asset: &str, staged: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO imports VALUES(?1,?2,?3,'copying',NULL)",
+            params![id, asset, staged],
+        )?;
+        Ok(())
+    }
+    pub(crate) fn import_state(&self, id: &str, state: &str, error: Option<String>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE imports SET state=?1,error=?2 WHERE id=?3",
+            params![state, error, id],
+        )?;
+        Ok(())
+    }
+    pub(crate) fn recover_imports(&self, root: &Path) -> Result<()> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id,staged FROM imports WHERE state IN ('copying','verifying','ready')",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        for row in rows {
+            let (id, staged) = row?;
+            let path = Path::new(&staged);
+            if path.parent() != Some(Path::new("cache"))
+                || !path.file_name().is_some_and(|name| {
+                    name.to_string_lossy().starts_with(&format!("import-{id}."))
+                })
+            {
+                return Err(Error::Invalid(
+                    "invalid staged import path in database".into(),
+                ));
+            }
+            match std::fs::remove_file(root.join(path)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+            self.import_state(&id,"interrupted",Some("Import owner exited; original/head were preserved. Retry with the same request key.".into()))?;
+        }
+        Ok(())
+    }
+    pub fn imports(&self) -> Result<Vec<Value>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id,asset_id,state,error FROM imports ORDER BY rowid DESC LIMIT 100")?;
+        let rows=stmt.query_map([],|r|Ok(json!({"id":r.get::<_,String>(0)?,"assetId":r.get::<_,String>(1)?,"state":r.get::<_,String>(2)?,"error":r.get::<_,Option<String>>(3)?})))?;
+        rows.map(|r| r.map_err(Error::from)).collect()
     }
 
     pub fn request_outcome(&self, key: &str) -> Result<Option<Outcome>> {

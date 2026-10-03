@@ -83,6 +83,12 @@ pub enum Request {
         expected_revision: u64,
         key: String,
     },
+    Unprotect {
+        project: PathBuf,
+        id: String,
+        expected_revision: u64,
+        key: String,
+    },
     Protect {
         project: PathBuf,
         range: Value,
@@ -96,6 +102,14 @@ pub enum Request {
         key: String,
         #[serde(default)]
         dry_run: bool,
+    },
+    TranscribeStart {
+        project: PathBuf,
+        asset_id: String,
+        expected_revision: u64,
+        key: String,
+        #[serde(default)]
+        no_launch: bool,
     },
     TranscriptImport {
         project: PathBuf,
@@ -136,6 +150,9 @@ pub enum Request {
         key: String,
         #[serde(default)]
         no_launch: bool,
+    },
+    Imports {
+        project: PathBuf,
     },
     Jobs {
         project: PathBuf,
@@ -181,6 +198,7 @@ pub struct Service {
     pub root: Option<PathBuf>,
     pub backend: FfmpegBackend,
     pub executable: PathBuf,
+    pub asr: Option<crate::asr::Config>,
 }
 impl Service {
     fn path(&self, path: &Path) -> Result<PathBuf> {
@@ -221,7 +239,7 @@ impl Service {
         match request {
             Request::Schema {} => Ok(serde_json::to_value(schemars::schema_for!(Request))?),
             Request::Capabilities {} => Ok(
-                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["resume","import","transcript-import","transcript-search","compose","apply","restore","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"SDR H.264/AAC","source":"local SDR video/audio/image/font","hdr":"rejected","asr":"imported transcript; local provider adapter is separate"},"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
+                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"SDR H.264/AAC","source":"local SDR video/audio/image/font","hdr":"rejected","asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
             ),
             Request::AgentGuide {} => Ok(json!({"guide":include_str!("../AGENT_GUIDE.md")})),
             Request::Doctor {} => doctor(&self.backend),
@@ -322,6 +340,14 @@ impl Service {
             } => Ok(serde_json::to_value(
                 Store::open(&self.path(&project)?)?.restore(revision, expected_revision, &key)?,
             )?),
+            Request::Unprotect {
+                project,
+                id,
+                expected_revision,
+                key,
+            } => Ok(serde_json::to_value(
+                Store::open(&self.path(&project)?)?.unprotect(&id, expected_revision, &key)?,
+            )?),
             Request::Protect {
                 project,
                 range,
@@ -348,6 +374,32 @@ impl Service {
                     dry_run,
                 )?,
             )?),
+            Request::TranscribeStart {
+                project,
+                asset_id,
+                expected_revision,
+                key,
+                no_launch,
+            } => {
+                let config=self.asr.clone().ok_or_else(||Error::Invalid("local ASR is not configured; launch with --whisper, --whisper-model and --whisper-model-sha256, or import a reviewed transcript".into()))?;
+                let root = self.path(&project)?;
+                let mut store = Store::open(&root)?;
+                store.project()?.require_asset(&asset_id)?;
+                let job = store.enqueue(
+                    &key,
+                    &jobs::RenderInput {
+                        sequence: "seq_main".into(),
+                        expected_revision,
+                        ffmpeg: self.backend.ffmpeg_path().into(),
+                        ffprobe: self.backend.ffprobe_path().into(),
+                        asr: Some(crate::asr::Input { asset_id, config }),
+                    },
+                )?;
+                if !no_launch && job.state == "queued" {
+                    self.launch(&root)?;
+                }
+                Ok(serde_json::to_value(job)?)
+            }
             Request::TranscriptImport {
                 project,
                 transcript,
@@ -421,12 +473,16 @@ impl Service {
                         expected_revision,
                         ffmpeg: self.backend.ffmpeg_path().into(),
                         ffprobe: self.backend.ffprobe_path().into(),
+                        asr: None,
                     },
                 )?;
                 if !no_launch && job.state == "queued" {
                     self.launch(&root)?;
                 }
                 Ok(serde_json::to_value(job)?)
+            }
+            Request::Imports { project } => {
+                Ok(json!(Store::open(&self.path(&project)?)?.imports()?))
             }
             Request::Jobs { project } => job_list(&Store::open(&self.path(&project)?)?, 100),
             Request::JobStatus { project, id } => Ok(serde_json::to_value(
@@ -463,6 +519,19 @@ impl Service {
                 let result = job
                     .result
                     .ok_or_else(|| Error::Invalid("artifact result is missing".into()))?;
+                if result["mimeType"] == "application/json" {
+                    let path =
+                        self.path(Path::new(result["path"].as_str().ok_or_else(|| {
+                            Error::Invalid("transcript artifact path missing".into())
+                        })?))?;
+                    let hash = media::hash_file(&path)?;
+                    if result["sha256"] != hash {
+                        return Err(Error::Invalid("transcript artifact bytes changed".into()));
+                    }
+                    return Ok(
+                        json!({"jobId":id,"path":path,"revision":job.revision,"sha256":hash,"bytes":std::fs::metadata(path)?.len(),"mimeType":"application/json","verified":true,"needsTextReview":true}),
+                    );
+                }
                 let manifest_path = result["manifest"]
                     .as_str()
                     .ok_or_else(|| Error::Invalid("artifact manifest is missing".into()))?;

@@ -21,6 +21,7 @@ fn scoped_service_rejects_escape_and_produces_equivalent_mcp_and_cli_errors() {
         root: Some(root.clone()),
         backend: media::backend("ffmpeg".into(), "ffprobe".into()),
         executable: "avw".into(),
+        asr: None,
     };
     assert!(
         !envelope(service.execute(Request::Create {

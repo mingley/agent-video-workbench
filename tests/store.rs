@@ -124,8 +124,10 @@ fn migrates_old_schema_with_recoverable_consistent_backup() {
     let path = temp.path().join("p");
     drop(Store::create(&path, "original").unwrap());
     let conn = rusqlite::Connection::open(path.join("project.sqlite")).unwrap();
-    conn.execute_batch("DROP TABLE job_requests; DROP TABLE jobs; PRAGMA user_version=1;")
-        .unwrap();
+    conn.execute_batch(
+        "DROP TABLE imports; DROP TABLE job_requests; DROP TABLE jobs; PRAGMA user_version=1;",
+    )
+    .unwrap();
     drop(conn);
     let store = Store::open(&path).unwrap();
     assert!(store.jobs().unwrap().is_empty());
@@ -165,4 +167,36 @@ fn incomplete_backup_is_not_opened_as_a_project() {
     drop(Store::create(&path, "original").unwrap());
     std::fs::write(path.join("backup.incomplete"), b"pending").unwrap();
     assert!(Store::open(&path).is_err());
+}
+
+#[test]
+fn abandoned_import_recovers_only_its_owned_staged_file() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("project");
+    drop(Store::create(&root, "Recovery").unwrap());
+    let owned = root.join("cache/import-abandoned.mp4");
+    let unrelated = root.join("cache/keep.mp4");
+    std::fs::write(&owned, b"incomplete copy").unwrap();
+    std::fs::write(&unrelated, b"unrelated file").unwrap();
+    let conn = rusqlite::Connection::open(root.join("project.sqlite")).unwrap();
+    conn.execute("INSERT INTO imports VALUES('abandoned','source','cache/import-abandoned.mp4','copying',NULL)", []).unwrap();
+    drop(conn);
+    let backend =
+        agent_video_workbench::media::backend("missing-ffmpeg".into(), "missing-ffprobe".into());
+    assert!(
+        agent_video_workbench::media::import(
+            &root,
+            &temp.path().join("missing-source"),
+            "source",
+            0,
+            "import-source",
+            &backend
+        )
+        .is_err()
+    );
+    let store = Store::open(&root).unwrap();
+    assert_eq!(store.imports().unwrap()[0]["state"], "interrupted");
+    assert!(!owned.exists());
+    assert!(unrelated.exists());
+    assert_eq!(store.project().unwrap().revision, 0);
 }

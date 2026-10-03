@@ -25,6 +25,8 @@ pub struct RenderInput {
     pub expected_revision: u64,
     pub ffmpeg: PathBuf,
     pub ffprobe: PathBuf,
+    #[serde(default)]
+    pub asr: Option<crate::asr::Input>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -201,8 +203,10 @@ pub fn worker(root: &Path, stop: Arc<AtomicBool>, idle_seconds: u64) -> Result<V
         .read(true)
         .write(true)
         .open(root.join("worker.lock"))?;
-    if lock.try_lock().is_err() {
-        return Ok(json!({"worker":"already-running"}));
+    match lock.try_lock() {
+        Ok(()) => {}
+        Err(std::fs::TryLockError::WouldBlock) => return Ok(json!({"worker":"already-running"})),
+        Err(std::fs::TryLockError::Error(error)) => return Err(error.into()),
     }
     let mut store = Store::open(&root)?;
     // Lock acquisition proves the previous execution owner no longer holds it.
@@ -234,14 +238,18 @@ pub fn worker(root: &Path, stop: Arc<AtomicBool>, idle_seconds: u64) -> Result<V
             stop: stop.clone(),
             heartbeat: Instant::now(),
         };
-        let result = media::render_attempt(
-            &root,
-            &input.sequence,
-            &backend,
-            &project,
-            &artifact_id,
-            &mut control,
-        );
+        let result = if let Some(asr) = &input.asr {
+            crate::asr::analyze(&root, &project, asr, &backend, &mut control)
+        } else {
+            media::render_attempt(
+                &root,
+                &input.sequence,
+                &backend,
+                &project,
+                &artifact_id,
+                &mut control,
+            )
+        };
         let (state, result, error) = match result {
             Ok(value) => ("succeeded", Some(serde_json::to_string(&value)?), None),
             Err(Error::Cancelled) if stop.load(Ordering::Relaxed) => (

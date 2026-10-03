@@ -1,3 +1,4 @@
+pub mod asr;
 pub mod inspect;
 pub mod jobs;
 pub mod json;

@@ -14,6 +14,7 @@ fn input() -> RenderInput {
         expected_revision: 0,
         ffmpeg: "ffmpeg".into(),
         ffprobe: "ffprobe".into(),
+        asr: None,
     }
 }
 #[test]

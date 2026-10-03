@@ -47,3 +47,23 @@ fn timeout_and_failure_have_bounded_diagnostics() {
     };
     assert!(details.len() <= 64 * 1024);
 }
+
+#[test]
+fn cancellation_is_checked_during_large_file_hashing() {
+    struct CancelAfterReads(usize);
+    impl Control for CancelAfterReads {
+        fn check(&mut self) -> agent_video_workbench::Result<()> {
+            self.0 += 1;
+            if self.0 >= 4 {
+                Err(Error::Cancelled)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    let file = tempfile::NamedTempFile::new().unwrap();
+    file.as_file().set_len(8 * 1024 * 1024).unwrap();
+    let result =
+        agent_video_workbench::media::hash_file_controlled(file.path(), &mut CancelAfterReads(0));
+    assert!(matches!(result, Err(Error::Cancelled)));
+}
