@@ -56,6 +56,7 @@ jobs:
           set -euo pipefail
           node evaluation/browser_smoke.mjs "$(command -v google-chrome)" "$RUNNER_TEMP/agent/review-set" "$RUNNER_TEMP/browser" "$PWD/evaluation/node_modules/playwright"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: qualified-native-${{ matrix.arch }}-bundle
           path: |

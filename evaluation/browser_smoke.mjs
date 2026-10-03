@@ -65,7 +65,23 @@ try {
       for (const video of document.querySelectorAll('video')) {
         const initial = video.currentTime;
         await video.play();
-        await new Promise(resolve => setTimeout(resolve, 350));
+        const started = performance.now();
+        await new Promise((resolve, reject) => {
+          const progress = () => {
+            if (video.currentTime > initial + 0.05) {
+              clearTimeout(timeout);
+              video.removeEventListener('timeupdate', progress);
+              resolve();
+            }
+          };
+          const timeout = setTimeout(() => {
+            video.removeEventListener('timeupdate', progress);
+            reject(new Error('video clock did not advance within 10 seconds'));
+          }, 10000);
+          video.addEventListener('timeupdate', progress);
+          progress();
+        });
+        const playbackWaitMs = performance.now() - started;
         const played = video.currentTime > initial;
         video.pause();
         const target = Math.min(2, video.duration / 2);
@@ -76,12 +92,13 @@ try {
         video.currentTime = target;
         await sought;
         videos.push({ width: video.videoWidth, height: video.videoHeight, duration: video.duration,
-          played, seekTargetSeconds: target, seekSeconds: video.currentTime,
+          played, playbackWaitMs, seekTargetSeconds: target, seekSeconds: video.currentTime,
           error: video.error?.code ?? null, displayedWidth: video.getBoundingClientRect().width });
       }
       return { videos, viewport: window.innerWidth, pageWidth: document.documentElement.scrollWidth };
     });
     results.push({ label, requestedViewport: viewport, ...media, pageErrors: errors });
+    await page.screenshot({ path: path.join(output, label + '.png'), fullPage: true });
     if (errors.length || !media.videos.length || media.videos.some(video => !video.played
       || video.error || Math.abs(video.seekSeconds - video.seekTargetSeconds) > 0.05)) {
       throw new Error('Playback/seek failed: ' + JSON.stringify(results.at(-1)));
@@ -99,7 +116,6 @@ try {
         throw new Error('Invalid linked captions');
       }
     }
-    await page.screenshot({ path: path.join(output, label + '.png'), fullPage: true });
     await context.close();
   }
   fs.writeFileSync(path.join(output, 'summary.json'), JSON.stringify({ passed: true,
