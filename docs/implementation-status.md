@@ -64,6 +64,19 @@ release publication. Local ASR and one-hour measurements are separate checks.
 Generated footage, model weights and project databases stay outside Git.
 Historical candidate research evidence is separate from this release.
 
+[0.3.0 is published](https://github.com/mingley/agent-video-workbench/releases/tag/v0.3.0)
+with native archives, combined checksums and dependency setup helpers.
+[Final native CI](https://github.com/mingley/agent-video-workbench/actions/runs/37097054216)
+passed all ten workflow harnesses on each architecture at source commit
+`7c520b50f44e1286563693180311c6030afed877`.
+[Publication](https://github.com/mingley/agent-video-workbench/actions/runs/37097667541)
+verified qualification/archive/binary identities before uploading. The public
+installer then downloaded that Ubuntu x86_64 release into a fresh Debian 13
+installation and passed readiness and the expanded official MCP workflow.
+The prepared cloud demo also retains a PQ original, its verified SDR delivery
+and independent captioned variants. Cloud installation/start instructions were
+exercised and saved; environment snapshot publication is a separate product action.
+
 ## Explicit support boundaries
 
 Delivery is **Rec.709 SDR H.264/AAC**, up to one hour per output and 4096 pixels

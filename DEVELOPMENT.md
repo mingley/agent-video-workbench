@@ -124,3 +124,14 @@ Transfer tests explicitly enable local development HTTP; production configuratio
 requires HTTPS and operator-approved hosts. Analysis provider fixtures are generated
 executables and do not supply a semantic model. Local model/hour checks remain
 separate from native CI; do not claim arbitrary camera/language/host support.
+
+## Publish qualified artifacts
+
+Update `.github/release-request.json` only for an intended release, binding its
+version, full source commit, successful native qualification run and notes under
+`docs/releases`. The publication workflow verifies both native jobs, all ten
+functional summaries and archive/binary/source identities. It uploads the exact
+qualified assets through Actions, verifies existing asset bytes on retry, and
+refuses to replace different assets or a different target. A published release
+is immutable in this workflow. Run the public installer and official MCP trial
+against the downloaded native binary, then record their evidence.

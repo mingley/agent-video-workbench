@@ -294,19 +294,97 @@
   },
   "nativeCI": [
     {
-      "url": "https://github.com/mingley/agent-video-workbench/actions/runs/37096028863",
-      "head": "fd469469e26a2e1ad431145546dadb250b7a6ffc",
+      "url": "https://github.com/mingley/agent-video-workbench/actions/runs/37097054216",
+      "head": "7c520b50f44e1286563693180311c6030afed877",
       "platforms": [
-        "Linux x86_64",
-        "Linux aarch64"
+        "Ubuntu 24.04 x86_64, glibc 2.39",
+        "Ubuntu 24.04 aarch64, glibc 2.39"
       ],
       "conclusion": "success",
-      "scope": "source analysis/tracking/retention baseline; final 0.3 release run recorded after completion"
+      "passedNativeHarnessesPerArchitecture": 10,
+      "scope": "final 0.3.0 native Rust/schema, application/jobs/media/studio/audio/timeline/transfer/analysis/4K and installed official MCP client"
     }
   ],
   "limits": [
     "Generated camera/color/narrative fixtures; real phone appearance requires review",
     "HDR-output masters, profile 5/Log transforms, complex scripts, Mac/Windows and arbitrary consumer-agent accounts are outside the support matrix",
     "One-hour benchmark is low-resolution; short 4K input does not qualify one-hour 4K performance"
-  ]
+  ],
+  "publication": {
+    "url": "https://github.com/mingley/agent-video-workbench/releases/tag/v0.3.0",
+    "status": "published",
+    "sourceCommit": "7c520b50f44e1286563693180311c6030afed877",
+    "assetCount": 7,
+    "workflow": "https://github.com/mingley/agent-video-workbench/actions/runs/37097667541",
+    "workflowConclusion": "success",
+    "artifacts": [
+      {
+        "version": "avw 0.3.0",
+        "commit": "7c520b50f44e1286563693180311c6030afed877",
+        "rust": "rustc 1.99.0 (b940084d7 2026-09-28)",
+        "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+        "externalRuntime": [
+          "FFmpeg/ffprobe 8",
+          "licensed TTF font"
+        ],
+        "optionalRuntime": [
+          "whisper.cpp v1.9.4 and checksum-verified English model"
+        ],
+        "binarySha256": "8f4ec1f41ac95c7d7be80c956d68419d5688170cb6c965a4431a8c58dd0c41af",
+        "archiveSha256": "2b13609a8573c04511514cd24f59ba416960376b9b480e652b7c8261e9d6c038",
+        "arch": "x86_64"
+      },
+      {
+        "version": "avw 0.3.0",
+        "commit": "7c520b50f44e1286563693180311c6030afed877",
+        "rust": "rustc 1.99.0 (b940084d7 2026-09-28)",
+        "platform": "Linux-6.17.0-1022-azure-aarch64-with-glibc2.39",
+        "externalRuntime": [
+          "FFmpeg/ffprobe 8",
+          "licensed TTF font"
+        ],
+        "optionalRuntime": [
+          "whisper.cpp v1.9.4 and checksum-verified English model"
+        ],
+        "binarySha256": "936cc55c0d55e8b41f93a06af9f0e05550fcbd9391a68dca754dc08bec1019f7",
+        "archiveSha256": "f25812ab3aa803bb7b6077d15ba2c5483647c918a7b0220ae397f35079eff6e7",
+        "arch": "aarch64"
+      }
+    ]
+  },
+  "releaseInstallation": {
+    "status": "passed",
+    "scope": "published Ubuntu x86_64 binary downloaded with the public installer and exercised on Debian 13",
+    "archiveChecksumVerified": true,
+    "binaryChecksumVerified": true,
+    "binarySha256": "8f4ec1f41ac95c7d7be80c956d68419d5688170cb6c965a4431a8c58dd0c41af",
+    "doctorPassed": true,
+    "officialMcpWorkflow": {
+      "passed": true,
+      "officialMcpSdk": true,
+      "cliMcpOutcomeEquivalent": true,
+      "transcriptMappedCaptions": true,
+      "independentNamedOutputs": 4,
+      "defaultHdCanvasTested": true,
+      "frozenBatchDelivery": true,
+      "expandedSchemaAndAnalysis": true,
+      "cacheReused": true,
+      "decodedFrames": 180,
+      "jobId": "a357ea2a-4442-4d3c-b542-18ab84e21a44"
+    }
+  },
+  "cloudSetup": {
+    "repeatability": "passed",
+    "checks": [
+      "latest stable Rust, strict format/Clippy/test/schema",
+      "verified FFmpeg and Whisper setup",
+      "application/studio/audio/analysis/official MCP/real ASR",
+      "workspace maintenance dry run with busy-project deferral"
+    ],
+    "savedFields": [
+      "install_script",
+      "start_skill"
+    ],
+    "scope": "current cloud instance and saved draft; no claim that a new environment snapshot has been published"
+  }
 }
