@@ -8,6 +8,11 @@ reopens a portable project. Native Ubuntu x86_64/ARM64 CI repeats installed-bina
 workflows. This qualifies that execution route; the consumer account observations
 below remain separate research and do not certify those products.
 
+## Dated account research and future deployment targets
+
+Current installation is Linux x86_64/ARM64 with CLI or local MCP stdio; see
+[deployment](deployment.md). The remote transport, additional OS bundles and machine-readable installer
+result discussed below are design targets, not shipped interfaces.
 
 The intended agent is a hosted product, possibly an OpenAI dot, Grok Bot, or
 Meta Muse. None was exercised through an account during this evaluation.
@@ -77,7 +82,8 @@ probing. The hosted agent may use an existing storage connector to materialize
 the original locally, then pass its path. A cloud-sharing page is not always a
 direct download URL. Handle expired links, authentication, redirects, quotas,
 and interrupted downloads explicitly. Keep transient signed URLs out of
-durable project exports/logs; store the source hash and stable locator instead.
+durable project history/exports; store the source hash and stable locator instead.
+Operator or host command logging is a separate responsibility.
 
 Direct chat attachments are convenient for small recordings only when the
 bot makes their original bytes accessible to software. Large originals should

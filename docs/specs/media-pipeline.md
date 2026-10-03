@@ -1,8 +1,11 @@
 # Media ingest, analysis and delivery
 
-Status: proposed. Features: F02, F03, F12, F15 and F24. The initial backend is
-FFmpeg/ffprobe invoked by Rust; optional model processes provide analysis.
-Reuse AgentCut through the adapter described in the [architecture](../architecture.md).
+Status: design requirements for F02, F03, F12, F15 and F24. The 0.3.1
+backend uses FFmpeg/ffprobe invoked by Rust; optional model processes provide
+analysis. [Implementation status](../implementation-status.md) records generated
+PQ/HLG, geometry, timing and delivery qualification. The matrix below also
+contains unfulfilled real-camera/HDR-output targets. See
+[architecture](../architecture.md) for the implemented adapter.
 
 ## Input capability matrix
 

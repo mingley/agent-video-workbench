@@ -1,7 +1,10 @@
 # Distribution, workers and hosted operation
 
-Status: proposed. Features: F16, F18, F19 and F22. Provider capabilities remain
-those in the dated [host compatibility research](../host-compatibility.md);
+Status: design requirements for F16, F18, F19 and F22. The shipped 0.3.1
+route is Linux x86_64/ARM64 CLI and local MCP stdio, with native archives and
+persistent workers; see [deployment](../deployment.md). Remote authenticated
+transport and other OS installers below are future targets. Provider capabilities
+remain those in the dated [host compatibility research](../host-compatibility.md);
 this specification does not establish new access or quota claims.
 
 ## Supported execution routes

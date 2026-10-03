@@ -1,243 +1,153 @@
-# Proposed architecture
+# Implemented architecture
 
-This document describes the target Rust application. The `avw` SDR editing
-service implements the qualified subset documented in [DEVELOPMENT.md](../DEVELOPMENT.md)
-and [implementation status](implementation-status.md). The broader interface
-and advanced workflows below remain proposed. Detailed contracts appear in the
-[agent protocol](specs/agent-protocol.md), [lifecycle](specs/project-lifecycle.md),
-[media](specs/media-pipeline.md), and [worker](specs/distribution-and-workers.md)
-specifications.
+This describes the **0.3.1** Rust application. See the
+[interface reference](agent-api.md) for wire behavior and
+[implementation status](implementation-status.md) for executed evidence and
+support limits. The [product plan](product-plan.md) and
+[specifications](specs/agent-protocol.md) retain broader design targets.
 
 ```mermaid
 flowchart LR
-    U[Creator: original video and feedback] --> A[External hosted agent]
-    A --> C[CLI: JSON requests and results]
-    A --> M[Optional MCP adapter]
-    C --> S[Rust application service]
+    A[External agent] --> C[CLI JSON]
+    A --> M[MCP stdio]
+    C --> S[Rust service]
     M --> S
-    S --> D[(SQLite: revisions, edits, jobs, artifacts)]
-    S --> E[AgentCut core: typed model, time, validation]
-    S --> W[Rust media and job execution]
-    E --> R[AgentCut render IR and compiler]
-    R --> W
-    W --> F[FFmpeg and ffprobe subprocesses]
-    W --> T[Optional local ASR backend]
-    W --> B[(Originals and content-addressed derived files)]
-    W --> Q[Decoded output verification]
-    Q --> S
-    S --> A
-    A --> U
+    S --> D[(SQLite authority)]
+    S --> E[AgentCut model and validation]
+    E --> R[Render IR and compiler]
+    R --> W[Persistent Rust worker]
+    S --> W
+    W --> F[FFmpeg and ffprobe]
+    W --> P[Optional ASR or analysis provider]
+    W --> Q[Decode and technical verification]
+    Q --> B[(Verified artifacts)]
+    S --> B
+    B --> A
 ```
 
-Use a small workspace: `avw-core` for our source references, styles and editorial
-metadata; `avw-store` for transactions/revisions; `avw-media` for ingest,
-inspection, ASR adapters and the render backend adapter; `avw-cli` for command
-parsing and job execution. Add `avw-mcp` only when a target host needs it. These
-are logical boundaries, not a requirement to create five crates on day one.
-Prefer two initial crates, core and CLI, until the separation earns its cost.
+## Runtime boundaries
 
-Pin AgentCut core/render to the audited commit with Cargo.lock. Keep its pure
-`apply_batch` validation boundary; do not use the existing best-effort
-`ProjectRepository` as our durable store. Adapt media probing/render IR through
-one narrow module. Fix rotation input handling or explicitly normalize a
-derivative before it reaches the affected path; do not hide a renderer patch
-in a shell alias. Track patches and upstream licenses. A changed upstream model
-requires explicit migration tests and an intentional dependency update.
+The application is one Rust package with a library and the `avw` binary.
+It reuses commit-pinned AgentCut core/render libraries through explicit adapters;
+AgentCut's best-effort CLI journal is not used for project authority.
 
-**One durable state authority.** A project directory contains `project.sqlite`,
-`originals/`, `analysis/`, `cache/`, `renders/`, and `exports/`. SQLite stores
-the head revision, immutable revision snapshots, parent links, authored edit
-batches, results keyed by request idempotency key, styles, semantic references,
-and job/artifact manifests. Exported JSON is a readable, versioned snapshot of
-one revision, not a second writable source of truth. Editing/importing such an
-export creates a validated new revision rather than silently replacing the DB.
-
-The directory survives process and conversation resets only when placed on
-the host's actual persistent storage. Local block storage is the initial DB
-target. Do not put SQLite WAL files on object storage or assume networked
-filesystem locking has local-disk semantics. A remote worker owns its local DB
-and durable volume; blob storage can hold originals and backups later.
-
-Represent each original by a stable asset ID, content SHA-256, byte size,
-container/stream metadata, and portable relative locator. Copy/import bytes
-once, or explicitly bind an existing immutable location; verify and relink by
-content identity. Never overwrite an original. Fonts, overlays and transcript
-artifacts also have IDs, hashes and license/provenance references. Cache cleanup
-can remove only derived objects. A reference is durable only while its original
-location remains available, so managed import is the default.
-
-Each output has a sequence ID and a creator-facing name such as
-`product-demo-1`. Clip IDs survive trims/moves; splits record lineage. Store
-source-range mappings for every output segment, including omitted ranges and
-the operation/reason that removed them. Semantic annotations reference source
-time and asset IDs: sentence IDs/word IDs, `product-demonstration`, and protected
-intervals. These are explicit project data, independent of an agent's memory.
-The project can answer “which sentence did revision 12 remove?” without replaying
-a conversation or guessing from the final MP4.
-
-Use integer values plus rational rates for time. Original video addressing
-uses stream PTS/timebase, with a timestamp index when needed. Output frames use
-an exact rate such as 30/1 or 30000/1001; audio uses sample counts. VFR source
-frame numbers must not be inferred from average fps. Maintain an explicit
-source-time-to-proxy/output mapping; record rounding at edit boundaries. A cut
-request can point to transcript words and source ranges while its resulting
-output duration is an exact number of frames.
-
-**Commit protocol:** parse a typed batch, check the schema, begin a SQLite
-write transaction, check idempotency and expected revision, apply to a candidate
-snapshot, validate the whole candidate and protected-source policy, then commit
-snapshot, revision, operations and response together. Return success only after
-that transaction commits. SQLite serializes writers; the expected revision is
-checked inside the transaction. Same key/same request returns its prior outcome;
-same key/different request is a structured conflict. Retain outcomes for project
-life instead of relying on a bounded undo journal. `dry-run` runs validation
-without committing or recording success.
-
-Use WAL with appropriate durable synchronization on a tested local filesystem.
-Store schema version and migrate transactionally with a backup. Revision
-snapshots and history live in the same DB transaction; loss of history must
-never be silently treated as a clean edit. Restore/undo creates a new revision
-referencing the earlier snapshot; revision numbers are never reused. For
-selective restoration, use the removed source-range record and emit a fresh
-operation batch, preserving later unrelated edits.
-
-Back up using SQLite's consistent backup API plus a referenced asset manifest.
-Portable bundles include the DB snapshot, styles/fonts with permitted
-redistribution, inspection artifacts, and optionally originals with a size
-estimate. Restore checks hashes and reports missing objects. A fresh hosted
-computer can reinstall tools, open the bundle, and continue editing. Exporting
-a current JSON file without history/media is not a sufficient project backup.
-
-**Ingest and inspection.** Stream file transfer, hash it, probe streams, and
-persist metadata before analysis. Normalize orientation exactly once, honor
-sample aspect ratio and color metadata, and inspect actual PTS for VFR. Proxy
-generation produces low-resolution SDR video at a documented cadence, with
-timing mapping and zero rotation metadata. A full working conversion is only
-created when required by the source/render path; a mandatory full mezzanine for
-every long video can cost more time/disk than it saves.
-
-SDR output is the initial delivery policy. HDR HLG/PQ needs an explicit
-color-managed, tested tone-map path, accurate tags, and phone review. Treat Dolby
-Vision variants and other unsupported modes as named capability failures.
-The 0.3 Rust adapter adds a versioned per-source linear-light PQ/HLG tone map and BT.709 matrix conversion; upstream pixel-format conversion alone does not establish HDR correctness. Keep original HDR bytes even when the working proxy/output is
-SDR. Publish a supported-input matrix based on fixtures and actual phone samples.
-
-Analysis is an independently cached job. Provide ffprobe metadata, timestamped
-speech/word transcripts, confidence where supplied, silence intervals, scene
-change scores/intervals, contact sheets, selected full frames, and short source
-or sequence previews. Scene boundaries and silence are suggestions; neither
-proves semantic importance. Expose paginated/searchable transcript ranges and
-bounded frame retrieval. Contact sheets carry a separate JSON index with
-asset/revision ID, each tile's source/output timestamp, and locator.
-
-Use an optional local `whisper.cpp` process as the first ASR backend, behind a
-Rust adapter. Accept imported timestamped transcripts as another provider.
-Verify the actual model artifact license/checksum and record backend/model
-version. Local transcription has compute costs without model API fees. Word
-timing remains an estimate; retain user corrections and inspect cuts with
-handles. A separately configured remote ASR adapter can be added without making
-it the only path or embedding conversational reasoning. No ASR model was run in
-the candidate evaluation.
-
-Create captions from source-word references and map them through retained
-timeline intervals after edits. Store raw transcript, corrections, caption text,
-and style separately so smaller captions do not rerun transcription. Detect
-overlong lines, off-canvas placement, cue overlap, missing glyphs/fonts and
-cut-boundary timing. Bind a real font asset, define crop-relative safe margins,
-and verify the rendered words visually. Ship one readable style; karaoke and
-animated word effects are later work. Preserve A/V links and prevent duplicate
-embedded-plus-dedicated audio in the adapter.
-
-**Agent contract.** CLI stdout is one JSON envelope for success and failure;
-stderr carries logs/progress. Use structured stdin or `--request <file>` for
-batches, large content, and paths; avoid forcing the model to invent shell
-escaping. Commands have schemas, examples, capabilities, stable IDs, precise
-errors, and explicit project handles. Typical proposed vocabulary:
-
-| Command family | Purpose |
+| Modules | Responsibility |
 | --- | --- |
-| `doctor`, `capabilities`, `schema`, `agent-guide` | Discover this host's supported operations and protocol |
-| `project create/open/status/export/restore` | Durable lifecycle and portable recovery |
-| `asset import/list/relink`, `inspect` | Original media and indexed analysis |
-| `transcript search`, `annotation protect` | Find speech and preserve demonstrations |
-| `edit validate/apply`, `history`, `diff`, `undo` | Reviewable, reversible transactional edits |
-| `preview`, `render start`, `job status/cancel` | Bounded tool calls for long-running media work |
-| `verify`, `artifact list/get` | Associate checked results with the correct revision |
+| `main`, `mcp`, `service`, `json` | CLI/stdio transport, shared typed requests, root-scoped paths, strict parsing and response envelopes |
+| `store`, `storage`, `policy` | SQLite transactions/revisions/replay, owned objects, verification/backup/relink/retention, source coverage |
+| `workflow`, `studio`, `library` | Transcript-to-caption composition, selective edits, profiles/templates/variants, review decisions and portable libraries |
+| `media`, `color`, `audio`, `animation` | Backend probing, render adaptation, tone mapping, audio processing and supported geometry animation |
+| `inspect`, `analysis`, `tracking`, `asr` | Bounded source evidence, cached analysis, selected-region tracking and optional local transcription |
+| `jobs`, `process` | Frozen queues, owner locks/fencing, child limits/cancellation and attempt recovery |
+| `transfer`, `delivery`, `interchange` | Scoped downloads, verified review packages and supported-cut OTIO exchange |
 
-For example, a proposed operation request would contain `projectId`,
-`expectedRevision`, `idempotencyKey`, a short creator instruction/reason, and
-typed operations targeting stable IDs. A result includes `ok`, `apiVersion`,
-`requestId`, new `revision`, created/changed IDs, warnings, and artifact/job
-references. A failure includes a stable code, phase, affected ID/path, retry
-policy and suggested recovery. CLI argument errors also obey that contract.
-Request/operation schemas must be generated or checked against Rust types.
+The external agent chooses stories, reviews evidence and delivers files through
+its host. The service contains no conversational model or social publisher.
 
-Publish compact capability summaries and per-command/per-operation schemas;
-do not preload all project/operation data into model context. MCP is a thin
-adapter to the same Rust service, including structured error data, project
-resources and artifact handles. Start with stdio where available; add a remote
-transport only for an actual hosted-bot route. Long jobs return immediately
-with job IDs, allowing poll/cancel without holding a tool call for an hour.
+## Durable project state
 
-On resume, the agent opens `project status`: current revision, asset presence,
-output names/IDs, saved style, protected ranges, last changes, pending/failed
-jobs, and previews/finals tied to specific revisions. It then searches history
-and transcript for the requested sentence or opening. A render from an earlier
-revision remains accessible and visibly labeled as that revision. The agent
-must not confuse it with the latest project state.
+A project contains `project.sqlite`, `originals/`, `analysis/`, `cache/`,
+`renders/` and `exports/`. SQLite schema 4 is the sole editing authority. It
+holds the head, immutable revision snapshots/history, request outcomes,
+operational job state and artifact references. Creator decisions are versioned
+project extensions. JSON snapshots and exports are derived views.
 
-**Rendering and failure recovery.** Compile one immutable revision to a render
-plan. Its hash includes relevant source/derivative hashes, timing/crop/caption
-data, fonts, export preset version, backend build/configuration and render
-parameters. The project may change during rendering without changing the
-captured plan. Final render uses originals or an explicitly approved working
-derivative; a proxy is never silently substituted for the final.
+Managed imports copy/probe/hash staged bytes before publishing content-addressed
+originals. Stable asset IDs bind those objects to the project; hashes verify
+identity on use and relink. Originals referenced by any historical revision
+remain retained. Imported fonts and images are owned objects too.
 
-Render through subprocess argument vectors, not shell strings. Treat subtitle
-text as literal data, use controlled text/subtitle files, and validate any
-filter parameters. Stream progress with bounded retained log tails. Encode to
-a job/attempt-specific partial path, then decode/probe/check it, atomically
-publish the file, and commit its manifest/reference. Failed attempts never
-replace a known good final. Cancellation signals the owned process group and
-has a bounded shutdown path.
+Use persistent local storage with working OS locks. SQLite uses WAL and FULL
+synchronization; object storage or an arbitrary network mount is not an equivalent
+live database. Process lifetime is separate from file persistence.
 
-Jobs persist `queued/running/verifying/succeeded/failed/cancelled/interrupted`,
-input revision/plan hash, owner/lease/heartbeat, output target, progress, attempt
-and error. Restart reconciles expired owners and existing outputs: a matching
-published manifest may complete a job; an unverified partial is discarded or
-retained as diagnostic data. Retry can reuse completed content-addressed stages.
-Do not promise resuming an arbitrary FFmpeg encode from its last frame. Long
-segmented renders can be added later after seam correctness is measured.
+### Edit transaction
 
-| Failure | Required behavior |
-| --- | --- |
-| Response lost after edit commit | Replay the persisted idempotent result |
-| Revision conflict | Return current revision; agent reads diff and rebuilds its proposal |
-| Bad operation or protected range removed | Reject the whole batch with unchanged head/history |
-| Missing/changed source | Refuse render; report the asset/hash and relink route |
-| Disk full or expired download | Preserve sources/head; mark job failure with recoverable stage |
-| Renderer/model failure | Keep diagnostic tail and input hashes; retry only the failed job/stage |
-| Process/host restart | Reopen persisted state; reconcile interrupted jobs; reinstall tools if needed |
-| Hardware encode unavailable | Expose the failure; an explicitly selected `auto` policy may choose CPU and records that choice |
-| Bad rendered dimensions/captions/audio | Keep output as failed QC/draft; do not mark it final |
+1. Parse a typed request and check its intent/key.
+2. Begin the write transaction; replay an existing matching outcome or check
+   `expectedRevision` against the head inside the transaction.
+3. Expand creator operations into a candidate snapshot; validate the domain,
+   source references, caption layout and protected coverage.
+4. Commit the new head, immutable history and outcome together, then acknowledge.
 
-Verify every deliverable independently: fully decode the short output; measure
-stream durations, decoded video frame count, rate, dimensions, rotation/SAR,
-codec/pixel format/color tags and expected audio. Check A/V alignment at edits,
-black/frozen-frame candidates, clipping/loudness, caption presence/timing and
-protected-source coverage. Sample the actual rendered file around each cut,
-caption change and crop, not only a preview graph. Produce a timestamped sheet
-and structured report. Automated measures cannot certify a good story, correct
-speech recognition, flattering crop or exact color appearance; the agent's
-available senses and the creator's preview review close those gaps.
+A failure commits neither a new head nor a success outcome. Same-key/same-intent
+replay survives a lost reply; changed intent conflicts. Dry-run validates without
+committing. Whole-snapshot `restore` appends a new revision; selective
+`restore-omission` reconstructs recorded source footage while preserving other
+later changes. Revision numbers are not reused.
 
-**Efficiency policy.** Decode short requested ranges for previews. Analyze each
-source/model version once; index/search transcripts instead of resending them.
-Use low-resolution proxies and limited representative frames, while retaining
-full-resolution product/key-shot frames. Cache keys include source hash,
-algorithm/model/tool versions and settings. New caption styles reuse speech
-analysis; new edits reuse source inspections. Measure cold and warm runs, peak
-RSS, scratch/durable disk use, elapsed time, and output quality on short and
-long inputs. Benchmark CPU before selecting GPU encoding or concurrent jobs;
-hardware decode/encode can require CPU filters and costly transfers, so a GPU
-name alone is not a performance conclusion.
+Protection requires temporal source coverage in the selected outputs. It does
+not certify that a crop or overlay leaves the protected subject visible.
+
+## Source time and editable analysis
+
+The domain uses integer values and rational rates. Source PTS/timebases are
+preserved for frame indexing; VFR frame positions are not inferred from average
+fps. Creator cuts/cues use half-open millisecond intervals relative to the
+container origin. `compose` creates a 30 fps output; frame rounding is explicit
+in the render plan. Proxies retain source maps and are not silently substituted
+for originals in final rendering.
+
+ASR and analysis are independently cached by source/tool/model/settings identity.
+They return evidence without editing history. Reviewed transcript import creates
+source-linked cues; compose maps their intersections through retained cuts.
+Corrections, chosen analysis versions and output captions remain editable.
+Changing style does not retranscribe. New analysis does not overwrite reviewed
+corrections; changed alignment requires review.
+
+Source orientation and SAR are applied once. PQ/HLG sources use versioned
+linear-light Mobius tone mapping and BT.2020-to-BT.709 conversion before SDR
+compositing, with a fixed 100-nit reference and 1000-nit peak policy. Original
+HDR bytes remain intact. Delivery is SDR H.264/AAC; HDR masters and unsupported
+color paths refuse. Generated pixel/sync tests are separate from real-camera
+appearance approval.
+
+## Frozen jobs and artifact publication
+
+Render, transcription and analysis creation persist a job with frozen input
+revision and tool identities. A batch freezes 1–32 distinct sequences atomically
+and creates independent child jobs. Larger priorities run first with stable
+ties. One owner holds each project's worker lock; attempts have generation
+fencing and persisted state. A worker reconciles abandoned attempts as
+interrupted before draining the queue.
+
+Jobs run as `queued` then `running`, can enter `verifying`, and finish as
+`succeeded`, `failed`, `cancelled` or `interrupted`. Verification precedes
+success; short stages may finish between polls. Batch status aggregates
+its children. Retry starts a fresh attempt rather than resuming an FFmpeg encode
+at its last frame. Later project edits do not alter frozen jobs.
+
+Processes receive argument vectors rather than shell-built media commands.
+Owned process groups support bounded cancellation and Linux parent-death cleanup.
+Child address space, files, logs and deadlines are bounded; operators still
+control aggregate host resources and disk. Frozen backend/provider hashes are
+checked on use.
+
+Encoding writes an attempt-specific partial. Full decode and technical QC check
+frame count/cadence, geometry, color tags, audio and requested loudness before
+publication. A failed attempt preserves earlier verified finals. Each succeeded
+render has an MP4, matching SRT/VTT, cover, indexed contact sheet and manifest.
+`artifact` rechecks content hashes; `delivery` copies verified files to a new
+bundle. Its manifest records failed children and feedback; the HTML displays
+successful videos. Technical QC cannot judge story, caption accuracy or crop
+appearance.
+
+## Backup, maintenance and trust
+
+Backup uses a consistent SQLite copy and **all historical originals**, sealed
+with verified hashes. It excludes reproducible analysis, render outputs and
+review packages. Restore checks the bundle and creates a fresh editable project;
+derived jobs become `unavailable`. Regenerate them with new requests/keys.
+Keep a delivery bundle separately if exports must travel with the backup.
+
+Lease-aware cache collection defaults to preview. Opt-in worker retention and
+scheduled `maintain` remove aged reproducible analysis or terminal scratch,
+retaining originals/history/succeeded artifacts and recoverable attempts.
+Missing or corrupt originals are reported; relink accepts only the retained hash.
+
+CLI workspace mode and MCP scope service file paths to an existing root. This
+is a local single-user service with no remote HTTP transport or account system.
+Configured provider executables are trusted operator programs: resource limits
+and result validation do not create a filesystem sandbox. Downloads require
+operator-approved HTTPS hosts; transient signed URLs do not enter durable
+project history. See [deployment](deployment.md) for operation and upgrades.

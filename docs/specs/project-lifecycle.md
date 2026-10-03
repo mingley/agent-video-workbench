@@ -1,9 +1,12 @@
 # Project lifecycle, revisions and review
 
-Status: proposed, building on the existing transactional SQLite prototype.
-Features: F01, F09, F10, F17, F20 and F23. See
-[current implementation](../implementation-status.md) for the narrower code
-available today.
+Status: design requirements for F01, F09, F10, F17, F20 and F23. The 0.3.1
+service implements transactional revisions, selective restoration, profiles,
+templates, review, catalog and verified backup.
+[Current implementation](../implementation-status.md) defines the tested subset.
+Requirements below include broader portability goals; the current backup excludes
+derived analysis/exports and requires fresh jobs after restore. See
+[deployment](../deployment.md#persistence-maintenance-and-rollback).
 
 ## Entities and authority
 
@@ -28,9 +31,9 @@ by another project or retained history.
 ## Revision behavior
 
 The current SQLite store commits head, revision and idempotency outcome in one
-transaction. Extend that boundary to operation results, created IDs, omission
-records and editorial metadata. No media render runs while holding the project
-write transaction. Long preparation produces immutable candidate artifacts;
+transaction, including operation results, created IDs, omission records and
+editorial metadata in the implemented creator workflows. No media render runs
+while holding the project write transaction. Long preparation produces immutable candidate artifacts;
 the final short transaction rechecks the expected revision before attaching them.
 
 Dry-run returns the normalized edit plan and predicted effects against one

@@ -1,9 +1,11 @@
 # Application qualification
 
-The 0.3 application checks and exact commands are in
+The 0.3.1 application checks and exact commands are in
 [DEVELOPMENT.md](../DEVELOPMENT.md). The current scope and evidence are in
 [implementation status](../docs/implementation-status.md) and
-[service qualification results](service-results/qualification.json).
+[0.3.0 baseline qualification](service-results/qualification.json).
+[Virtual verification](service-results/virtual-verification.json) records the
+0.3.1 published-binary provenance, combined HDR/sync checks and browser regression.
 `application_smoke.py`, `job_smoke.py`, `media_matrix.py`, `agent_smoke.mjs`,
 `asr_smoke.py`, `long_input.py`, `studio_smoke.py`, `audio_smoke.py`,
 `transfer_smoke.py`, `analysis_smoke.py`, `timeline_smoke.py`, `highres_smoke.py`
@@ -19,11 +21,13 @@ The rest of this document records a separate historical candidate comparison.
 Its media, assertions and known failures do not describe 0.3 application
 qualification.
 
-# Reproduce the candidate edit
+## Historical candidate comparison
+
+### Reproduce the candidate edit
 
 This is a research harness, not the new editing application. Python is used
 only to generate fixtures and drive unmodified upstream executables. The
-planned application's core, state and execution remain Rust.
+workbench's core, state and execution are Rust.
 
 [Pinned candidates](candidates.lock.json) record the source revisions used.
 Builds and execution were tested on Apple Silicon macOS 26.7 with Rust 1.98.1
@@ -93,7 +97,7 @@ error. A generated rotation-tagged MOV is tested independently. Expected
 error responses are recorded; a completed run does not mean all candidates
 passed every capability gate.
 
-## Checked-in results
+### Checked-in results
 
 | Artifact | Purpose |
 | --- | --- |
@@ -131,8 +135,9 @@ contains the exact vector used. Independently probe/decode it; this run yielded
 and the main harness are unchanged. A production correction still needs
 orientation regressions across modes and toolchains.
 
-No real iPhone footage, HEVC/HDR/VFR sample, ASR model, long-input benchmark,
-GPU encode, hosted bot or custom MCP connection was tested. The
+In that October 2 candidate comparison, no real iPhone footage, HEVC/HDR/VFR
+sample, ASR model, long-input benchmark, GPU encode, hosted bot or custom MCP
+connection was tested. The
 [research](../docs/research.md), [host plan](../docs/host-compatibility.md), and
 [backlog](../docs/roadmap.md) distinguish those remaining gates from the small
 cases actually verified here. Short synthetic elapsed times are not product

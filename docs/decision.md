@@ -1,8 +1,11 @@
-# Foundation recommendation and first creator workflow
+# Foundation decision and first creator workflow
 
-Decision date: October 2, 2026. This is a proposed implementation direction,
-supported by [source review and executable evaluation](research.md), rather
-than a claim that an existing editor already meets every requirement.
+Decision date: October 2, 2026. Adopted in the Rust workbench; status updated
+October 3 for 0.3.1. The comparison below records the original
+[source review and executable evaluation](research.md). Upstream failures
+refer to those pinned candidates, not the current workbench. Our SQLite
+authority and orientation adapter address those adoption gates; see
+[current qualification](implementation-status.md).
 
 The MVP described here is the first milestone within the expanded
 [product plan](product-plan.md). The longer-term scope includes multiple
@@ -21,7 +24,7 @@ Keep any necessary upstream patch explicit and small. A full fork is premature.
 The decisive match is its boundary: a Rust editing engine that an external
 agent can drive. This preserves useful existing editing/rendering work while
 allowing persistence and source-based editorial references to meet our needs.
-The current CLI's best-effort journal is unsuitable as our authoritative
+The evaluated upstream CLI's best-effort journal is unsuitable as our authoritative
 revision store, and its rotation fixture failed. These are adoption gates,
 not work to postpone until after users trust their projects.
 
@@ -70,7 +73,9 @@ Vision profiles get a precise error before edits/rendering. Do not silently
 reinterpret HDR as SDR, and do not claim all camera modes until tested.
 ProRes/Log, Cinematic/depth data, multicam, face tracking, automatic animated
 reframing, complicated motion graphics, music generation, and direct posting
-remain extension targets, except selected-region CPU tracking and animated crop proposals now implemented in 0.3. The tested HDR-to-SDR path is in the current status; actual phone appearance remains a qualification gate.
+remain extension targets, except selected-region CPU tracking and animated crop
+proposals now implemented in 0.3.1. The tested HDR-to-SDR path is in the current
+status; actual phone appearance remains a qualification gate.
 
 The agent chooses content and crop intent. Deterministic software applies it.
 Source transcripts, semantic annotations, crop proposals, and silence results

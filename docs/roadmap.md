@@ -1,12 +1,12 @@
 # Initial implementation roadmap and broader milestones
 
-Each phase delivers a usable check of the workflow. The current Rust SDR
-prototype is described in [DEVELOPMENT.md](../DEVELOPMENT.md) and the
-[implementation inventory](implementation-status.md). Its synthetic Linux checks
-cover transactional storage, immutable import, captioned renders, rotation,
-revision restoration, source protection, durable render records and portable
-media backup. Real phone/host acceptance remains open; none of phases 0–5 is
-claimed complete. These initial phases feed the [broader product milestones](product-plan.md),
+These are the original planning phases, not the published release status.
+The 0.3.1 Linux CLI/MCP workbench implements the foundation and many broader
+creator workflows; [the inventory](implementation-status.md) lists executed
+checks. [DEVELOPMENT.md](../DEVELOPMENT.md) documents reproduction. Real phone,
+additional hosted-account and appearance acceptance still remain open, so the
+full criteria below are not all complete. These initial phases feed the
+[broader product milestones](product-plan.md),
 with an [expanded backlog](implementation-backlog.md) for the complete creator
 workbench. Build usable slices while retaining that larger product design.
 

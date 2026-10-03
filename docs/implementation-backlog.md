@@ -1,11 +1,11 @@
 # Implementation completion and remaining qualification
 
-The former N01–N08 implementation gaps are addressed in the 0.3 Linux CLI/MCP
+The former N01–N08 implementation gaps are addressed in the 0.3.1 Linux CLI/MCP
 route. [Implementation status](implementation-status.md) links actual evidence;
 [product plan](product-plan.md) retains the broader M1–M5 acceptance ambitions.
 An implemented feature and camera/host/appearance certification are different gates.
 
-| Epic | 0.3 implementation | Remaining gate or extension |
+| Epic | 0.3.1 implementation | Remaining gate or extension |
 | --- | --- | --- |
 | E01 History | Atomic revisions/replay/conflicts, selective omission restore and exact policy | Repeated real creator trials |
 | E02 Phone ingest | H.264/HEVC/VFR, PQ/HLG→SDR, SAR/rotation/offset/audio-gap fixtures, resumable transfer | Actual iPhone/Dolby Vision compatible samples and appearance review; profile 5/Log/ProRes/Cinematic support |

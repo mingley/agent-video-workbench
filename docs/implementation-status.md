@@ -1,4 +1,4 @@
-# Version 0.3 implementation and qualification
+# Version 0.3.1 implementation and qualification
 
 October 3, 2026. This release provides a durable agent-operated Linux CLI/MCP
 workbench. It closes the prior implementation gaps for HDR-to-SDR conversion,
@@ -59,33 +59,52 @@ qualified generated-fixture font; local ASR uses whisper.cpp v1.9.4 and tiny.en.
 | combined_media_smoke.py | Rotated offset HDR10/VFR with delayed audio; measured paired light/audio burst sync, mixed PQ/HLG/SDR captions; unsafe color/grade/HDR-output requests refuse | Generated camera-like media; no real phone approval |
 | browser_smoke.mjs | Actual Chromium playback, seeking and sidecar links at 1280/390/320px; regression reproduces 0.3.0 viewport failure and verifies the 0.3.1 fix | Chromium emulation, not iOS Safari or a physical phone |
 
-[Qualification JSON](../evaluation/service-results/qualification.json) records
-current summaries and provenance. Actions artifacts carry their own source
-commit/platform manifests; successful workflow execution is observed before
-release publication. Local ASR and one-hour measurements are separate checks.
-Generated footage, model weights and project databases stay outside Git.
-Historical candidate research evidence is separate from this release.
+### Published 0.3.1
 
-[Fresh virtual verification](virtual-verification.md) also exercised the actual
-published archive in an offline Ubuntu container and an independent MCP edit
-trial on a copy of the user demo. It records the mobile review fix in 0.3.1 and
-the measurements separately from real-camera/display/platform qualification.
 [0.3.1](https://github.com/mingley/agent-video-workbench/releases/tag/v0.3.1)
-is published with source commit `b1c17a1364225e9b1ae097c4afef7ff55c6923c9`;
-its public installer, combined HDR/sync checks and expanded MCP workflow pass.
+is published from `b1c17a1364225e9b1ae097c4afef7ff55c6923c9`.
+[Native qualification](https://github.com/mingley/agent-video-workbench/actions/runs/37128053961)
+passed 12 functional summaries on Ubuntu x86_64 and 11 on ARM64; browser testing
+is explicitly skipped on ARM64. Both run Rust tests, formatting, strict Clippy
+and schema checks. Local ASR and one-hour measurements remain separate.
+[Publication](https://github.com/mingley/agent-video-workbench/actions/runs/37128475899)
+verified the qualified archive/binary/source identities before publishing seven
+assets. The public installer, expanded official MCP workflow and combined
+HDR/sync checks passed against the downloaded x86_64 binary.
 
-[0.3.0 is published](https://github.com/mingley/agent-video-workbench/releases/tag/v0.3.0)
-with native archives, combined checksums and dependency setup helpers.
-[Final native CI](https://github.com/mingley/agent-video-workbench/actions/runs/37097054216)
-passed all ten workflow harnesses on each architecture at source commit
+[Fresh virtual verification](virtual-verification.md) and its
+[machine-readable record](../evaluation/service-results/virtual-verification.json)
+separate each run's version and provenance. They include offline Ubuntu
+installation, an independent MCP edit trial and the reproduced mobile review
+failure fixed in 0.3.1. A subsequent
+[infrastructure run](https://github.com/mingley/agent-video-workbench/actions/runs/37128475887)
+passed both architectures with Node 24 Actions and zero workflow annotations;
+it is separate from the frozen release source.
+
+The [first-edit walkthrough](first-edit.md) was also executed with the published
+0.3.1 binary on October 3: 19 successful CLI calls, two independent five-second
+outputs with 150 decoded frames each, verified delivery, idempotent replay and
+backup reopening at revision 5 with derived jobs unavailable. The same current
+request files also passed 13 official MCP SDK calls in a separate fresh project,
+including both verified renders and delivery. Its media was generated and
+remains outside Git.
+
+### Earlier baseline and research
+
+[Baseline qualification JSON](../evaluation/service-results/qualification.json)
+records the 0.3.0 feature-matrix summaries. That release's
+[native CI](https://github.com/mingley/agent-video-workbench/actions/runs/37097054216)
+passed ten harnesses on each architecture at
 `7c520b50f44e1286563693180311c6030afed877`.
-[Publication](https://github.com/mingley/agent-video-workbench/actions/runs/37097667541)
-verified qualification/archive/binary identities before uploading. The public
-installer then downloaded that Ubuntu x86_64 release into a fresh Debian 13
-installation and passed readiness and the expanded official MCP workflow.
-The prepared cloud demo also retains a PQ original, its verified SDR delivery
-and independent captioned variants. Cloud installation/start instructions were
-exercised and saved; environment snapshot publication is a separate product action.
+[Its publication](https://github.com/mingley/agent-video-workbench/actions/runs/37097667541)
+verified identities before upload; public installation and MCP trials followed.
+These older records are retained rather than relabeled as 0.3.1 measurements.
+
+Historical candidate research is a separate comparison. Actions artifacts carry
+source/platform manifests. Generated footage, model weights and project
+databases stay outside Git. The prepared cloud demo retains its original media,
+verified SDR delivery and independent variants; environment snapshot publication
+is a separate product action.
 
 ## Explicit support boundaries
 

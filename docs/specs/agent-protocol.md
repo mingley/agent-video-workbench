@@ -1,11 +1,13 @@
 # Agent interface and operation contract
 
-Status: draft specification. F18, with F01/F03/F16 integration. The current CLI
-is documented in [implementation status](../implementation-status.md). The
-draft preserves its `apiVersion: "1"`, `result` envelope and AgentCut batch
-field names; richer commands/metadata still need implementation. The
-[schemas and examples](../../specs/schemas/README.md) validate wire structure,
-not the existence or semantic validity of an editing operation.
+Status: design specification for F18, with F01/F03/F16 integration. Many
+capabilities are implemented in 0.3.1, but the proposed command families and
+response metadata below are not the runtime wire reference. Use
+[the current interface](../agent-api.md),
+[generated schema](../../specs/schemas/service-request.schema.json) and
+[current request examples](../../examples/requests/README.md) for integration.
+[Implementation status](../implementation-status.md) records tested behavior.
+Draft schemas validate structure rather than operation semantics.
 
 ## Discovery and bounded interaction
 

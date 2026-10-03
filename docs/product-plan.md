@@ -1,10 +1,12 @@
 # Product plan beyond the first creator workflow
 
-Status: proposed product requirements, October 2, 2026. These are implementation
-targets. The [current implementation](implementation-status.md) is an initial
-Rust SDR editor with synthetic application checks documented in
-[DEVELOPMENT.md](../DEVELOPMENT.md). Candidate and application evaluations have
-separate scopes. Milestone names are planning labels, not published releases.
+Status: product requirements established October 2, 2026; updated for 0.3.1
+on October 3. Many workflows below now exist in the Linux CLI/MCP workbench,
+including HDR-to-SDR, analysis, profiles/templates, variants, batch delivery,
+review and backup. [Implementation status](implementation-status.md) records
+which behavior is implemented and tested. Remaining camera, script, platform
+and hosted-account acceptance gates still apply. Milestone names are planning
+labels, not published releases; the specifications include broader targets.
 
 The product should become a dependable editing workbench that a hosted agent
 can install, inspect, operate and resume. The creator sends footage and intent,
@@ -111,11 +113,16 @@ still locates the commented source interval. If that interval has been removed,
 report an unresolved reference and offer its source preview rather than moving
 the comment to an unrelated shot.
 
-**Portable batch:** queue several aspect/language variants, interrupt the
-worker, restore the project on another supported machine, and finish the batch.
+**Portable batch target (broader than the current backup):** queue several
+aspect/language variants, interrupt the worker, restore the project on another
+supported machine, and finish the batch.
 Verified earlier exports stay available. Completed analysis stages are reused
 when their model/tool fingerprints match; unavailable models or fonts are
 reported precisely. Delivery distinguishes completed, failed and pending items.
+Current backup preserves history and all originals but excludes derived analysis/exports and
+marks derived jobs unavailable. Regenerate with fresh requests after restore;
+retain deliveries separately. Resuming an interrupted batch from this portable
+backup is not an implemented contract.
 
 **Long-recording reuse:** analyze one 60-minute recording, make several shorts,
 then change a caption style. The change does not transcribe or transfer the

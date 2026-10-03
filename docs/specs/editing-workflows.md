@@ -1,9 +1,11 @@
 # Editing workflow specifications
 
-Status: proposed. Feature IDs refer to the [product plan](../product-plan.md).
-The current store accepts AgentCut operation batches; the higher-level workflows
-here still require application code. All mutations use the revision/idempotency
-contract in the [agent protocol](agent-protocol.md).
+Status: design requirements. Feature IDs refer to the [product plan](../product-plan.md).
+The 0.3.1 service implements many higher-level workflows through `compose` and
+`studio`; [implementation status](../implementation-status.md) identifies tested
+subsets and unsupported rendering combinations. Requirements below also include
+extensions. Use [the current interface](../agent-api.md) and generated schema
+for requests; [the agent protocol](agent-protocol.md) retains broader design targets.
 
 ## Timeline operations and multiple sources — F01, F07, F08
 

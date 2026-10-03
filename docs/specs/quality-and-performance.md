@@ -1,8 +1,11 @@
 # Quality, performance and release gates
 
 Status: proposed acceptance policy for F24 and every media-facing feature.
-Targets below are product test decisions, not measured results. The existing
-[candidate results](../../evaluation/README.md) cover only their generated cases.
+Targets below are product test decisions, not measured results or the exact
+runtime report schema. [Application qualification](../implementation-status.md)
+and [virtual verification](../virtual-verification.md) record current tests.
+[Historical candidate results](../../evaluation/README.md#historical-candidate-comparison)
+cover a separate October 2 comparison.
 
 ## Verification report
 
