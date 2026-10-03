@@ -1,87 +1,81 @@
-# Current implementation evidence
+# Version 0.2 implementation and qualification
 
-The 0.2 service adds shared typed JSON requests and MCP stdio, with generated
-request schemas, bounded resume/history/search, semantic ID diffs and durable
-request-outcome lookup. `compose` expands ordered source cuts and imported
-transcript cues into independent named outputs in the revision transaction.
-Source frames, metadata, silence and scene evidence are bounded and cached.
-Managed assets are imported, not injected through raw editing operations.
+October 3, 2026. This release provides an agent-testable local Linux SDR editing
+service through a CLI and MCP stdio. The external agent owns conversation and
+editorial decisions. It is a supported implementation slice of the
+[product plan](product-plan.md), not completion of its M1–M5 camera, host and
+advanced creator-workflow milestones.
 
-`render-start`, `worker`, `job-status`, `job-cancel` and `job-retry` use schema 3
-frozen inputs, attempts, generations, cancellation and heartbeat. An OS owner
-lock permits one worker per project. Reacquisition marks abandoned attempts
-interrupted; retry writes a new immutable attempt. Start idempotency prevents
-duplicate jobs. The Linux runner bounds logs, imposes deadlines, kills owned
-process groups and stops FFmpeg when its worker dies.
+## Implemented behavior
 
-Evidence: 15 Rust tests; the application media regression;
-`evaluation/job_smoke.py` through actual CLI/worker processes with SIGKILL,
-reopen/retry and bounded cancellation; `evaluation/agent_smoke.mjs` through the
-official MCP SDK, covering import/transcript/search/compose, cached frames,
-background render/QC/artifact, backup and equivalent CLI/MCP replay/conflicts.
-Real phone/host qualification remains open.
+| Area | Current contract and evidence |
+| --- | --- |
+| Project authority | SQLite schema 4; immutable revisions and atomic head/history/request outcomes; exact rational source time; WAL/FULL sync |
+| Editing and recovery | Validated atomic batches, dry-run, optimistic conflicts, same-key replay, request-outcome lookup, restore as a new revision, created/changed IDs, semantic diff |
+| Agent interfaces | Shared strict typed JSON request API, CLI, MCP stdio; generated request schema; official MCP SDK integration; guide resource and supported operation examples |
+| Resume and discovery | Compact resume; bounded history with through-revision pagination; bounded transcript search and job/artifact lists; capability/limit discovery |
+| Ingest | Regular local files copied to content-addressed originals; staged import records and owner lock; owned abandoned staging recovery; original hashes checked before work; HDR/DOVI/stream-offset rejection |
+| Source evidence | Metadata, bounded source frames, silence and scene evidence; cache keys include source/tool/parameters; cached frame hash validation; suggestions never edit automatically |
+| Transcription | Optional pinned local whisper.cpp process adapter; model/executable/source fingerprints, bounded process and scratch checks; normalized source cues, cache hash validation and reuse; explicit attachment to project history |
+| Creator workflow | Reviewed source transcripts; ordered source cuts into independent named outputs; 30 fps output mapping; imported font, measured caption wrapping within 80% canvas width, dark stroke, at most three lines; overflow refuses the transaction |
+| Source protection | Exact source interval union in enabled, visible-opacity, normal-speed video tracks; respects solo; rejects lost coverage in edits/restores; explicit audited unprotect request |
+| Jobs | Frozen revision/tool inputs; idempotent enqueue; per-project OS execution lock, heartbeat and generation fence; cancellation, interrupted-owner recovery and explicit retry with fresh attempts |
+| Execution | Linux owned process groups, parent-death child termination, bounded stdout/stderr, deadlines and cancellation checks including file hashes; two render threads; duration/canvas/free-space checks |
+| Export | H.264/yuv420p, constant frame cadence, square pixels, Rec.709 tags; full decode, planned frame/dimension checks and expected AAC duration; atomic final publish, manifest, indexed contact sheet and artifact hashes |
+| Backup/migration | Consistent SQLite backup plus every historical original, hash validation, incomplete-copy guard, copied artifact jobs unavailable; schema 1–3 upgrades with pre-migration database backup |
+| Distribution | Native 0.2 archive with checksums, no-root installer, licenses, dependency declarations, schema/agent guide and compiler/platform/commit manifest; tested runtime paths and MCP configuration |
 
-The inventory below records the preceding prototype baseline; it will be
-replaced with the service acceptance matrix once agent integration is validated.
+The supported raw editing surface is project.rename, sequence.add/set,
+track.add/set, clip.add, item.set/move/remove, text.add and caption.add.
+Property discovery exposes the pinned domain registry. Rendering of every
+possible property combination is not implied. Managed assets must enter
+through import. Source protection certifies temporal coverage, not visibility
+under another track, crop choices or editorial quality.
 
-# Implementation status
+## Executed acceptance
 
-Source baseline: commit `21cba27`, October 2, 2026. This inventory describes code
-present in the repository. It distinguishes that prototype from the broader
-[product plan](product-plan.md) and the separately executed
-[candidate evaluation](research.md). [DEVELOPMENT.md](../DEVELOPMENT.md) records
-the application smoke workflow and its verified synthetic Linux scope.
+The release qualification runs on Debian 13 x86_64, latest stable Rust 1.99.0,
+FFmpeg n8.0.1 CPU/libx264 and DejaVu Sans. The application includes 21 passing
+Rust tests with formatting and strict Clippy (`-D warnings`), covering atomic
+rollback/concurrent writers, persistence/migration, queue ownership/retry,
+exact protection, bounded subprocess cancellation, JSON/path conformance,
+operation discovery, abandoned imports and caption overflow.
 
-## Present in the Rust prototype
-
-The `avw` binary exposes project/edit commands plus `doctor`, `capabilities`,
-`describe`, `import`, `render`, `jobs`, `protect` and `backup`. It uses the pinned
-AgentCut core/render dependencies, SQLite and external FFmpeg/ffprobe.
-
-| Area | Current source behavior | Remaining work |
+| Executed harness | Verified result | Practical limit |
 | --- | --- | --- |
-| Project creation | Creates a new directory, media subdirectories and schema-version-2 database; default canvas 360×640 at 30 fps | Configurable format; recoverable interrupted initialization |
-| Apply | Reads an AgentCut `OperationBatch`; applies model operations and source-coverage validation inside an immediate SQLite write transaction | Richer result IDs/diffs and application workflow operations |
-| Revision persistence | Stores snapshots, parent, request, head and retry outcome transactionally; WAL/FULL sync; schema 1→2 migration retains a backup | Broader crash/storage-fault and migration coverage; detailed provenance |
-| Retry/conflict | SHA-256 request hash; same key replays outcome; mismatched key or stale revision errors | Request-outcome query; documented canonicalization; enriched recovery metadata |
-| Restore | Copies a prior snapshot into a fresh revision while preserving current protection annotations | Source-based selective restoration and user-facing undo/redo navigation |
-| Status/history/diff | Returns current project, full history, or the two requested snapshots | Compact resume status, pagination and semantic diff |
-| JSON/discovery | `ok`, `apiVersion: "1"`, `result` or `error`; argument errors use JSON; exposes pinned capability registry and descriptions | Request IDs, complete schema API, host-qualified capability results, recovery details and MCP |
-| Managed import | Copies/hashes local bytes into immutable managed originals, probes metadata and rejects detected HDR paths | Remote/resumable transfer, recorded import stages, broad iPhone/HEVC/VFR/HDR qualification |
-| Render/QC | Synchronous H.264/AAC render; explicit autorotation handling; decode/frame/dimension/rate/tag/audio checks, contact sheet and revision manifest | Async execution, richer presets, color-managed phone qualification, caption/semantic quality checks |
-| Protection | Enforces exact source-time coverage in enabled video clips across edits/restores; cannot remove protection implicitly | Explicit policy editing, stream/speed policies and visibility/crop review; no unprotect command yet |
-| Jobs | Persists running/succeeded/failed render records tied to a revision | Leases, cancellation, start idempotency, automatic crash reconciliation and batch scheduling |
-| Backup | CLI creates a consistent DB snapshot plus originals referenced throughout history; incomplete copies refuse to open; omitted render records become unavailable | Rich bundle manifests, archive transport, relink workflow and wider recovery tests |
-| Packaging | Native archive/installer scripts with licenses, dependency declarations and checksums; FFmpeg/fonts/models remain external | Published releases, qualified platform/host matrix, managed updates and offline dependency bundles |
+| application_smoke.py | Two-minute import; 30/31-second edit/revise/undo; 900/930 decoded frames; unchanged source, byte-identical undo, backup reopen/render, corrupt-source and protection rejection, upright rotation | Generated SDR fixture |
+| job_smoke.py | SIGKILL worker, owned child terminates; next worker reconciles interrupted attempt; retry succeeds at attempt 2; cancellation finishes within five seconds and retains prior final | Linux process ownership and filesystem |
+| agent_smoke.mjs | Official MCP SDK 1.32.0 handshake and tool schema; same CLI/MCP replay, key conflicts, cached frame, transcript/search, three independent captioned outputs, verified artifacts, explicit protection removal, scoped paths and backup | Real local MCP integration; no hosted-bot certification |
+| media_matrix.py | Rotation 0/90/180/270 pixel comparison, synthetic HEVC SDR and VFR, video without audio; all outputs decode 60 frames; tagged PQ/HLG and nonzero starts rejected without committed assets | Does not prove real-camera color or speech lip sync |
+| asr_smoke.py | Real tiny.en model on generated speech; recognized product/video; searchable source cues; analysis leaves history unchanged; cache reuse, wrong-model and altered-artifact/cache rejection | Machine text needs review; English fixture only |
+| long_input.py | One-hour 256×144/10 fps source; five-second output at source 59:00; input seek at 3540 seconds; 150 decoded frames; render about 1.7 s and sampled process-tree peak about 145 MiB | Low-resolution CPU fixture, not 4K/iPhone performance or a hard memory reservation |
+| Native bundle installation | Pending the release installation run; required gate is archive/binary SHA-256 validation, doctor and official MCP workflow through the installed binary | Same-host native route; no separate host certification |
 
-`--help` and `--version` use normal human-readable CLI output. The application
-does not yet expose transcription, asynchronous persistent workers, style
-libraries or MCP. Rendering is SDR-only; HDR rejection and Rec.709 output tags
-do not establish complete color-managed iPhone support. The upstream capability
-registry is broader than the application's acceptance matrix.
+[Release evidence](../evaluation/service-results/qualification.json) records
+summaries and provenance. Generated footage, models and project databases stay
+outside Git. Historical candidate evaluation results remain separate.
+CI executes Rust/schema plus application, worker, media-matrix and official MCP
+checks and packages a native archive. Local ASR and the one-hour benchmark are
+separate release checks. A checked-in CI workflow does not establish that a
+remote Actions run passed; local execution is the evidence here.
 
-The source includes tests for reopen/retry/restore, invalid batches, dry-run,
-concurrent writers and rollback when request insertion is rejected by a SQLite
-trigger, plus source-protection and migration/backup tests. The application smoke
-harness covers the generated SDR edit/revise/render/backup loop documented in
-DEVELOPMENT.md. The SQLite trigger is a transaction-failure simulation, not an
-actual disk-full or power-loss experiment. This specification expansion does
-not rerun or broaden that media/host evidence.
+## Remaining product scope
 
-## How to interpret the specifications
+Real creator-supplied phone footage, phone appearance/audio review, a tested
+HDR conversion path and an actual hosted-agent delivery trial remain open.
+This build rejects unsupported HDR/offset paths clearly. There is no broad
+claim of iPhone support, arbitrary languages or universal platform support.
 
-The original [architecture](architecture.md) remains the broad design. The
-[specifications](specs/agent-protocol.md) make behavior and acceptance gates more
-concrete. Proposed commands and operation extensions are explicitly labeled.
-The current CLI keeps its flat commands and AgentCut batch format until an
-intentional compatibility change implements any new surface.
+Higher-level B-roll/audio narrative workflows, reusable versioned profiles,
+selective source restoration helpers, named format/language variant operations,
+timestamped review comments, workspace catalog, resumable remote transfer,
+retention automation, published cross-platform installers and timeline
+interchange remain in the [expanded backlog](implementation-backlog.md).
+Projects can already contain multiple managed sources and independent outputs;
+that does not certify all advanced composition or delivery combinations.
 
-The [draft schemas](../specs/schemas/README.md) validate example wire structure;
-they are not generated from current Rust types and do not certify domain/media
-validity. Before shipping them as the runtime contract, add conformance checks
-against Rust parsing, responses and capability-derived operation schemas.
-
-No downloadable application release or supported-host certification is implied
-by the source package's `0.1.0` version. Published compatibility claims require
-the [deployment](specs/distribution-and-workers.md) and
-[quality](specs/quality-and-performance.md) gates.
+[Deployment](deployment.md) documents local access, worker supervision, storage,
+upgrade/rollback and the supported limits. The generated service request schema
+is the runtime envelope contract; older schemas/examples and proposed commands
+in design specifications remain illustrative. Stable 1.0 acceptance requires
+the broader documented camera/host and operational gates.

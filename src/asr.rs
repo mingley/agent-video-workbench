@@ -70,14 +70,20 @@ pub fn analyze(
     let key = format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(
-            &json!({"asset":asset.fingerprint.sha256,"config":input.config,"version":1})
+            &json!({"asset":asset.fingerprint.sha256,"config":input.config,"version":2})
         )?)
     );
     let cache = root.join("analysis").join(format!("asr-{key}.json"));
-    if cache.exists() {
+    let cache_manifest = cache.with_extension("manifest.json");
+    if cache.exists() && cache_manifest.exists() {
+        let manifest: Value = crate::json::read(&cache_manifest)?;
+        let hash = media::hash_file_controlled(&cache, control)?;
+        if manifest["sha256"] != hash {
+            return Err(Error::Invalid("cached transcript bytes changed".into()));
+        }
         let transcript: Transcript = crate::json::read(&cache)?;
         return Ok(
-            json!({"path":cache,"sha256":media::hash_file(&cache)?,"mimeType":"application/json","assetId":transcript.asset_id,"cacheHit":true,"cueCount":transcript.cues.len()}),
+            json!({"path":cache,"sha256":hash,"mimeType":"application/json","assetId":transcript.asset_id,"cacheHit":true,"cueCount":transcript.cues.len()}),
         );
     }
     let scratch = root
@@ -165,11 +171,21 @@ pub fn analyze(
         let staged = scratch.join("normalized.json");
         std::fs::write(&staged, serde_json::to_vec_pretty(&transcript)?)?;
         File::open(&staged)?.sync_all()?;
+        let hash = media::hash_file_controlled(&staged, control)?;
+        let staged_manifest = scratch.join("manifest.json");
+        std::fs::write(
+            &staged_manifest,
+            serde_json::to_vec(
+                &json!({"sha256":hash,"sourceSha256":asset.fingerprint.sha256,"provider":input.config,"adapterVersion":2}),
+            )?,
+        )?;
+        File::open(&staged_manifest)?.sync_all()?;
         control.check()?;
         std::fs::rename(&staged, &cache)?;
+        std::fs::rename(&staged_manifest, &cache_manifest)?;
         File::open(root.join("analysis"))?.sync_all()?;
         Ok(
-            json!({"path":cache,"sha256":media::hash_file(&cache)?,"mimeType":"application/json","assetId":input.asset_id,"cacheHit":false,"cueCount":transcript.cues.len()}),
+            json!({"path":cache,"sha256":hash,"mimeType":"application/json","assetId":input.asset_id,"cacheHit":false,"cueCount":transcript.cues.len()}),
         )
     })();
     let _ = std::fs::remove_dir_all(scratch);

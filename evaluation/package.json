@@ -1,0 +1,8 @@
+{
+  "name": "avw-agent-conformance",
+  "private": true,
+  "version": "0.2.0",
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.0"
+  }
+}

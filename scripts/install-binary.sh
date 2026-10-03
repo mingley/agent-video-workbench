@@ -5,6 +5,7 @@ if [[ $# != 1 ]]; then
   exit 2
 fi
 bundle=$(cd "$(dirname "$0")" && pwd)
+(cd "$bundle" && sha256sum -c SHA256SUMS)
 mkdir -p "$1"
 # Refuse to replace an existing installation without an explicit user action.
 if [[ -e "$1/avw" ]]; then

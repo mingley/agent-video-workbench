@@ -1,4 +1,19 @@
-# Draft wire schemas
+# Runtime and design schemas
+
+[service-request.schema.json](service-request.schema.json) is generated from the
+Rust `Request` type. `avw schema` returns the same schema; MCP tools/list uses
+it for the `avw` tool. `scripts/check-schema.py` verifies the checked-in contract
+against the current executable. CLI flat commands map to the same service.
+The parser also rejects duplicate keys and integers outside the exact JSON
+range; JSON Schema alone does not enforce those parsing rules.
+
+The request schema describes command envelopes and typed creator workflows.
+Raw apply batches remain pinned AgentCut operations; `describe OPERATION`
+provides examples and property discovery, and `apply --dry-run` performs domain
+validation, including source protection and revision checks.
+
+The following older documents remain design artifacts, not a replacement for
+the generated runtime contract:
 
 These JSON Schema 2020-12 documents are design artifacts for the
 [agent protocol](../../docs/specs/agent-protocol.md). They preserve the prototype's

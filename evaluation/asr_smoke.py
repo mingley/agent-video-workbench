@@ -21,14 +21,14 @@ def main():
     prefix=[a.avw,'--ffmpeg',a.ffmpeg,'--ffprobe',a.ffprobe,'--whisper',a.whisper,
             '--whisper-model',a.model,'--whisper-model-sha256',a.model_sha256]
     ledger=[]
-    def run(*args):
+    def run(*args, expected=0):
         result=subprocess.run([*prefix,*map(str,args)],capture_output=True,text=True,timeout=30)
         ledger.append({'args':list(map(str,args)),'exit':result.returncode,'stdout':result.stdout,'stderr':result.stderr})
         (root/'commands.json').write_text(json.dumps(ledger,indent=2))
-        assert result.returncode==0,ledger[-1]
+        assert result.returncode==expected,ledger[-1]
         response=json.loads(result.stdout)
-        assert response['ok'],response
-        return response['result']
+        assert response['ok']==(expected==0),response
+        return response.get('result',response)
     project=root/'project'
     run('create',project,'--name','Local ASR')
     run('import',project,speech,'--id','speech','--expected-revision',0,'--key','import-speech')
@@ -53,9 +53,27 @@ def main():
         if cached['state']=='succeeded':break
         time.sleep(0.1)
     assert cached['state']=='succeeded' and cached['result']['cacheHit'],cached
+    # Wrong model identity fails the queued job without attaching new text.
+    prefix[-1]='0'*64
+    bad=run('transcribe-start',project,'--asset-id','speech','--expected-revision',2,'--key','wrong-model')
+    for _ in range(100):
+        bad=run('job-status',project,bad['id'])
+        if bad['state'] in ('failed','succeeded'):break
+        time.sleep(0.1)
+    assert bad['state']=='failed' and 'checksum' in bad['error'],bad
+    assert run('status',project)['revision']==2
+    prefix[-1]=a.model_sha256
+    with Path(artifact['path']).open('a') as changed: changed.write('\n ')
+    assert run('artifact',project,job['id'],expected=1)['error']['code']=='E_INVALID_REQUEST'
+    changed=run('transcribe-start',project,'--asset-id','speech','--expected-revision',2,'--key','changed-cache')
+    for _ in range(100):
+        changed=run('job-status',project,changed['id'])
+        if changed['state'] in ('failed','succeeded'):break
+        time.sleep(0.1)
+    assert changed['state']=='failed' and 'cached transcript bytes changed' in changed['error'],changed
     (root/'summary.json').write_text(json.dumps({'passed':True,'realWhisperModel':True,
         'modelSha256':a.model_sha256,'cueCount':len(transcript['cues']),'text':text,
-        'analysisDidNotMutateHistory':True,'cacheReused':True},indent=2))
+        'analysisDidNotMutateHistory':True,'cacheReused':True,'modelMismatchRejected':True,'changedArtifactRejected':True,'changedCacheRejected':True},indent=2))
     print('ASR smoke passed:',root/'summary.json')
 
 

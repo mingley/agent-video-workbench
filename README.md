@@ -1,80 +1,58 @@
 # Agent Video Workbench
 
-An open-source Rust video workbench for an external persistent agent. The first
-user is an iPhone content creator who wants to send footage, review drafts, and
-request revisions conversationally. The planned broader product supports multiple
-recordings, reusable styles, alternative openings and delivery variants.
+A Rust video tool for an external agent. It owns original media, editable
+projects, revision history, analysis, background jobs and verified exports.
+The agent owns conversation, content choices and file delivery. A GUI and a
+proprietary model service are unnecessary.
 
-**Status: Rust SDR editing prototype, candidate evaluation and product
-specifications, October 2, 2026.** The CLI implements transactional projects,
-managed original import, synchronous verified renders, source protection and
-portable media backup. Local packaging scripts are available. The
-[development guide](DEVELOPMENT.md) describes the synthetic editing/render loop;
-real phone and hosted-bot acceptance remains pending. See the
-[implementation inventory](docs/implementation-status.md) for precise limits.
-`agent-video-workbench` is a provisional repository name; a product name remains
-open. Reelwright is already used by other video products and a GitHub project.
+**Version 0.2: local Linux CLI and MCP service, October 3, 2026.** Import footage,
+inspect source frames/scenes/silence, import a reviewed transcript or run local
+Whisper, compose independent named captioned shorts, render in the background,
+revise after restarting, and reopen portable backups. SQLite commits edits,
+history and retry outcomes together. Render workers support cancellation,
+crash recovery and retries; completed exports include technical QC, source
+snapshots and contact sheets.
 
-**Recommended starting point:** extend the MIT-licensed AgentCut Rust core and
-renderer in a focused application, with durable transactional project history,
-iPhone ingest, transcription, and a small agent interface. Pin the upstream
-revision. The prototype replaces the best-effort journal with SQLite and adapts
-rotation handling; real phone/host qualification remains necessary. Keep
-OpenReelio as the alternative if the library boundary proves unsuitable.
-
-The external bot owns conversation, reasoning, and its own memory. This tool
-owns media, editable projects, source references, revisions, jobs, and render
-evidence. FFmpeg supplies media processing; a GUI is unnecessary.
-
-| Document | What it answers |
-| --- | --- |
-| [Product plan](docs/product-plan.md) | Full creator workflow, 24 capabilities, daily use, portability and stable-release milestones |
-| [Implementation status](docs/implementation-status.md) | What the Rust prototype currently implements and what remains proposed |
-| [Development guide](DEVELOPMENT.md) | Run the existing SDR prototype, application regression and native packaging scripts |
-| [Foundation decision](docs/decision.md) | Adopt, extend, fork, or build; first complete creator workflow |
-| [Candidate research](docs/research.md) | Pinned source audit, licenses, installs, verified edits, limitations |
-| [Architecture](docs/architecture.md) | Rust boundaries, durable state, exact timing, inspection, rendering, recovery |
-| [Initial roadmap](docs/roadmap.md) | First end-to-end milestones and their relationship to the broader product |
-| [Expanded backlog](docs/implementation-backlog.md) | Next implementation slices, 22 epics, dependencies and acceptance boundaries |
-| [Editing specifications](docs/specs/editing-workflows.md) | Multi-source timelines, B-roll, captions, language variants, audio, framing and templates |
-| [Project lifecycle](docs/specs/project-lifecycle.md) | Variants, profiles, review comments, workspace library, retention and portable projects |
-| [Agent protocol](docs/specs/agent-protocol.md) | Discovery, atomic requests, resume context, structured recovery and draft wire schemas |
-| [Media pipeline](docs/specs/media-pipeline.md) | iPhone input matrix, analysis graph, color, multiple formats and delivery packages |
-| [Distribution and workers](docs/specs/distribution-and-workers.md) | Downloadable installation, host routes, persistent jobs, resource limits and upgrades |
-| [Quality and performance](docs/specs/quality-and-performance.md) | Fixture coverage, output checks, measurement method and release qualification |
-| [Hosted-bot compatibility](docs/host-compatibility.md) | Dots, Grok Bot, Muse, installation, transfer, storage, GPU assumptions |
-| [Evaluation](evaluation/README.md) | Reproduce the tests and inspect generated artifacts |
-
-The MVP is the first delivery milestone. The next creator workflow combines
-multiple phone recordings and B-roll, preserves dialogue, compares named hook
-variants, applies versioned styles, incorporates comments on old previews, and
-exports several aspect/language variants from the same project. Those features
-have concrete semantics and acceptance criteria in the specifications above.
-
-For the current Rust prototype, use Rust 1.99 or newer as declared by the
-manifest. These commands exercise project persistence:
+Start with [installation and MCP connection](docs/deployment.md) and the
+[agent workflow](AGENT_GUIDE.md). The native installer needs no Rust compiler,
+Node, GUI or root. Building from source uses latest stable Rust:
 
 ```sh
-cargo run --locked -- create ../avw-demo-project --name "Demo"
-cargo run --locked -- status ../avw-demo-project
-cargo run --locked -- history ../avw-demo-project
+cargo build --release --locked
+./target/release/avw --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe doctor
+./target/release/avw create ../avw-project --name "First short"
+./target/release/avw agent-guide
 ```
 
-The example keeps project data outside this source checkout. The existing native
-archive installer requires no Rust compiler; published cross-platform release
-bundles and hosted-bot qualification remain planned.
-Draft protocol examples are in [specs/schemas](specs/schemas/README.md).
+Use FFmpeg/ffprobe 8 with libx264/AAC and an imported licensed TTF font.
+`scripts/setup-media.sh TOOL_DIRECTORY` prepares the qualified Linux backend.
+Optional `scripts/setup-asr.sh PROVIDER_DIRECTORY` installs pinned local English
+Whisper with checksum-verified weights. Paths, transcripts, jobs and exports
+are available through the same typed CLI/JSON and MCP operations.
 
-Built and ran AgentCut, ave, and OpenReelio from pinned source on Apple Silicon.
-The synthetic edit retained two ranges, removed a four-second pause, burned
-captions, and rendered a draft. AgentCut also restored an omitted interval in
-one batch, changed captions, and undid/redid the revision across CLI processes.
-These checks do not establish real iPhone, HDR, transcription, long-video, or
-hosted-bot compatibility.
+The qualified route is Debian 13 x86_64 and local persistent storage, delivering
+SDR H.264/AAC. Tests cover real CLI/worker processes, the official MCP client,
+generated H.264/HEVC/VFR and four rotations, local ASR, backup recovery, and
+bounded editing of a one-hour fixture. HDR and nonzero stream starts are
+rejected. Real phone footage/appearance and hosted-bot delivery still need
+qualification; the full creator product roadmap remains in progress. Read the
+[acceptance matrix](docs/implementation-status.md) for precise evidence and limits.
 
-![Generated draft contact sheet](evaluation/results/draft-sheet.png)
+| Document | Purpose |
+| --- | --- |
+| [Agent guide](AGENT_GUIDE.md) | Requests, source cues, named outputs, revision conflicts and jobs |
+| [Deployment](docs/deployment.md) | Native installation, MCP configuration, storage, restart and upgrade |
+| [Development](DEVELOPMENT.md) | Latest stable Rust, strict Clippy, generated schema and functional checks |
+| [Implementation status](docs/implementation-status.md) | Implemented contracts, acceptance evidence and remaining scope |
+| [Product plan](docs/product-plan.md) | Creator workflows and longer-term milestones |
+| [Backlog](docs/implementation-backlog.md) | Remaining epics and acceptance criteria |
+| [Architecture](docs/architecture.md) | Rust boundaries, exact time and durable state design |
+| [Foundation decision](docs/decision.md) | Why the pinned MIT AgentCut core/render libraries were selected |
+| [Research](docs/research.md) | Historical candidate source audit and evaluation |
+| [Evaluation](evaluation/README.md) | Application checks and the separate candidate harness |
+| [Service schema](specs/schemas/service-request.schema.json) | Generated request envelope shared by CLI and MCP |
 
-Software in this repository is MIT licensed. External agents, optional hosted
-transcription, storage, bandwidth, and compute can cost money. FFmpeg builds,
-models, and fonts retain their own licenses. No proprietary model service is
-required by the planned editor.
+The application's AgentCut dependency is commit-pinned; its best-effort journal
+is not used as project authority. Software here is MIT licensed. FFmpeg, fonts,
+models and agent hosts retain their own licenses and operating costs. Never
+commit private footage, credentials or model weights.

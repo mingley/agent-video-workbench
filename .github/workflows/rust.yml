@@ -1,13 +1,46 @@
-name: Rust
+name: Rust and agent workflow
 on: [push, pull_request]
 jobs:
-  check:
+  qualify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --locked --all-targets --all-features -- -D warnings
-      - run: cargo test --locked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: evaluation/package-lock.json
+      - name: Strict Rust checks, schema and native bundle
+        run: scripts/package.sh "$RUNNER_TEMP/release"
+      - name: Checksum-verified FFmpeg runtime
+        run: scripts/setup-media.sh "$RUNNER_TEMP/tools"
+      - name: Application, media and worker qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          media="$RUNNER_TEMP/tools/ffmpeg8/linux"
+          python3 evaluation/application_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/application"
+          python3 evaluation/job_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --project "$RUNNER_TEMP/application/backup" --output "$RUNNER_TEMP/jobs"
+          python3 evaluation/media_matrix.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/matrix"
+      - name: Official MCP client, installed binary and CLI conformance
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --prefix evaluation
+          "$RUNNER_TEMP/release/avw/install.sh" "$RUNNER_TEMP/bin"
+          media="$RUNNER_TEMP/tools/ffmpeg8/linux"
+          node evaluation/agent_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf "$RUNNER_TEMP/agent" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qualified-native-bundle
+          path: |
+            ${{ runner.temp }}/release/*.tar.gz
+            ${{ runner.temp }}/release/SHA256SUMS
+            ${{ runner.temp }}/application/summary.json
+            ${{ runner.temp }}/jobs/summary.json
+            ${{ runner.temp }}/matrix/summary.json
+            ${{ runner.temp }}/agent/summary.json

@@ -1,0 +1,159 @@
+{
+  "applicationVersion": "0.2.0",
+  "date": "2026-10-03",
+  "platform": "Debian 13 Linux x86_64",
+  "rust": "latest stable 1.99.0",
+  "ffmpeg": "n8.0.1-48-g0592be14ff-20260116",
+  "whisperSourceCommit": "927cfce34f31707e17f2bff35c349632fb9e2c3a",
+  "rustChecks": {
+    "fmt": true,
+    "strictClippy": true,
+    "testsPassed": 21,
+    "ignored": 0
+  },
+  "functionalChecks": {
+    "application": {
+      "passed": true,
+      "draftFrames": 900,
+      "revisedFrames": 930,
+      "sourceUnchanged": true,
+      "undoBytesMatch": true,
+      "corruptOriginalRejected": true,
+      "rotationOrientationVerified": true,
+      "limitations": [
+        "synthetic SDR only; no real iPhone or hosted bot trial"
+      ]
+    },
+    "jobs": {
+      "passed": true,
+      "ownerDeathStopsChild": true,
+      "interruptedJobRecovered": true,
+      "retryAttempt": 2,
+      "cancelBounded": true,
+      "previousFinalPreserved": true
+    },
+    "agent": {
+      "passed": true,
+      "officialMcpSdk": true,
+      "cliMcpOutcomeEquivalent": true,
+      "transcriptMappedCaptions": true,
+      "independentNamedOutputs": 3,
+      "cacheReused": true,
+      "decodedFrames": 180,
+      "jobId": "83f10925-ac36-4dfd-b905-e861151f5f81"
+    },
+    "mediaMatrix": {
+      "passed": true,
+      "accepted": [
+        {
+          "fixture": "rotation_0",
+          "decodedFrames": 60,
+          "sourceUnchanged": true,
+          "orientationMeanAbsoluteDifference": 2.2048119212962964
+        },
+        {
+          "fixture": "rotation_90",
+          "decodedFrames": 60,
+          "sourceUnchanged": true,
+          "orientationMeanAbsoluteDifference": 1.4562109375
+        },
+        {
+          "fixture": "rotation_180",
+          "decodedFrames": 60,
+          "sourceUnchanged": true,
+          "orientationMeanAbsoluteDifference": 2.172243923611111
+        },
+        {
+          "fixture": "rotation_270",
+          "decodedFrames": 60,
+          "sourceUnchanged": true,
+          "orientationMeanAbsoluteDifference": 1.5193619791666666
+        },
+        {
+          "fixture": "hevc_sdr",
+          "decodedFrames": 60,
+          "sourceUnchanged": true,
+          "orientationMeanAbsoluteDifference": null
+        },
+        {
+          "fixture": "vfr",
+          "decodedFrames": 60,
+          "sourceUnchanged": true,
+          "orientationMeanAbsoluteDifference": null
+        }
+      ],
+      "rejected": [
+        "pq",
+        "hlg",
+        "offset"
+      ],
+      "limitations": [
+        "Generated inputs only; real camera color/audio and Dolby Vision remain unqualified",
+        "VFR fixture verifies output cadence/count, not lip sync in real speech"
+      ]
+    },
+    "asr": {
+      "passed": true,
+      "realWhisperModel": true,
+      "modelSha256": "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
+      "cueCount": 1,
+      "text": "hello, this video shows our product demonstration. please keep the product visible.",
+      "analysisDidNotMutateHistory": true,
+      "cacheReused": true,
+      "modelMismatchRejected": true,
+      "changedArtifactRejected": true,
+      "changedCacheRejected": true
+    },
+    "longInput": {
+      "passed": true,
+      "sourceSeconds": 3600,
+      "sourceBytes": 16386540,
+      "outputFrames": 150,
+      "inputSeekSeconds": 3540,
+      "measurements": [
+        {
+          "command": "one-hour.mp4",
+          "elapsedSeconds": 35.652,
+          "peakProcessTreeRssBytes": 33140736
+        },
+        {
+          "command": "One-hour fixture",
+          "elapsedSeconds": 0.103,
+          "peakProcessTreeRssBytes": 1769472
+        },
+        {
+          "command": "long-source",
+          "elapsedSeconds": 1.137,
+          "peakProcessTreeRssBytes": 19398656
+        },
+        {
+          "command": "long-font",
+          "elapsedSeconds": 0.104,
+          "peakProcessTreeRssBytes": 5373952
+        },
+        {
+          "command": "late-compose",
+          "elapsedSeconds": 0.103,
+          "peakProcessTreeRssBytes": 5046272
+        },
+        {
+          "command": "late_short",
+          "elapsedSeconds": 1.656,
+          "peakProcessTreeRssBytes": 151605248
+        }
+      ],
+      "limitations": [
+        "256x144 10fps synthetic SDR, 360x640 output; not a 4K/iPhone benchmark",
+        "Linux /proc sampled RSS, not a hard memory reservation"
+      ]
+    }
+  },
+  "releaseInstallation": {
+    "status": "pending",
+    "scope": "same-host native no-Cargo install and official MCP loop"
+  },
+  "limits": [
+    "Generated fixtures; real camera appearance/color/audio and hosted bots remain unqualified",
+    "The one-hour benchmark is low-resolution and measures sampled RSS, not a hard reservation"
+  ]
+}

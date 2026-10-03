@@ -7,3 +7,4 @@ __pycache__/
 .env
 .env.*
 *.partial
+node_modules/

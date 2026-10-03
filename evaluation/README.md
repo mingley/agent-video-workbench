@@ -1,3 +1,19 @@
+# Application qualification
+
+The 0.2 application checks and exact commands are in
+[DEVELOPMENT.md](../DEVELOPMENT.md). The current scope and evidence are in
+[implementation status](../docs/implementation-status.md) and
+[service qualification results](service-results/qualification.json).
+`application_smoke.py`, `job_smoke.py`, `media_matrix.py`, `agent_smoke.mjs`,
+`asr_smoke.py` and `long_input.py` drive the Rust application with generated
+media. New output directories must be outside Git; model weights and private
+footage must never be checked in. Node and the locked official MCP SDK are test
+clients, not application runtime dependencies.
+
+The rest of this document records a separate historical candidate comparison.
+Its media, assertions and known failures do not describe 0.2 application
+qualification.
+
 # Reproduce the candidate edit
 
 This is a research harness, not the new editing application. Python is used

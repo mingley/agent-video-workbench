@@ -51,10 +51,30 @@ try {
  if(status.state!=='succeeded')throw new Error(JSON.stringify(status));
  const artifact=await call({command:'artifact',project:'project',id:job.id});if(!fs.existsSync(artifact.path)||artifact.mimeType!=='video/mp4')throw new Error('artifact unavailable');
  const manifest=JSON.parse(fs.readFileSync(status.result.manifest,'utf8'));if(manifest.verification.expectedFrames!==180)throw new Error('wrong decoded duration');
+ const originalOutput=JSON.stringify((await state()).sequences.find(s=>s.id==='product_demo'));
+ let finalRevision=edited.revision;
+ for(const [outputId,name] of [['hook_b','Alternative opening'],['hook_c','Third short']]) {
+   const outcome=await call({...compose,key:'compose-'+outputId,expectedRevision:finalRevision,edit:{...compose.edit,outputId,name,cuts:[...compose.edit.cuts].reverse()}});
+   finalRevision=outcome.revision;
+ }
+ if(JSON.stringify((await state()).sequences.find(s=>s.id==='product_demo'))!==originalOutput)throw new Error('composing variants changed the first output');
+ for(const sequence of ['hook_b','hook_c']) {
+   const queued=await call({command:'render-start',project:'project',sequence,expectedRevision:finalRevision,key:'render-'+sequence});
+   let done;
+   for(let i=0;i<240;i++){done=await call({command:'job-status',project:'project',id:queued.id});if(['succeeded','failed','cancelled','interrupted'].includes(done.state))break;await new Promise(resolve=>setTimeout(resolve,250));}
+   if(done.state!=='succeeded')throw new Error(JSON.stringify(done));
+   await call({command:'artifact',project:'project',id:queued.id});
+ }
+ const protectedResult=await call({command:'protect',project:'project',expectedRevision:finalRevision,key:'protect-demo',range:{id:'demo',assetId:'phone',sequenceId:'product_demo',start:{value:210,rate:{numerator:30,denominator:1}},end:{value:300,rate:{numerator:30,denominator:1}}}});
+ finalRevision=protectedResult.revision;
+ const unprotect={command:'unprotect',project:'project',id:'demo',expectedRevision:finalRevision,key:'remove-protection'};
+ const removed=await call(unprotect);
+ if(JSON.stringify(await call(unprotect))!==JSON.stringify(removed))throw new Error('unprotect replay diverged');
+ finalRevision=removed.revision;
  await call({command:'resume',project:'project'});await call({command:'history',project:'project',limit:2});
  const escape=await call({command:'status',project:'../outside'},true);if(escape.ok!==false)throw new Error('workspace escape accepted');
  await call({command:'backup',project:'project',destination:'backup'});
- const reopened=await call({command:'status',project:'backup'});if(reopened.revision!==edited.revision)throw new Error('backup lost revision');
- fs.writeFileSync(path.join(root,'summary.json'),JSON.stringify({passed:true,officialMcpSdk:true,cliMcpOutcomeEquivalent:true,transcriptMappedCaptions:true,cacheReused:true,decodedFrames:180,jobId:job.id,artifact:artifact.path},null,2));
+ const reopened=await call({command:'status',project:'backup'});if(reopened.revision!==finalRevision)throw new Error('backup lost revision');
+ fs.writeFileSync(path.join(root,'summary.json'),JSON.stringify({passed:true,officialMcpSdk:true,cliMcpOutcomeEquivalent:true,transcriptMappedCaptions:true,independentNamedOutputs:3,cacheReused:true,decodedFrames:180,jobId:job.id,artifact:artifact.path},null,2));
  console.log('Agent interface smoke passed:',path.join(root,'summary.json'));
 } finally {await client.close();}

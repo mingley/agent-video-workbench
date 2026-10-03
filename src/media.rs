@@ -292,7 +292,8 @@ pub(crate) fn render_attempt(
     let staged = directory.join("unverified.mp4");
     let preset = agentcut_render::preset::require("h264-mp4")?;
     let (prepared, seeks) = seek_project(project, sequence)?;
-    let normalized = agentcut_core::normalize::normalize_sequence(&prepared, sequence)?;
+    let mut normalized = agentcut_core::normalize::normalize_sequence(&prepared, sequence)?;
+    layout_caption_lines(&mut normalized)?;
     let ir = agentcut_render::ir::build(project, &normalized, root, preset, &staged, None, false)?;
     let info = crate::process::run(
         Command::new(backend.ffmpeg_path()).arg("-version"),
@@ -370,7 +371,7 @@ pub(crate) fn render_attempt(
     plan.plan_hash = format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(
-            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":2,"inputSeeksSeconds":seeks})
+            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":3,"inputSeeksSeconds":seeks})
         )?)
     );
     std::fs::write(
@@ -582,6 +583,71 @@ pub fn backup(root: &Path, destination: &Path) -> Result<Value> {
     Ok(
         json!({"path":destination,"originalCount":hashes.len(),"revision":copied.project()?.revision,"derivedArtifactsIncluded":false}),
     )
+}
+
+/// FFmpeg 8 drawtext can display the line separator as a missing glyph.
+/// Give each caption line its own text plane, preserving the original cue in
+/// the project and its source map. No line separator reaches drawtext.
+pub fn layout_caption_lines(
+    normalized: &mut agentcut_core::normalize::NormalizedSequence,
+) -> Result<()> {
+    use agentcut_core::{Crop, FitMode, Size2d, VerticalAlignment};
+    for layer in &mut normalized.video_layers {
+        let mut laid_out = Vec::new();
+        for item in &layer.items {
+            let Some(text) = &item.text else {
+                laid_out.push(item.clone());
+                continue;
+            };
+            if item.caption.is_none() || !text.text.contains('\n') {
+                laid_out.push(item.clone());
+                continue;
+            }
+            let lines: Vec<_> = text.text.lines().collect();
+            if lines.len() > 3 {
+                return Err(Error::Invalid(
+                    "caption exceeds three renderable lines; split the cue".into(),
+                ));
+            }
+            let height = (text.style.font_size * text.style.line_height)
+                .ceil()
+                .max(1.0);
+            let block_height = height * lines.len() as f64;
+            let top = match text.style.vertical_alignment {
+                VerticalAlignment::Top => text.transform.position.y - text.text_box.height / 2.0,
+                VerticalAlignment::Middle => text.transform.position.y - block_height / 2.0,
+                VerticalAlignment::Bottom => {
+                    text.transform.position.y + text.text_box.height / 2.0 - block_height
+                }
+            };
+            for (n, line) in lines.iter().enumerate() {
+                let mut line_item = item.clone();
+                line_item.item_id = format!("{}_line_{n}", item.item_id);
+                let mut line_text = text.clone();
+                line_text.text = (*line).into();
+                line_text.text_box.height = height;
+                line_text.transform.position.y = top + height * (n as f64 + 0.5);
+                line_text.style.vertical_alignment = VerticalAlignment::Middle;
+                line_item.placement = Some(agentcut_core::normalize::resolve_placement(
+                    Size2d {
+                        width: line_text.text_box.width.ceil() as u32,
+                        height: height as u32,
+                    },
+                    normalized.canvas,
+                    FitMode::None,
+                    Crop::none(),
+                    &line_text.transform,
+                )?);
+                line_item.text = Some(line_text);
+                if let Some(caption) = &mut line_item.caption {
+                    caption.text = (*line).into();
+                }
+                laid_out.push(line_item);
+            }
+        }
+        layer.items = laid_out;
+    }
+    Ok(())
 }
 
 fn seek_project(

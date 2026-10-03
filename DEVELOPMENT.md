@@ -1,94 +1,113 @@
-# Develop and run the prototype
+# Develop Agent Video Workbench 0.2
 
-The first Rust prototype implements a SQLite revision store and a synchronous
-SDR media loop. It pins AgentCut's pure model and renderer to the audited
-revision; its best-effort journal is never used as project authority.
+The Rust application provides durable local projects, a typed CLI/JSON API,
+MCP stdio, source inspection, optional local transcription, captioned named
+outputs and persistent rendering workers. Read [the agent guide](AGENT_GUIDE.md)
+for the editing workflow and [deployment](docs/deployment.md) for installation,
+MCP configuration and restart behavior. The qualified scope is in
+[implementation status](docs/implementation-status.md).
 
-Use latest stable Rust (`rustup update stable`), a C compiler for bundled SQLite,
-Python 3 for the generated-media regression, FFmpeg/ffprobe 8+ with libx264,
-AAC, drawtext/libass, and a licensed local TTF font. No GUI, Node, GPU or model
-service is required. Build and verify from this checkout:
+## Prerequisites and required checks
+
+Use latest stable Rust (`rustup update stable`); the manifest currently requires
+Rust 1.99+. The stable toolchain file includes rustfmt and Clippy. A C compiler
+builds bundled SQLite. Runtime needs FFmpeg/ffprobe 8 with libx264, AAC and
+caption filters, plus an imported, licensed TTF font. Linux x86_64 on persistent
+local block storage is the qualified route. No GUI, GPU, Node or model service
+is needed to run the binary.
 
 ```sh
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked
 cargo build --release --locked
+python3 scripts/check-schema.py target/release/avw
+```
+
+Format changes with `cargo fmt --all`. Never suppress warnings to pass Clippy.
+The generated request contract is
+[service-request.schema.json](specs/schemas/service-request.schema.json).
+Regenerate it from the `result` in `avw schema` when request types change.
+`describe OPERATION` provides examples and the domain property registry;
+`apply --dry-run` checks actual parameters, time arithmetic and project policy.
+The older draft schemas remain design documents.
+
+## Media and agent checks
+
+On this Linux route, `scripts/setup-media.sh /path/to/tools` installs a
+checksum-verified FFmpeg 8 backend without root. FFmpeg remains an external
+runtime with its own license. Substitute its paths below. Each test output
+must be a new directory outside the checkout.
+
+```sh
 python3 evaluation/application_smoke.py \
   --avw "$PWD/target/release/avw" \
   --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe \
-  --font /path/to/font.ttf --output /path/to/new-smoke-directory
+  --font /path/to/font.ttf --output /path/to/new-application-run
+python3 evaluation/job_smoke.py \
+  --avw "$PWD/target/release/avw" \
+  --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe \
+  --project /path/to/new-application-run/backup --output /path/to/new-job-run
+python3 evaluation/media_matrix.py \
+  --avw "$PWD/target/release/avw" \
+  --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe \
+  --output /path/to/new-matrix-run
+npm ci --ignore-scripts --prefix evaluation
+node evaluation/agent_smoke.mjs "$PWD/target/release/avw" \
+  /path/to/ffmpeg /path/to/ffprobe /path/to/font.ttf \
+  /path/to/new-agent-run "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
 ```
 
-`--output` must not exist. The regression generates a two-minute source,
-imports original bytes and a font, makes a 30-second vertical captioned draft,
-restores a source interval, changes caption size/opening, renders 31 seconds,
-and undoes/redoes from fresh CLI processes. It checks decoded frame counts,
-unchanged input bytes, byte-identical undo output, corrupt-source rejection, pixel comparison against
-FFmpeg's upright rotation reference, portable backup reopening and re-rendering,
-and protected source removal/unsafe restore rejection.
-Every render also creates an indexed contact sheet and validates H.264/AAC,
-frame rate, square pixels, Rec.709 tags and expected audio duration.
-Commands/results stay in the chosen output directory; private media stays
-outside Git. Automated synthetic checks do not establish phone appearance.
+The application regression creates a two-minute source, a captioned 30-second
+draft and a 31-second revision, then checks restore/reopen, byte-identical undo,
+source corruption rejection, protection, rotation and portable backup. It
+intentionally corrupts its original project at the end; use its intact `backup`
+for the worker regression. That regression kills an actual worker, checks child
+termination and reconciliation, retries, cancels and preserves the earlier
+verified output. The matrix checks four rotations against upright pixels, HEVC
+SDR, VFR and missing audio; it rejects tagged PQ/HLG and nonzero stream starts.
+The official MCP SDK test produces three independent captioned outputs, checks
+CLI/MCP replay equivalence, cached inspection, conflicts, policy removal,
+artifact verification and backup reopening. Node is only a test dependency.
 
-`avw --help` lists commands. `create DIRECTORY --name NAME` requires a new
-directory. `import DIRECTORY SOURCE --id ID --expected-revision N --key KEY`
-copies and hashes source bytes. `status DIRECTORY` returns an AgentCut project
-snapshot. `apply DIRECTORY --request FILE [--dry-run]` accepts its pinned typed
-operation-batch format; the regression is a complete request example.
-`render DIRECTORY` produces a unique artifact directory containing the render
-plan, verified MP4 and revision/source snapshot manifest. `history`, `diff`,
-and `restore` expose immutable revisions. Restoring appends a revision; redo
-means restoring the earlier edited revision with a new idempotency key.
+Optional local ASR needs CMake and C/C++ to build pinned whisper.cpp v1.9.4.
+`scripts/setup-asr.sh /path/to/providers` verifies source revision and tiny.en
+model SHA-256. Retain the provider build directory and its shared libraries.
+It downloads no private media; model weights remain outside Git.
 
-Normal command outcomes and argument errors are JSON envelopes. Requests must
-supply current revision and an idempotency key. Same request/key returns the
-committed response; changed requests using that key conflict. State, history
-and request outcome commit in one SQLite transaction, with WAL and FULL sync.
-Use persistent local block storage; do not place the SQLite database on object
-storage or assume arbitrary network filesystem locking is safe.
+```sh
+python3 evaluation/asr_smoke.py \
+  --avw "$PWD/target/release/avw" \
+  --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe \
+  --whisper /path/to/providers/whisper/build/bin/whisper-cli \
+  --model /path/to/providers/whisper/models/ggml-tiny.en.bin \
+  --model-sha256 921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f \
+  --output /path/to/new-asr-run
+python3 evaluation/long_input.py \
+  --avw "$PWD/target/release/avw" \
+  --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe \
+  --font /path/to/font.ttf --output /path/to/new-hour-run
+```
 
-`jobs DIRECTORY` lists durable running/succeeded/failed render records and
-revision-bound artifact paths. A crash can leave a running record; this initial
-synchronous runner does not yet implement leases, cancellation or automatic
-reconciliation. `backup DIRECTORY NEW_DIRECTORY` uses SQLite's backup API and
-copies every original referenced by any historical revision. Reopen the backup
-with `status`, `history`, `restore` or `render`; derived renders are omitted,
-and their copied job records are labeled unavailable. Incomplete backups refuse
-to open. Schema upgrades retain a pre-migration SQLite backup.
+ASR speech generation uses `/usr/bin/ffmpeg` with the `flite` filter. The ASR
+adapter itself uses the configured FFmpeg backend. The long-input benchmark
+uses Linux `/proc` sampled process-tree RSS and a low-resolution generated
+one-hour source. It does not establish 4K camera performance or hard host
+resource reservations. Every harness preserves a current-run summary and
+command ledger. Inspect outputs as well as test exit status.
 
-`protect DIRECTORY --request FILE --expected-revision N --key KEY` accepts
-`{"id":"demo","assetId":"phone","sequenceId":"seq_main","start":{"value":1800,"rate":{"numerator":30,"denominator":1}},"end":{"value":2250,"rate":{"numerator":30,"denominator":1}}}`.
-It protects exact source coverage in the named output, including across split
-or reordered clips. Edits and restores cannot remove that coverage or silently
-remove the annotation. Protection is temporal coverage; it does not certify
-visibility beneath overlays, framing or editorial quality. No unprotect
-operation exists in this initial slice.
+## Release archive
 
-`capabilities` exposes the pinned operation registry; `describe CAPABILITY`
-returns its parameter descriptions. The upstream operation surface is broader
-than the application acceptance matrix: discoverable does not mean every
-operation is runtime-tested here.
+`scripts/package.sh /path/to/new-release-directory` runs required Rust/schema
+checks and creates a versioned native archive, installer, licenses, dependency
+license declarations, compiler/platform/commit manifest and SHA256SUMS. Verify
+and extract the archive; run `avw/install.sh /path/to/new-user-bin`. The installer
+verifies the binary and refuses to overwrite an existing installation. Cargo,
+Node and root are unnecessary on the destination host. The bundle excludes
+FFmpeg, fonts and models. Only the native Debian 13 x86_64 build has been
+installed and exercised here; other platform builds need qualification.
 
-The render adapter disables implicit FFmpeg autorotation because the pinned
-compiler emits its own display-matrix transforms. HDR HLG/PQ/BT.2020 ingest
-is rejected rather than silently converted. This is a prototype: persisted
-job cancellation/reconciliation, ASR,
-phone/HDR/VFR acceptance, hosted-bot trials and release packaging are still
-roadmap work. Rendering is synchronous; preserve the project directory and
-all originals. Never interpret the historical candidate evaluation as an
-application acceptance run.
-
-
-## Local release archive
-
-`scripts/package.sh /path/to/new-release-directory` runs the required Rust
-checks and produces a native archive with the binary, licenses, dependency
-license declarations and SHA256SUMS. Verify the archive with
-`sha256sum -c SHA256SUMS`, extract it, then run
-`avw/install.sh /path/to/user-bin`. Installation does not require Cargo, Node,
-a GUI or root. The archive contains no FFmpeg, fonts, private media or models;
-configure the required FFmpeg/ffprobe paths separately. This native build is
-validated on Debian 13 x86_64, not a claim of compatibility with every Linux
-libc or architecture. No GitHub release is published by this script.
+CI runs the Rust/schema, generated application, worker, media and official MCP
+checks, then retains the native bundle. Local ASR and one-hour measurements
+are separate release qualification checks. Product roadmaps and historical
+candidate results describe additional work; they are not runtime contracts.

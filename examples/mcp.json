@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "agent-video-workbench": {
+      "command": "/absolute/path/to/avw",
+      "args": [
+        "--ffmpeg", "/absolute/path/to/ffmpeg",
+        "--ffprobe", "/absolute/path/to/ffprobe",
+        "mcp", "--root", "/absolute/path/to/workspace"
+      ]
+    }
+  }
+}

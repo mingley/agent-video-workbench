@@ -232,12 +232,16 @@ impl Store {
                         let end=time(end-cut.start_ms).rescale_to(at.rate,RoundingMode::Nearest)?;
                         let cue_duration=end.checked_sub(local)?;
                         if cue_duration.is_zero(){continue;}
+                        if ops.len() > 4990 { return Err(Error::Invalid("composed edit exceeds 5000 operations; use shorter cuts or fewer caption cues".into())); }
                         let cue_id=format!("{}_{}_{}",compose.output_id,cut.id,cue.id);
                         let text=wrap_caption(&cue.text,compose.width as f64 * 0.8,|line|metrics.run_width(line,compose.font_size as f64,0.0))?;
                         if text.lines().count() as f64 * compose.font_size as f64 * 1.2 > compose.height as f64 * 0.3 {return Err(Error::Invalid("caption exceeds the safe height; reduce fontSize".into()));}
                         ops.push(json!({"op":"caption.add","params":{"id":cue_id,"track":ctrack,"at":at.checked_add(local)?,"duration":cue_duration,"text":text}}));
                         ops.push(json!({"op":"item.set","target":cue_id,"params":{"property":"text.style.fontAssetId","value":compose.font_asset_id}}));
                         ops.push(json!({"op":"item.set","target":cue_id,"params":{"property":"text.style.fontSize","value":compose.font_size}}));
+                        for (property,value) in [("text.style.stroke.enabled",json!(true)),("text.style.stroke.color",json!("#000000FF")),("text.style.stroke.width",json!((compose.font_size as f64 * 0.06).max(1.0)))] {
+                            ops.push(json!({"op":"item.set","target":cue_id,"params":{"property":property,"value":value}}));
+                        }
                     }
                 }
                 at=at.checked_add(duration)?;
