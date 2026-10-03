@@ -93,6 +93,11 @@ def main():
          key='reanalysis-phone', transcript={'assetId': 'phone', 'language': 'en', 'provider': 'new-analysis',
          'cues': [{'id': 'sentence', 'startMs': 0, 'endMs': 8000, 'text': 'Wrong new name'}]})
     assert call('transcript-search', project=str(project), query='Mingley')['items']
+    versions = {key.removeprefix('avw.analysis.transcript.'): value for key, value in state()['extensions'].items()
+                if key.startswith('avw.analysis.transcript.') and value['provider'] == 'new-analysis'}
+    edit('transcript-select', assetId='phone', analysisVersion=next(iter(versions)),
+         preserveCorrections=True, sequences=['creator'])
+    assert call('transcript-search', project=str(project), query='Mingley')['items']
     # A visual replacement leaves the continuous dialogue route untouched.
     before = call('render', project=str(project), sequence='creator')
     edit('layer', sequence='creator', id='broll', assetId='closeup', atMs=0,

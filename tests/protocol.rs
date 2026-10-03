@@ -23,6 +23,7 @@ fn scoped_service_rejects_escape_and_produces_equivalent_mcp_and_cli_errors() {
         executable: "avw".into(),
         asr: None,
         downloads: Default::default(),
+        provider: None,
     };
     assert!(
         !envelope(service.execute(Request::Create {
@@ -60,6 +61,7 @@ fn every_advertised_edit_has_actionable_discovery() {
         executable: "avw".into(),
         asr: None,
         downloads: Default::default(),
+        provider: None,
     };
     let capabilities = service.execute(Request::Capabilities {}).unwrap();
     for operation in capabilities["editOperations"].as_array().unwrap() {

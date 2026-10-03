@@ -6,6 +6,55 @@ use serde_json::{Value, json};
 pub const PROBE: &str = "avw.ingest.v1";
 pub const HDR_FILTER: &str = "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=mobius:param=0.3:desat=2:peak=10,zscale=t=bt709:m=bt709:r=limited:dither=error_diffusion,format=yuv420p";
 
+pub fn upright_size(video: &agentcut_core::VideoMetadata) -> agentcut_core::Size2d {
+    let width = (f64::from(video.size.width) * video.sample_aspect_ratio.as_f64())
+        .round()
+        .max(1.0) as u32;
+    if video.rotation_degrees.rem_euclid(180) == 90 {
+        agentcut_core::Size2d {
+            width: video.size.height,
+            height: width,
+        }
+    } else {
+        agentcut_core::Size2d {
+            width,
+            height: video.size.height,
+        }
+    }
+}
+pub fn geometry(project: &agentcut_core::Project) -> agentcut_core::Project {
+    let mut prepared = project.clone();
+    for asset in &mut prepared.assets {
+        if let Some(video) = &mut asset.metadata.video {
+            video.size = upright_size(video);
+            video.rotation_degrees = 0;
+            video.sample_aspect_ratio = agentcut_core::RationalRate {
+                numerator: 1,
+                denominator: 1,
+            };
+        }
+    }
+    prepared
+}
+pub fn source_filter(asset: &Asset) -> Result<String> {
+    let mut filters = Vec::new();
+    if let Some(video) = &asset.metadata.video {
+        if video.sample_aspect_ratio.numerator != video.sample_aspect_ratio.denominator {
+            filters.push("scale=iw*sar:ih,setsar=1");
+        }
+        match video.rotation_degrees.rem_euclid(360) {
+            90 => filters.push("transpose=1"),
+            180 => filters.push("hflip,vflip"),
+            270 => filters.push("transpose=2"),
+            _ => {}
+        }
+    }
+    if let Some(color) = filter(asset)? {
+        filters.push(color);
+    }
+    Ok(filters.join(","))
+}
+
 pub fn capability(asset: &Asset) -> Value {
     let dovi = asset
         .extensions
@@ -71,15 +120,20 @@ pub fn adapt(
         let asset = project.require_asset(&input.asset_id)?;
         let label = format!("[{}:v]", index + 1);
         if graph.contains(&label) {
-            if let Some(filter) = filter(asset)? {
+            let filter = source_filter(asset)?;
+            if !filter.is_empty() {
                 // Each source branch is converted before compositing, rather than
                 // tone mapping the already mixed SDR captions and overlays.
                 *graph = graph.replace(&label, &format!("{label}{filter},"));
             }
-            decisions.push(json!({"assetId":asset.id,"sourceSha256":asset.fingerprint.sha256,"color":capability(asset)}));
+            decisions.push(json!({"assetId":asset.id,"sourceSha256":asset.fingerprint.sha256,"color":capability(asset),"sourceFilters":filter,"orientationAppliedOnce":true}));
         }
         let audio = format!("[{}:a]", index + 1);
         *graph = graph.replace(&audio, &format!("{audio}aresample=async=1:first_pts=0,"));
     }
+    *graph = graph.replace(
+        "setsar=1,format=yuv420p[vout]",
+        "setsar=1,format=gbrp,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[vout]",
+    );
     Ok(json!(decisions))
 }

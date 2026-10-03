@@ -186,3 +186,80 @@ fn otio_roundtrip_keeps_supported_source_order_and_exact_times() {
         );
     }
 }
+
+#[test]
+fn transcript_selection_requires_explicit_review_when_corrections_cannot_align() {
+    use agent_video_workbench::workflow::{Cue, Transcript};
+    use std::collections::BTreeMap;
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::create(&temp.path().join("p"), "transcripts").unwrap();
+    seed(&mut store);
+    let transcript = |end| Transcript {
+        asset_id: "source".into(),
+        language: "en".into(),
+        provider: "test".into(),
+        cues: vec![Cue {
+            id: "word".into(),
+            start_ms: 0,
+            end_ms: end,
+            text: "wrong".into(),
+        }],
+    };
+    store
+        .transcript_import(transcript(1000), 1, "original-transcript")
+        .unwrap();
+    store
+        .studio(
+            &Edit::TranscriptCorrect {
+                asset_id: "source".into(),
+                cues: BTreeMap::from([("word".into(), "Mingley".into())]),
+                sequences: vec![],
+            },
+            2,
+            "correct-transcript",
+            false,
+        )
+        .unwrap();
+    store
+        .transcript_import(transcript(900), 3, "new-transcript")
+        .unwrap();
+    let project = store.project().unwrap();
+    let version = project
+        .extensions
+        .iter()
+        .find(|(k, v)| k.starts_with("avw.analysis.transcript.") && v["cues"][0]["endMs"] == 900)
+        .unwrap()
+        .0
+        .strip_prefix("avw.analysis.transcript.")
+        .unwrap()
+        .to_owned();
+    let mut edit = Edit::TranscriptSelect {
+        asset_id: "source".into(),
+        analysis_version: version,
+        preserve_corrections: true,
+        sequences: vec![],
+    };
+    assert!(
+        store
+            .studio(&edit, 4, "unaligned-selection", false)
+            .is_err()
+    );
+    assert_eq!(store.project().unwrap().revision, 4);
+    if let Edit::TranscriptSelect {
+        preserve_corrections,
+        ..
+    } = &mut edit
+    {
+        *preserve_corrections = false;
+    }
+    store.studio(&edit, 4, "reviewed-selection", false).unwrap();
+    let project = store.project().unwrap();
+    assert_eq!(
+        project.extensions["avw.transcripts.v1"][0]["cues"][0]["text"],
+        "wrong"
+    );
+    assert_eq!(
+        project.extensions["avw.corrections.source"][0]["changes"][0]["correctedText"],
+        "Mingley"
+    );
+}

@@ -108,6 +108,7 @@ pub fn inspect(
             "file",
             "-ss",
             &format!("{:.3}", start_ms as f64 / 1000.0),
+            "-noautorotate",
             "-i",
         ])
         .arg(source);
@@ -115,9 +116,15 @@ pub fn inspect(
     match kind {
         Kind::Frame => {
             let staged = directory.join(format!("{key}-{}.partial.png", uuid::Uuid::new_v4()));
-            let filter = crate::color::filter(asset)?
-                .map(|f| format!("{f},scale=1280:1280:force_original_aspect_ratio=decrease"))
-                .unwrap_or_else(|| "scale=1280:1280:force_original_aspect_ratio=decrease".into());
+            let color = crate::color::source_filter(asset)?;
+            let filter = format!(
+                "{}scale=1280:1280:force_original_aspect_ratio=decrease,setsar=1",
+                if color.is_empty() {
+                    color
+                } else {
+                    format!("{color},")
+                }
+            );
             command
                 .args(["-vf", &filter, "-frames:v", "1"])
                 .arg(&staged);

@@ -1,3 +1,5 @@
+pub mod analysis;
+pub mod animation;
 pub mod asr;
 pub mod audio;
 pub mod color;
@@ -15,6 +17,7 @@ pub mod service;
 pub mod storage;
 pub mod store;
 pub mod studio;
+pub mod tracking;
 pub mod transfer;
 pub mod workflow;
 

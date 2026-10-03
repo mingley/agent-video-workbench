@@ -167,6 +167,8 @@ pub enum Request {
         key: String,
         #[serde(default)]
         no_launch: bool,
+        #[serde(default)]
+        priority: i32,
     },
     Imports {
         project: PathBuf,
@@ -200,6 +202,16 @@ pub enum Request {
     Backup {
         project: PathBuf,
         destination: PathBuf,
+    },
+    AnalyzeStart {
+        project: PathBuf,
+        task: crate::analysis::Task,
+        expected_revision: u64,
+        key: String,
+        #[serde(default)]
+        no_launch: bool,
+        #[serde(default)]
+        priority: i32,
     },
     LibraryExport {
         project: PathBuf,
@@ -247,6 +259,13 @@ pub enum Request {
         #[serde(default = "limit")]
         limit: u32,
     },
+    Maintain {
+        workspace: PathBuf,
+        #[serde(default = "grace")]
+        grace_seconds: u64,
+        #[serde(default = "yes")]
+        dry_run: bool,
+    },
     VerifyProject {
         project: PathBuf,
     },
@@ -273,6 +292,8 @@ pub enum Request {
         key: String,
         #[serde(default)]
         no_launch: bool,
+        #[serde(default)]
+        priority: i32,
     },
     BatchStatus {
         project: PathBuf,
@@ -293,6 +314,12 @@ pub enum Request {
     },
     StudioState {
         project: PathBuf,
+        #[serde(default = "decision_prefix")]
+        prefix: String,
+        #[serde(default)]
+        offset: u32,
+        #[serde(default = "limit")]
+        limit: u32,
     },
     Reviews {
         project: PathBuf,
@@ -301,6 +328,9 @@ pub enum Request {
     Describe {
         capability: String,
     },
+}
+fn decision_prefix() -> String {
+    "avw.".into()
 }
 fn download_bytes() -> u64 {
     8 * 1024 * 1024 * 1024
@@ -323,6 +353,7 @@ pub struct Service {
     pub executable: PathBuf,
     pub asr: Option<crate::asr::Config>,
     pub downloads: crate::transfer::Policy,
+    pub provider: Option<crate::analysis::Provider>,
 }
 impl Service {
     fn path(&self, path: &Path) -> Result<PathBuf> {
@@ -361,6 +392,35 @@ impl Service {
     }
     pub fn execute(&self, request: Request) -> Result<Value> {
         match request {
+            Request::AnalyzeStart {
+                project,
+                task,
+                expected_revision,
+                key,
+                no_launch,
+                priority,
+            } => {
+                let root = self.path(&project)?;
+                let provider = if matches!(task, crate::analysis::Task::Provider { .. }) {
+                    self.provider.clone()
+                } else {
+                    None
+                };
+                let input = jobs::RenderInput {
+                    sequence: "seq_main".into(),
+                    priority,
+                    expected_revision,
+                    ffmpeg: self.backend.ffmpeg_path().into(),
+                    ffprobe: self.backend.ffprobe_path().into(),
+                    asr: None,
+                    analysis: Some(crate::analysis::Input { task, provider }),
+                };
+                let job = Store::open(&root)?.enqueue(&key, &input)?;
+                if !no_launch && job.state == "queued" {
+                    self.launch(&root)?;
+                }
+                Ok(serde_json::to_value(job)?)
+            }
             Request::LibraryExport {
                 project,
                 destination,
@@ -449,16 +509,19 @@ impl Service {
                 expected_revision,
                 key,
                 no_launch,
+                priority,
             } => {
                 let root = self.path(&project)?;
                 let inputs: Vec<_> = sequences
                     .into_iter()
                     .map(|sequence| jobs::RenderInput {
                         sequence,
+                        priority,
                         expected_revision,
                         ffmpeg: self.backend.ffmpeg_path().into(),
                         ffprobe: self.backend.ffprobe_path().into(),
                         asr: None,
+                        analysis: None,
                     })
                     .collect();
                 let batch = Store::open(&root)?.enqueue_batch(&key, &inputs)?;
@@ -489,9 +552,36 @@ impl Service {
                     dry_run,
                 )?,
             )?),
-            Request::StudioState { project } => {
+            Request::Maintain {
+                workspace,
+                grace_seconds,
+                dry_run,
+            } => crate::storage::maintain(&self.path(&workspace)?, grace_seconds, dry_run),
+            Request::StudioState {
+                project,
+                prefix,
+                offset,
+                limit,
+            } => {
+                if !(1..=100).contains(&limit) {
+                    return Err(Error::Invalid("decision limit requires 1..100".into()));
+                }
                 let p = Store::open(&self.path(&project)?)?.project()?;
-                Ok(json!({"revision":p.revision,"decisions":p.extensions}))
+                let mut all = p
+                    .extensions
+                    .into_iter()
+                    .filter(|(key, _)| key.starts_with(&prefix))
+                    .collect::<Vec<_>>();
+                all.sort_by(|a, b| a.0.cmp(&b.0));
+                let total = all.len();
+                let mut decisions = serde_json::Map::new();
+                for (key, value) in all.into_iter().skip(offset as usize).take(limit as usize) {
+                    let bytes = serde_json::to_vec(&value)?.len();
+                    decisions.insert(key,if bytes<=65536 {value} else {json!({"omitted":true,"bytes":bytes,"assetId":value["assetId"],"language":value["language"],"provider":value["provider"],"detail":"use bounded transcript-search or an explicitly requested snapshot"})});
+                }
+                Ok(
+                    json!({"revision":p.revision,"decisions":decisions,"nextOffset":if offset as usize+decisions.len()<total {Some(offset+limit)}else{None}}),
+                )
             }
             Request::Reviews { project, sequence } => crate::studio::remap_reviews(
                 &Store::open(&self.path(&project)?)?.project()?,
@@ -499,7 +589,7 @@ impl Service {
             ),
             Request::Schema {} => Ok(serde_json::to_value(schemars::schema_for!(Request))?),
             Request::Capabilities {} => Ok(
-                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"SDR H.264/AAC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"PQ/HLG tone mapped per source to Rec.709; Dolby Vision compatible profile 8 base layer only","asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
+                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"SDR H.264/AAC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"PQ/HLG tone mapped per source to Rec.709; Dolby Vision compatible profile 8 base layer only","asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
             ),
             Request::AgentGuide {} => Ok(json!({"guide":include_str!("../AGENT_GUIDE.md")})),
             Request::Doctor {} => doctor(&self.backend),
@@ -649,10 +739,12 @@ impl Service {
                     &key,
                     &jobs::RenderInput {
                         sequence: "seq_main".into(),
+                        priority: 0,
                         expected_revision,
                         ffmpeg: self.backend.ffmpeg_path().into(),
                         ffprobe: self.backend.ffprobe_path().into(),
                         asr: Some(crate::asr::Input { asset_id, config }),
+                        analysis: None,
                     },
                 )?;
                 if !no_launch && job.state == "queued" {
@@ -724,16 +816,19 @@ impl Service {
                 expected_revision,
                 key,
                 no_launch,
+                priority,
             } => {
                 let root = self.path(&project)?;
                 let job = Store::open(&root)?.enqueue(
                     &key,
                     &jobs::RenderInput {
                         sequence,
+                        priority,
                         expected_revision,
                         ffmpeg: self.backend.ffmpeg_path().into(),
                         ffprobe: self.backend.ffprobe_path().into(),
                         asr: None,
+                        analysis: None,
                     },
                 )?;
                 if !no_launch && job.state == "queued" {
@@ -788,8 +883,29 @@ impl Service {
                     if result["sha256"] != hash {
                         return Err(Error::Invalid("transcript artifact bytes changed".into()));
                     }
+                    let report: Value = crate::json::read(&path)?;
+                    let mut attachments = Vec::new();
+                    if let Some(files) = report["files"].as_array() {
+                        for file in files {
+                            let name = file["name"].as_str().ok_or_else(|| {
+                                Error::Invalid("analysis attachment name missing".into())
+                            })?;
+                            if Path::new(name).components().count() != 1 {
+                                return Err(Error::Invalid(
+                                    "invalid analysis attachment path".into(),
+                                ));
+                            }
+                            let attachment = self.path(&path.with_file_name(name))?;
+                            if media::hash_file(&attachment)? != file["sha256"] {
+                                return Err(Error::Invalid(
+                                    "analysis attachment bytes changed".into(),
+                                ));
+                            }
+                            attachments.push(json!({"path":attachment,"sha256":file["sha256"],"bytes":std::fs::metadata(&attachment)?.len()}));
+                        }
+                    }
                     return Ok(
-                        json!({"jobId":id,"path":path,"revision":job.revision,"sha256":hash,"bytes":std::fs::metadata(path)?.len(),"mimeType":"application/json","verified":true,"needsTextReview":true}),
+                        json!({"jobId":id,"path":path,"revision":job.revision,"sha256":hash,"bytes":std::fs::metadata(path)?.len(),"mimeType":"application/json","verified":true,"needsTextReview":result.get("assetId").is_some(),"attachments":attachments}),
                     );
                 }
                 let manifest_path = result["manifest"]
@@ -931,7 +1047,7 @@ fn operation_description(operation: &str) -> Result<Value> {
         "bus.add" => json!({"id":"dialogue","sequence":"output","gainDb":0}),
         "bus.set" => json!({"gainDb":-3}),
         "transition.add" => {
-            json!({"id":"dissolve","sequence":"output","left":"left","right":"right","type":"transition.dissolve","duration":time,"handlePolicy":"reject"})
+            json!({"id":"dissolve","sequence":"output","left":"left","right":"right","type":"video.transition.crossfade","duration":time,"handlePolicy":"reject"})
         }
         "marker.add" => json!({"id":"note","sequence":"output","at":time,"name":"Review"}),
         "track.remove" | "effect.remove" | "bus.remove" | "transition.remove" | "marker.remove" => {

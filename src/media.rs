@@ -297,11 +297,14 @@ pub(crate) fn render_attempt(
     let directory = root.join("renders").join(id);
     std::fs::create_dir(&directory)?;
     let staged = directory.join("unverified.mp4");
+    crate::animation::validate(project, sequence)?;
     let preset = agentcut_render::preset::require("h264-mp4")?;
     let (prepared, seeks) = seek_project(project, sequence)?;
+    let prepared = crate::color::geometry(&prepared);
     let mut normalized = agentcut_core::normalize::normalize_sequence(&prepared, sequence)?;
     layout_caption_lines(&mut normalized)?;
-    let ir = agentcut_render::ir::build(project, &normalized, root, preset, &staged, None, false)?;
+    let ir =
+        agentcut_render::ir::build(&prepared, &normalized, root, preset, &staged, None, false)?;
     let info = crate::process::run(
         Command::new(backend.ffmpeg_path()).arg("-version"),
         std::time::Duration::from_secs(10),
@@ -321,6 +324,7 @@ pub(crate) fn render_attempt(
     let mut plan = agentcut_render::compile::compile(&ir, backend.ffmpeg_path(), &toolchain)?;
     let color_decisions = crate::color::adapt(&mut plan, project)?;
     crate::audio::adapt(&mut plan, &ir, project.require_sequence(sequence)?)?;
+    crate::animation::adapt(&mut plan, &ir, &prepared)?;
     if plan.duration_seconds > 3600.0 {
         return Err(Error::Invalid(
             "output exceeds the one-hour worker limit".into(),
@@ -386,7 +390,7 @@ pub(crate) fn render_attempt(
     plan.plan_hash = format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(
-            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":4,"colorDecisions":color_decisions,"inputSeeksSeconds":seeks})
+            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":5,"colorDecisions":color_decisions,"inputSeeksSeconds":seeks})
         )?)
     );
     std::fs::write(

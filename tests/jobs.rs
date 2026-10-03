@@ -11,11 +11,47 @@ use std::{
 fn input() -> RenderInput {
     RenderInput {
         sequence: "seq_main".into(),
+        priority: 0,
         expected_revision: 0,
         ffmpeg: "ffmpeg".into(),
         ffprobe: "ffprobe".into(),
         asr: None,
+        analysis: None,
     }
+}
+
+#[test]
+fn queued_priority_is_stable_and_batch_validation_is_atomic() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("p");
+    let mut store = Store::create(&root, "priority").unwrap();
+    let mut missing = input();
+    missing.sequence = "missing".into();
+    assert!(
+        store
+            .enqueue_batch("invalid-batch", &[input(), missing])
+            .is_err()
+    );
+    assert!(store.jobs().unwrap().is_empty());
+    let connection = rusqlite::Connection::open(root.join("project.sqlite")).unwrap();
+    connection.execute_batch("CREATE TABLE test_claims(id TEXT); CREATE TRIGGER trace_claim AFTER UPDATE OF state ON jobs WHEN NEW.state='running' BEGIN INSERT INTO test_claims VALUES(NEW.id); END;").unwrap();
+    let mut high = input();
+    high.priority = 20;
+    let mut low = input();
+    low.priority = -20;
+    let low = store.enqueue("low-priority", &low).unwrap();
+    let normal = store.enqueue("normal-priority", &input()).unwrap();
+    let high = store.enqueue("high-priority", &high).unwrap();
+    jobs::worker(&root, Arc::new(AtomicBool::new(false)), 0).unwrap();
+    let mut statement = connection
+        .prepare("SELECT id FROM test_claims ORDER BY rowid")
+        .unwrap();
+    let order: Vec<String> = statement
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(order, vec![high.id, normal.id, low.id]);
 }
 #[test]
 fn queue_replays_conflicts_cancels_and_retries_without_new_logical_job() {

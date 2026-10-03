@@ -7,6 +7,11 @@ use std::{
     time::{Duration, Instant},
 };
 struct CancelAt(Instant);
+
+#[test]
+fn media_children_have_enforced_memory_and_file_budgets() {
+    process::run(Command::new("python3").args(["-c","import mmap,resource,sys; assert resource.getrlimit(resource.RLIMIT_AS)==(4294967296,4294967296); assert resource.getrlimit(resource.RLIMIT_FSIZE)==(34359738368,34359738368)\ntry: mmap.mmap(-1,5368709120)\nexcept OSError: sys.exit(0)\nsys.exit(1)" ]),Duration::from_secs(10),&mut Uncontrolled).unwrap();
+}
 impl Control for CancelAt {
     fn check(&mut self) -> agent_video_workbench::Result<()> {
         if self.0.elapsed() > Duration::from_millis(150) {

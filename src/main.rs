@@ -32,6 +32,8 @@ struct Cli {
     download_host: Vec<String>,
     #[arg(long, global = true)]
     download_loopback_http: bool,
+    #[arg(long, global = true)]
+    analysis_provider: Option<PathBuf>,
     #[command(subcommand)]
     command: Action,
 }
@@ -52,6 +54,13 @@ enum Action {
         offset: u32,
         #[arg(long, default_value_t = 50)]
         limit: u32,
+    },
+    Maintain {
+        workspace: PathBuf,
+        #[arg(long, default_value_t = 86400)]
+        grace_seconds: u64,
+        #[arg(long,default_value_t=true,action=clap::ArgAction::Set)]
+        dry_run: bool,
     },
     VerifyProject {
         project: PathBuf,
@@ -83,6 +92,8 @@ enum Action {
         key: String,
         #[arg(long)]
         no_launch: bool,
+        #[arg(long, default_value_t = 0)]
+        priority: i32,
     },
     BatchStatus {
         project: PathBuf,
@@ -106,6 +117,12 @@ enum Action {
     },
     StudioState {
         project: PathBuf,
+        #[arg(long, default_value = "avw.")]
+        prefix: String,
+        #[arg(long, default_value_t = 0)]
+        offset: u32,
+        #[arg(long, default_value_t = 50)]
+        limit: u32,
     },
     Reviews {
         project: PathBuf,
@@ -204,6 +221,8 @@ enum Action {
         key: String,
         #[arg(long)]
         no_launch: bool,
+        #[arg(long, default_value_t = 0)]
+        priority: i32,
     },
     JobStatus {
         project: PathBuf,
@@ -303,11 +322,13 @@ enum Action {
 
 fn execute(cli: Cli) -> Result<Value> {
     let asr = asr_config(&cli)?;
+    let provider = provider_config(&cli)?;
     let service = Service {
         root: cli.workspace,
         backend: agent_video_workbench::media::backend(cli.ffmpeg.clone(), cli.ffprobe.clone()),
         executable: std::env::current_exe()?,
         asr,
+        provider,
         downloads: agent_video_workbench::transfer::Policy {
             hosts: cli.download_host.clone(),
             allow_loopback_http: cli.download_loopback_http,
@@ -425,6 +446,7 @@ fn main() {
                 ),
                 executable: std::env::current_exe()?,
                 asr,
+                provider: provider_config(&cli)?,
                 downloads: agent_video_workbench::transfer::Policy {
                     hosts: cli.download_host.clone(),
                     allow_loopback_http: cli.download_loopback_http,
@@ -468,4 +490,16 @@ fn asr_config(cli: &Cli) -> Result<Option<agent_video_workbench::asr::Config>> {
         model_sha256: hash,
         language: cli.whisper_language.clone(),
     }))
+}
+
+fn provider_config(cli: &Cli) -> Result<Option<agent_video_workbench::analysis::Provider>> {
+    cli.analysis_provider
+        .as_ref()
+        .map(|p| {
+            Ok(agent_video_workbench::analysis::Provider {
+                program: p.canonicalize()?,
+                sha256: agent_video_workbench::media::hash_file(p)?,
+            })
+        })
+        .transpose()
 }

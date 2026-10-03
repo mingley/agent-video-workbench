@@ -25,6 +25,9 @@ pub struct Profile {
     #[serde(default)]
     pub true_peak_db: Option<f64>,
 }
+fn preserve() -> bool {
+    true
+}
 fn cover() -> String {
     "cover".into()
 }
@@ -55,6 +58,22 @@ pub struct Slot {
     deny_unknown_fields
 )]
 pub enum Edit {
+    Retention {
+        enabled: bool,
+        grace_seconds: u64,
+    },
+    Grade {
+        item_id: String,
+        effect_id: String,
+        brightness: f64,
+        exposure: f64,
+        contrast: f64,
+        saturation: f64,
+    },
+    ReframeApply {
+        item_id: String,
+        proposal: crate::tracking::Proposal,
+    },
     AudioDuck {
         sequence: String,
         settings: crate::audio::Ducking,
@@ -119,6 +138,14 @@ pub enum Edit {
         #[serde(default)]
         sequences: Vec<String>,
     },
+    TranscriptSelect {
+        asset_id: String,
+        analysis_version: String,
+        #[serde(default = "preserve")]
+        preserve_corrections: bool,
+        #[serde(default)]
+        sequences: Vec<String>,
+    },
     ReviewAdd {
         id: String,
         job_id: String,
@@ -152,6 +179,21 @@ struct Omission {
     restored: bool,
 }
 
+pub(crate) fn valid_color(color: &str) -> bool {
+    (color.len() == 7 || color.len() == 9)
+        && color.starts_with('#')
+        && color[1..].bytes().all(|b| b.is_ascii_hexdigit())
+}
+pub(crate) fn validate_canvas(width: u32, height: u32) -> Result<()> {
+    if !(2..=4096).contains(&width)
+        || !(2..=4096).contains(&height)
+        || !width.is_multiple_of(2)
+        || !height.is_multiple_of(2)
+    {
+        return Err(invalid("canvas requires even dimensions in 2..4096"));
+    }
+    Ok(())
+}
 fn invalid(message: &str) -> Error {
     Error::Invalid(message.into())
 }
@@ -333,6 +375,57 @@ pub fn remap_reviews(project: &Project, sequence: &str) -> Result<Value> {
     }
     Ok(json!({"revision":project.revision,"sequenceId":sequence,"items":result}))
 }
+fn reflow_captions(previous: &Project, next: &mut Project, root: &Path) -> Result<()> {
+    let assets = next
+        .assets
+        .iter()
+        .map(|a| (a.id.clone(), a.clone()))
+        .collect::<BTreeMap<_, _>>();
+    for sequence in &mut next.sequences {
+        for item in sequence.tracks.iter_mut().flat_map(|t| &mut t.items) {
+            if let Some((old_sequence, _, old)) = previous.find_item(&item.id)
+                && old_sequence.canvas == sequence.canvas
+                && old.payload == item.payload
+            {
+                continue;
+            }
+            let ItemPayload::Caption(caption) = &mut item.payload else {
+                continue;
+            };
+            let font = assets
+                .get(
+                    caption
+                        .style
+                        .font_asset_id
+                        .as_deref()
+                        .ok_or_else(|| invalid("changed captions require an imported font"))?,
+                )
+                .ok_or_else(|| invalid("caption font missing"))?;
+            media::verify_asset(root, font)?;
+            let metrics = agentcut_render::probe::font_metrics(&root.join(&font.uri))
+                .ok_or_else(|| invalid("caption font metrics missing"))?;
+            let unwrapped = caption
+                .text
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            caption.text =
+                workflow::wrap_caption(&unwrapped, sequence.canvas.width as f64 * 0.8, |line| {
+                    metrics.run_width(line, caption.style.font_size, caption.style.letter_spacing)
+                })?;
+            if caption.text.lines().count() as f64
+                * caption.style.font_size
+                * caption.style.line_height
+                > sequence.canvas.height as f64 * 0.3
+            {
+                return Err(invalid(
+                    "caption exceeds safe height; reduce font size or split the source cue",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
 impl Store {
     pub fn studio(
         &mut self,
@@ -377,9 +470,30 @@ impl Store {
         self.change(key,expected,json!({"kind":"studio.edit","edit":edit,"expectedRevision":expected}),dry_run,|project| {
             let mut next=project.clone();
             match edit {
+                Edit::Retention{enabled,grace_seconds}=>{if !(60..=31_536_000).contains(grace_seconds){return Err(invalid("retention grace requires 60 seconds..1 year"));}next.extensions.insert("avw.retention".into(),json!({"enabled":enabled,"graceSeconds":grace_seconds}));},
+                Edit::Grade{item_id,effect_id,brightness,exposure,contrast,saturation} => {
+                    workflow::id(effect_id)?;let params=json!({"brightness":brightness,"exposure":exposure,"contrast":contrast,"saturation":saturation});
+                    next=batch(project,vec![json!({"op":"effect.add","target":item_id,"params":{"id":effect_id,"effect":"video.color.basic","params":params}})])?;
+                    next.find_item_mut(item_id).ok_or_else(||invalid("graded item missing"))?.extensions.insert("avw.grade.v1".into(),json!({"effectId":effect_id,"parameters":params,"workingSpace":"display-referred Rec.709 SDR after source tone mapping","version":1}));
+                },
+                Edit::ReframeApply{item_id,proposal} => {
+                    let (sequence,_,item)=project.find_item(item_id).ok_or_else(||invalid("reframed item missing"))?;let clip=item.payload.as_clip().ok_or_else(||invalid("reframing requires video clip"))?;if !clip.video.speed.is_normal(){return Err(invalid("tracked framing requires normal-speed footage"));}
+                    let asset=project.require_asset(&clip.asset_id)?;if asset.fingerprint.sha256.as_deref()!=Some(&proposal.source_sha256){return Err(invalid("tracking proposal belongs to a different original"));}
+                    if proposal.points.is_empty() || proposal.points.len()>121 || proposal.points.windows(2).any(|p|p[0].source_ms>=p[1].source_ms){return Err(invalid("proposal needs 1..121 ordered points"));}
+                    let source_start=(clip.source_range.start.as_seconds_f64()*1000.0).round() as i64;let source_end=(clip.source_range.end_exclusive()?.as_seconds_f64()*1000.0).round() as i64;if proposal.start_ms>source_start || proposal.end_ms<source_end {return Err(invalid("tracking coverage must include the complete selected clip"));}
+                    let size=crate::color::upright_size(asset.metadata.video.as_ref().ok_or_else(||invalid("reframing requires video"))?);let source_aspect=size.width as f64/size.height as f64;let output_aspect=sequence.canvas.width as f64/sequence.canvas.height as f64;let viewport_width=(output_aspect/source_aspect).min(1.0);let viewport_height=(source_aspect/output_aspect).min(1.0);
+                    if proposal.region.width>viewport_width || proposal.region.height>viewport_height{return Err(invalid("selected region exceeds the output crop; choose contain or a wider canvas"));}
+                    let first=proposal.points.iter().rev().find(|p|p.source_ms<=source_start).ok_or_else(||invalid("tracking has no initial framing point"))?;let mut points=vec![(source_start,first)];points.extend(proposal.points.iter().filter(|p|p.source_ms>source_start && p.source_ms<source_end).map(|p|(p.source_ms,p)));
+                    let mut ops=vec![property(item_id,"video.fit",json!("cover"))];for (n,(at,p)) in points.iter().enumerate(){if !p.center_x.is_finite() || !p.center_y.is_finite() || !(0.0..=1.0).contains(&p.confidence){return Err(invalid("invalid tracking coordinates/confidence"));}
+                        let left=if viewport_width==1.0{0.0}else{p.center_x-viewport_width/2.0};let top=if viewport_height==1.0{0.0}else{p.center_y-viewport_height/2.0};let right=1.0-left-viewport_width;let bottom=1.0-top-viewport_height;if [left,top,right,bottom].iter().any(|v|*v< -0.000001){return Err(invalid("proposed crop extends outside source; review or edit the proposal instead of silent clamping"));}
+                        for (side,value) in [("left",left),("right",right),("top",top),("bottom",bottom)] {let path=format!("video.crop.{side}");if n==0{ops.push(property(item_id,&path,json!(value)));}ops.push(json!({"op":"keyframe.set","target":item_id,"params":{"property":path,"at":workflow::time(at-source_start),"value":value,"interpolation":if p.held {"step"}else{"linear"}}}));}
+                    }
+                    next=batch(project,ops)?;next.find_item_mut(item_id).ok_or_else(||invalid("reframed item missing"))?.extensions.insert("avw.reframe.v1".into(),serde_json::to_value(proposal)?);
+                },
                 Edit::AudioDuck {sequence,settings} => {crate::audio::validate(settings)?; for id in settings.dialogue_items.iter().chain(&settings.music_items) {if !project.require_sequence(sequence)?.tracks.iter().flat_map(|t| &t.items).any(|i| &i.id==id && i.payload.as_clip().is_some_and(|c|c.audio.enabled)){return Err(invalid("ducking requires active audio clip IDs in the selected sequence"));}}next.require_sequence_mut(sequence)?.extensions.insert("avw.ducking".into(),serde_json::to_value(settings)?);},
                 Edit::ProfilePut{profile:p}=> {
-                    workflow::id(&p.id)?;if p.version==0 || p.font_size==0 || p.font_size>200{return Err(invalid("profile version and font size must be positive; font size <=200"));}
+                    workflow::id(&p.id)?;if !valid_color(&p.color){return Err(invalid("profile color requires #RRGGBB or #RRGGBBAA"));}
+                    if p.version==0 || p.font_size==0 || p.font_size>200{return Err(invalid("profile version and font size must be positive; font size <=200"));}
                     if p.loudness_lufs.is_some_and(|v| !(-30.0..=-5.0).contains(&v)) || p.true_peak_db.is_some_and(|v| !(-9.0..=-0.1).contains(&v)) {return Err(invalid("audio target outside supported range"));}
                     let font=project.require_asset(&p.font_asset_id)?;if font.kind!=agentcut_core::AssetKind::Font{return Err(invalid("profile requires an imported font"));} media::verify_asset(&root,font)?;
                     if !matches!(p.fit.as_str(),"cover"|"contain"){return Err(invalid("profile fit must be contain or cover"));}
@@ -388,7 +502,7 @@ impl Store {
                 },
                 Edit::ProfileApply{sequence,profile_id,version}=>next=apply_profile(project,sequence,&profile(project,profile_id,*version)?)?,
                 Edit::TemplatePut{template:t}=>{
-                    workflow::id(&t.id)?;profile(project,&t.profile_id,t.profile_version)?;
+                    workflow::id(&t.id)?;validate_canvas(t.width,t.height)?;profile(project,&t.profile_id,t.profile_version)?;
                     if t.version==0 || t.slots.is_empty() || t.slots.len()>100{return Err(invalid("template requires positive version and 1..100 slots"));}
                     let mut ids=std::collections::BTreeSet::new();for slot in &t.slots{workflow::id(&slot.id)?;if !ids.insert(&slot.id) || slot.min_duration_ms<1 || slot.max_duration_ms<slot.min_duration_ms || slot.max_duration_ms>3_600_000{return Err(invalid("invalid template slot constraints"));}}
                     let name=template_key(&t.id,t.version);if next.extensions.contains_key(&name){return Err(invalid("template versions are immutable"));}next.extensions.insert(name,serde_json::to_value(t)?);
@@ -450,6 +564,31 @@ impl Store {
                     for sequence in sequences {let seq=next.require_sequence_mut(sequence)?;for item in seq.tracks.iter_mut().flat_map(|t| &mut t.items){if let ItemPayload::Caption(c)=&mut item.payload && let Some(binding)=item.extensions.get("avw.sourceCue") && binding["assetId"]==*asset_id && let Some(text)=binding["cueId"].as_str().and_then(|id|cues.get(id)){c.text=text.clone();}}}
                     next.extensions.insert(workflow::TRANSCRIPTS.into(),serde_json::to_value(transcripts)?);let name=format!("avw.corrections.{asset_id}");let mut corrections=next.extensions.get(&name).cloned().unwrap_or(json!([]));corrections.as_array_mut().ok_or_else(||invalid("invalid correction history"))?.push(json!({"analysis":original,"changes":changes,"revision":expected+1}));next.extensions.insert(name,corrections);
                 },
+                Edit::TranscriptSelect{asset_id,analysis_version,preserve_corrections,sequences}=>{
+                    if analysis_version.len()!=64 || !analysis_version.bytes().all(|b|b.is_ascii_hexdigit()){return Err(invalid("analysisVersion requires a SHA-256 transcript version"));}
+                    let mut selected:workflow::Transcript=serde_json::from_value(project.extensions.get(&format!("avw.analysis.transcript.{analysis_version}")).ok_or_else(||invalid("analysis version missing"))?.clone())?;
+                    if selected.asset_id!=*asset_id{return Err(invalid("analysis source does not match selected asset"));}
+                    let mut list=workflow::transcripts(project)?;let previous=list.iter().find(|t|t.asset_id==*asset_id).ok_or_else(||invalid("selected source has no attached transcript"))?;
+                    let correction_key=format!("avw.corrections.{asset_id}");
+                    if *preserve_corrections && let Some(history)=project.extensions.get(&correction_key).and_then(Value::as_array){
+                        for change in history.iter().filter_map(|h|h["changes"].as_array()).flatten(){
+                            let cue_id=change["cueId"].as_str().ok_or_else(||invalid("correction cue missing"))?;
+                            let old=previous.cues.iter().find(|c|c.id==cue_id).ok_or_else(||invalid("reviewed cue missing"))?;
+                            let cue=selected.cues.iter_mut().find(|c|c.id==cue_id && c.start_ms==old.start_ms && c.end_ms==old.end_ms).ok_or_else(||invalid("correction cannot align to new analysis; review explicitly with preserveCorrections false"))?;
+                            cue.text=old.text.clone();
+                        }
+                    }
+                    for id in sequences {for item in next.require_sequence_mut(id)?.tracks.iter_mut().flat_map(|t|&mut t.items){
+                        if let ItemPayload::Caption(c)=&mut item.payload && let Some(binding)=item.extensions.get_mut("avw.sourceCue") && binding["assetId"]==*asset_id{
+                            let cue=selected.cues.iter().find(|c|Some(c.id.as_str())==binding["cueId"].as_str()).ok_or_else(||invalid("bound caption cue missing in new analysis; recompose selected output"))?;
+                            let start=binding["sourceStartMs"].as_i64().ok_or_else(||invalid("caption source start missing"))?;let end=binding["sourceEndMs"].as_i64().ok_or_else(||invalid("caption source end missing"))?;
+                            if start<cue.start_ms || end>cue.end_ms{return Err(invalid("new cue timing does not cover existing caption; recompose selected output"));}
+                            c.text=cue.text.clone();binding["analysisVersion"]=json!(analysis_version);binding["language"]=json!(selected.language);
+                        }
+                    }}
+                    list.retain(|t|t.asset_id!=*asset_id);list.push(selected);next.extensions.insert(workflow::TRANSCRIPTS.into(),serde_json::to_value(list)?);
+                    next.extensions.entry(format!("avw.transcriptSelections.{asset_id}")).or_insert(json!([])).as_array_mut().ok_or_else(||invalid("invalid transcript selection history"))?.push(json!({"analysisVersion":analysis_version,"preserveCorrections":preserve_corrections,"sequences":sequences,"revision":expected+1}));
+                },
                 Edit::ReviewAdd{id,job_id,at_ms,end_ms,actor,text}=>{
                     workflow::id(id)?;if *at_ms<0 || end_ms<=at_ms || actor.trim().is_empty() || text.trim().is_empty() || text.len()>4000{return Err(invalid("review requires an interval, actor and 1..4000 bytes of text"));}
                     let manifest=review.as_ref().ok_or_else(||invalid("review manifest missing"))?;let snapshot:Project=serde_json::from_value(manifest["snapshot"].clone())?;let sequence=manifest["sequenceId"].as_str().ok_or_else(||invalid("review sequence missing"))?;let seq=snapshot.require_sequence(sequence)?;if *end_ms as f64>seq.content_duration()?.as_seconds_f64()*1000.0+1.0{return Err(invalid("review extends beyond artifact duration"));}
@@ -458,7 +597,7 @@ impl Store {
                 },
                 Edit::ReviewResolve{id,state,note}=>{let reviews=next.extensions.get_mut("avw.reviews").and_then(Value::as_array_mut).ok_or_else(||invalid("reviews missing"))?;let review=reviews.iter_mut().find(|r|r["id"]==*id).ok_or_else(||invalid("review missing"))?;review["state"]=serde_json::to_value(state)?;review["resolution"]=json!({"revision":expected+1,"note":note});}
             }
-            validate(&next)?;Ok(next)
+            reflow_captions(project,&mut next,&root)?;validate(&next)?;Ok(next)
         })
     }
 }

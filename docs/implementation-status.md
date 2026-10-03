@@ -122,3 +122,28 @@ The creator fixture also passes reusable library import and OTIO cut roundtrip.
 Native Linux aarch64 qualification has been added to CI alongside x86_64; its
 successful execution must be observed before publishing a supported ARM release.
 Child media processes now have 4-GiB address-space and 32-GiB file-size limits.
+
+## October 3: Analysis, tracking and maintenance
+
+Persistent analysis jobs provide original-PTS frame indexes, bounded source-mapped
+SDR proxies, selected-region CPU template tracking and an operator-configured
+provider process contract. Provider/source/tool fingerprints, cancellation,
+malformed-output rejection and cache/attachment hashes are enforced. Tracking
+returns confidence, editable source coordinates and explicit held-position
+findings; accepted proposals become rendered crop keyframes. Linear/step position
+and constant-viewport crop animation render explicitly. Unsupported animation
+or basic-grade parameters are refused instead of silently frozen. Basic grading
+is reversible and occurs in the display-referred SDR composite. Source SAR and
+orientation are normalized once before placement; output RGB-to-YUV conversion
+uses the BT.709 matrix.
+
+The analysis fixture passes moving-product placement, occlusion fallback,
+proxy tamper rejection, grade-plus-pan rendering, provider cache reuse, malformed
+results and cancellation without history changes. The expanded media fixture
+passes rotated non-square pixels and an initial delayed-audio gap. Creator
+corrections can explicitly select a newer analysis; mismatched correction
+alignment refuses atomically until reviewed. Changed captions reflow against
+owned font metrics and safe layout bounds. Studio decisions are paginated and
+large analysis values summarized. Opt-in per-project retention runs when a
+worker drains; workspace `maintain` supports scheduled collection and reports
+busy projects for retry. Thirty Rust tests pass, with formatting and strict Clippy.

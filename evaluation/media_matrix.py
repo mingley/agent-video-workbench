@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import array
 
 
 def main():
@@ -41,6 +42,14 @@ def main():
         run([args.ffmpeg, '-v', 'error', '-display_rotation', rotation, '-i', base,
              '-c', 'copy', source])
         accepted.append((f'rotation_{rotation}', source))
+    sar = root / 'sar.mp4'
+    run([args.ffmpeg, '-v', 'error', '-i', base, '-vf', 'setsar=2',
+         '-c:v', 'libx264', '-preset', 'ultrafast', sar])
+    accepted.append(('sar', sar))
+    sar_rotated = root / 'sar-rotated.mov'
+    run([args.ffmpeg, '-v', 'error', '-display_rotation', '90', '-i', sar,
+         '-c', 'copy', sar_rotated])
+    accepted.append(('sar_rotated', sar_rotated))
     hevc = root / 'hevc.mp4'
     run([args.ffmpeg, '-v', 'error', '-i', base, '-c:v', 'libx265',
          '-x265-params', 'pools=2:frame-threads=2:log-level=error', '-tag:v', 'hvc1', hevc])
@@ -60,6 +69,11 @@ def main():
     offset = root / 'offset.mp4'
     run([args.ffmpeg, '-v', 'error', '-i', base, '-c', 'copy', '-output_ts_offset', '2', offset])
     accepted.append(('offset', offset))
+    delayed = root / 'delayed-audio.mp4'
+    run([args.ffmpeg, '-v', 'error', '-i', base, '-itsoffset', '1', '-f', 'lavfi',
+         '-i', 'sine=frequency=440:sample_rate=48000:duration=2', '-map', '0:v', '-map', '1:a',
+         '-c:v', 'copy', '-c:a', 'aac', delayed])
+    accepted.append(('delayed_audio', delayed))
     results = []
     for name, source in accepted:
         digest = hashlib.sha256(source.read_bytes()).hexdigest()
@@ -84,18 +98,36 @@ def main():
         assert manifest['verification']['expectedFrames'] == 60
         assert hashlib.sha256(source.read_bytes()).hexdigest() == digest
         difference = None
-        if name.startswith('rotation_') or name in ('pq', 'hlg', 'offset'):
+        if name.startswith('rotation_') or name in ('pq', 'hlg', 'offset', 'sar', 'sar_rotated'):
             def pixels(path, reference=False):
-                argv = [args.ffmpeg, '-v', 'error', '-ss', '1', '-i', path]
+                argv = [args.ffmpeg, '-v', 'error', *(['-noautorotate'] if reference else []), '-ss', '1', '-i', path]
                 if reference:
-                    argv += ['-vf', (hdr_filter + ',' if name in ('pq', 'hlg') else '') + 'scale=360:640:force_original_aspect_ratio=increase,crop=360:640,setsar=1']
+                    filters = []
+                    if name in ('sar', 'sar_rotated'):
+                        filters += ['scale=iw*sar:ih', 'setsar=1']
+                    rotation = 90 if name == 'sar_rotated' else (int(name.removeprefix('rotation_')) if name.startswith('rotation_') else 0)
+                    if rotation:
+                        filters += [{90: 'transpose=2', 180: 'hflip,vflip', 270: 'transpose=1'}[rotation]]
+                    if name in ('pq', 'hlg'):
+                        filters += [hdr_filter]
+                    filters += ['scale=360:640:force_original_aspect_ratio=increase', 'crop=360:640', 'setsar=1', 'format=gbrp', 'scale=out_color_matrix=bt709:out_range=tv', 'format=yuv420p']
+                    argv += ['-vf', ','.join(filters)]
                 return run([*argv, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'])
             reference, actual = pixels(source, True), pixels(artifact['path'])
             assert len(reference) == len(actual) == 360 * 640 * 3
             difference = sum(abs(a - b) for a, b in zip(reference, actual)) / len(actual)
             assert difference < 8, (name, difference)
+        audio_gap = None
+        if name == 'delayed_audio':
+            pcm = array.array('h', run([args.ffmpeg, '-v', 'error', '-i', artifact['path'],
+                    '-vn', '-ac', '1', '-ar', '48000', '-f', 's16le', '-']))
+            def amplitude(at):
+                segment = pcm[int(at*48000):int((at+.1)*48000)]
+                return (sum(v*v for v in segment)/len(segment))**.5
+            assert amplitude(.1)<10 and amplitude(1.2)>1000, (amplitude(.1), amplitude(1.2))
+            audio_gap = {'initialSilenceRms':amplitude(.1), 'laterToneRms':amplitude(1.2)}
         results.append({'fixture': name, 'decodedFrames': 60,
-                        'sourceUnchanged': True, 'orientationMeanAbsoluteDifference': difference})
+                        'sourceUnchanged': True, 'orientationMeanAbsoluteDifference': difference, 'audioGap':audio_gap})
     summary = {'passed': True, 'accepted': results,
                'limitations': ['Generated inputs; real camera appearance/audio needs human review',
                                'Dolby Vision profile 5 is inspectable but has no delivery path',

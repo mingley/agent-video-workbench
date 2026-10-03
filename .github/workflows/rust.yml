@@ -37,6 +37,7 @@ jobs:
           python3 evaluation/studio_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/studio"
           python3 evaluation/audio_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/audio"
           python3 evaluation/transfer_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/transfer"
+          python3 evaluation/analysis_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/analysis"
       - name: Official MCP client, installed binary and CLI conformance
         shell: bash
         run: |
@@ -58,3 +59,4 @@ jobs:
             ${{ runner.temp }}/studio/summary.json
             ${{ runner.temp }}/audio/summary.json
             ${{ runner.temp }}/transfer/summary.json
+            ${{ runner.temp }}/analysis/summary.json

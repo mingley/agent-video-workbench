@@ -179,7 +179,7 @@ pub fn gc(root: &Path, grace_seconds: u64, dry_run: bool) -> Result<Value> {
                 ["path", "manifest"].iter().any(|key| {
                     j["result"][key]
                         .as_str()
-                        .is_some_and(|p| Path::new(p) == path)
+                        .is_some_and(|p| Path::new(p).starts_with(&path))
                 })
             }) {
                 continue;
@@ -282,5 +282,47 @@ pub fn catalog(root: &Path, query: &str, offset: u32, limit: u32) -> Result<Valu
         .collect();
     Ok(
         json!({"items":items,"nextOffset":if offset as usize+items.len()<total {Some(offset+limit)}else{None},"authority":"each project's SQLite database; catalog is rebuilt on demand"}),
+    )
+}
+
+/// A scheduler entry point; busy projects are reported and retried next run.
+pub fn maintain(workspace: &Path, grace_seconds: u64, dry_run: bool) -> Result<Value> {
+    if grace_seconds < 60 {
+        return Err(Error::Invalid(
+            "cache grace must be at least 60 seconds".into(),
+        ));
+    }
+    let mut offset = 0;
+    let mut results = Vec::new();
+    loop {
+        let page = catalog(workspace, "", offset, 100)?;
+        for item in page["items"]
+            .as_array()
+            .ok_or_else(|| Error::Invalid("invalid catalog page".into()))?
+        {
+            let path = Path::new(
+                item["path"]
+                    .as_str()
+                    .ok_or_else(|| Error::Invalid("catalog path missing".into()))?,
+            );
+            let result = if item["state"] == "available" {
+                gc(path, grace_seconds, dry_run)
+                    .map(|v| json!({"path":path,"state":"collected","result":v}))
+                    .unwrap_or_else(
+                        |e| json!({"path":path,"state":"deferred","error":e.to_string()}),
+                    )
+            } else {
+                item.clone()
+            };
+            results.push(result);
+        }
+        let Some(next) = page["nextOffset"].as_u64() else {
+            break;
+        };
+        offset =
+            u32::try_from(next).map_err(|_| Error::Invalid("catalog offset overflow".into()))?;
+    }
+    Ok(
+        json!({"dryRun":dry_run,"projects":results,"deferredProjects":results.iter().filter(|r|r["state"]!="collected").count()}),
     )
 }

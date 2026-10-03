@@ -145,6 +145,91 @@
           "additionalProperties": false,
           "properties": {
             "action": {
+              "const": "retention",
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "graceSeconds": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "action",
+            "enabled",
+            "graceSeconds"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "grade",
+              "type": "string"
+            },
+            "brightness": {
+              "format": "double",
+              "type": "number"
+            },
+            "contrast": {
+              "format": "double",
+              "type": "number"
+            },
+            "effectId": {
+              "type": "string"
+            },
+            "exposure": {
+              "format": "double",
+              "type": "number"
+            },
+            "itemId": {
+              "type": "string"
+            },
+            "saturation": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          "required": [
+            "action",
+            "itemId",
+            "effectId",
+            "brightness",
+            "exposure",
+            "contrast",
+            "saturation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "reframe-apply",
+              "type": "string"
+            },
+            "itemId": {
+              "type": "string"
+            },
+            "proposal": {
+              "$ref": "#/$defs/Proposal"
+            }
+          },
+          "required": [
+            "action",
+            "itemId",
+            "proposal"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
               "const": "audio-duck",
               "type": "string"
             },
@@ -470,6 +555,38 @@
           "additionalProperties": false,
           "properties": {
             "action": {
+              "const": "transcript-select",
+              "type": "string"
+            },
+            "analysisVersion": {
+              "type": "string"
+            },
+            "assetId": {
+              "type": "string"
+            },
+            "preserveCorrections": {
+              "default": true,
+              "type": "boolean"
+            },
+            "sequences": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "action",
+            "assetId",
+            "analysisVersion"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
               "const": "review-add",
               "type": "string"
             },
@@ -541,6 +658,38 @@
       ],
       "type": "string"
     },
+    "Point": {
+      "additionalProperties": false,
+      "properties": {
+        "centerX": {
+          "format": "double",
+          "type": "number"
+        },
+        "centerY": {
+          "format": "double",
+          "type": "number"
+        },
+        "confidence": {
+          "format": "double",
+          "type": "number"
+        },
+        "held": {
+          "type": "boolean"
+        },
+        "sourceMs": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sourceMs",
+        "centerX",
+        "centerY",
+        "confidence",
+        "held"
+      ],
+      "type": "object"
+    },
     "Profile": {
       "additionalProperties": false,
       "properties": {
@@ -593,6 +742,82 @@
       ],
       "type": "object"
     },
+    "Proposal": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "type": "string"
+        },
+        "endMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "fallback": {
+          "type": "string"
+        },
+        "findings": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/Point"
+          },
+          "type": "array"
+        },
+        "region": {
+          "$ref": "#/$defs/Region"
+        },
+        "sourceSha256": {
+          "type": "string"
+        },
+        "startMs": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "algorithm",
+        "startMs",
+        "endMs",
+        "sourceSha256",
+        "region",
+        "points",
+        "findings",
+        "fallback"
+      ],
+      "type": "object"
+    },
+    "Region": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "format": "double",
+          "type": "number"
+        },
+        "width": {
+          "format": "double",
+          "type": "number"
+        },
+        "x": {
+          "format": "double",
+          "type": "number"
+        },
+        "y": {
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "type": "object"
+    },
     "ReviewState": {
       "enum": [
         "open",
@@ -622,6 +847,145 @@
         "maxDurationMs"
       ],
       "type": "object"
+    },
+    "Task": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "assetId": {
+              "type": "string"
+            },
+            "endMs": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "kind": {
+              "const": "frame-index",
+              "type": "string"
+            },
+            "startMs": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "assetId",
+            "startMs",
+            "endMs"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "assetId": {
+              "type": "string"
+            },
+            "endMs": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "height": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "proxy",
+              "type": "string"
+            },
+            "startMs": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "width": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "assetId",
+            "startMs",
+            "endMs",
+            "width",
+            "height"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "assetId": {
+              "type": "string"
+            },
+            "endMs": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "kind": {
+              "const": "track",
+              "type": "string"
+            },
+            "maxMotionFraction": {
+              "format": "double",
+              "type": "number"
+            },
+            "minConfidence": {
+              "format": "double",
+              "type": "number"
+            },
+            "region": {
+              "$ref": "#/$defs/Region"
+            },
+            "sampleMs": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "startMs": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "assetId",
+            "startMs",
+            "endMs",
+            "region",
+            "sampleMs",
+            "minConfidence",
+            "maxMotionFraction"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "assetId": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "provider",
+              "type": "string"
+            },
+            "parameters": true,
+            "task": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "assetId",
+            "task",
+            "parameters"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "Template": {
       "additionalProperties": false,
@@ -1269,6 +1633,11 @@
           "default": false,
           "type": "boolean"
         },
+        "priority": {
+          "default": 0,
+          "format": "int32",
+          "type": "integer"
+        },
         "project": {
           "type": "string"
         },
@@ -1446,6 +1815,46 @@
         "command",
         "project",
         "destination"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "analyze-start",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key": {
+          "type": "string"
+        },
+        "noLaunch": {
+          "default": false,
+          "type": "boolean"
+        },
+        "priority": {
+          "default": 0,
+          "format": "int32",
+          "type": "integer"
+        },
+        "project": {
+          "type": "string"
+        },
+        "task": {
+          "$ref": "#/$defs/Task"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "task",
+        "expectedRevision",
+        "key"
       ],
       "type": "object"
     },
@@ -1652,6 +2061,33 @@
       "additionalProperties": false,
       "properties": {
         "command": {
+          "const": "maintain",
+          "type": "string"
+        },
+        "dryRun": {
+          "default": true,
+          "type": "boolean"
+        },
+        "graceSeconds": {
+          "default": 86400,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "workspace": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "workspace"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
           "const": "verify-project",
           "type": "string"
         },
@@ -1756,6 +2192,11 @@
         "noLaunch": {
           "default": false,
           "type": "boolean"
+        },
+        "priority": {
+          "default": 0,
+          "format": "int32",
+          "type": "integer"
         },
         "project": {
           "type": "string"
@@ -1862,6 +2303,22 @@
       "properties": {
         "command": {
           "const": "studio-state",
+          "type": "string"
+        },
+        "limit": {
+          "default": 50,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "prefix": {
+          "default": "avw.",
           "type": "string"
         },
         "project": {

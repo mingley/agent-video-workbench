@@ -22,13 +22,20 @@ use std::{
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderInput {
     pub sequence: String,
+    #[serde(default, skip_serializing_if = "zero_priority")]
+    pub priority: i32,
     pub expected_revision: u64,
     pub ffmpeg: PathBuf,
     pub ffprobe: PathBuf,
     #[serde(default)]
     pub asr: Option<crate::asr::Input>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub analysis: Option<crate::analysis::Input>,
 }
 
+fn zero_priority(value: &i32) -> bool {
+    *value == 0
+}
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Job {
@@ -91,16 +98,23 @@ impl Store {
         let project: agentcut_core::Project = serde_json::from_str(&snapshot)?;
         let mut sequences = std::collections::BTreeSet::new();
         for input in inputs {
+            if !(-100..=100).contains(&input.priority) {
+                return Err(Error::Invalid("priority must be -100..100".into()));
+            }
             if input.expected_revision != project.revision {
                 return Err(Error::Conflict {
                     expected: input.expected_revision,
                     current: project.revision,
                 });
             }
-            if input.asr.is_some() || !sequences.insert(&input.sequence) {
+            if input.asr.is_some() || input.analysis.is_some() || !sequences.insert(&input.sequence)
+            {
                 return Err(Error::Invalid(
                     "batch requires distinct render sequences".into(),
                 ));
+            }
+            if let Some(analysis) = &input.analysis {
+                crate::analysis::validate(analysis, &project)?;
             }
             let seq = project.require_sequence(&input.sequence)?;
             if seq.canvas.width > 4096
@@ -188,6 +202,9 @@ impl Store {
         if key.trim().is_empty() || key.len() > 256 {
             return Err(Error::Invalid("job key must contain 1..256 bytes".into()));
         }
+        if !(-100..=100).contains(&input.priority) {
+            return Err(Error::Invalid("priority must be -100..100".into()));
+        }
         let encoded = serde_json::to_string(input)?;
         let hash = format!("{:x}", Sha256::digest(encoded.as_bytes()));
         let tx = self
@@ -265,7 +282,7 @@ impl Store {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let id: Option<String> = tx.query_row("SELECT id FROM jobs WHERE state='queued' AND input IS NOT NULL ORDER BY rowid LIMIT 1",[],|r|r.get(0)).optional()?;
+        let id: Option<String> = tx.query_row("SELECT id FROM jobs WHERE state='queued' AND input IS NOT NULL ORDER BY COALESCE(json_extract(input,'$.priority'),0) DESC,rowid LIMIT 1",[],|r|r.get(0)).optional()?;
         let Some(id) = id else { return Ok(None) };
         tx.execute("UPDATE jobs SET state='running',attempt=attempt+1,generation=generation+1,updated=?1 WHERE id=?2 AND state='queued'",params![now()?,id])?;
         tx.commit()?;
@@ -354,7 +371,9 @@ pub fn worker(root: &Path, stop: Arc<AtomicBool>, idle_seconds: u64) -> Result<V
             stop: stop.clone(),
             heartbeat: Instant::now(),
         };
-        let result = if let Some(asr) = &input.asr {
+        let result = if let Some(analysis) = &input.analysis {
+            crate::analysis::run(&root, &project, analysis, &backend, &mut control)
+        } else if let Some(asr) = &input.asr {
             crate::asr::analyze(&root, &project, asr, &backend, &mut control)
         } else {
             media::render_attempt(
@@ -382,8 +401,25 @@ pub fn worker(root: &Path, stop: Arc<AtomicBool>, idle_seconds: u64) -> Result<V
         }
         completed += 1;
     }
+    let policy = store.project()?.extensions.get("avw.retention").cloned();
     drop(lock);
-    Ok(json!({"worker":"stopped","processed":completed}))
+    let retention =
+        if !stop.load(Ordering::Relaxed) && policy.as_ref().is_some_and(|p| p["enabled"] == true) {
+            Some(
+                crate::storage::gc(
+                    &root,
+                    policy
+                        .as_ref()
+                        .and_then(|p| p["graceSeconds"].as_u64())
+                        .unwrap_or(86400),
+                    false,
+                )
+                .unwrap_or_else(|e| json!({"state":"deferred","error":e.to_string()})),
+            )
+        } else {
+            None
+        };
+    Ok(json!({"worker":"stopped","processed":completed,"retention":retention}))
 }
 
 pub fn launch(root: &Path, executable: &Path) -> Result<()> {
