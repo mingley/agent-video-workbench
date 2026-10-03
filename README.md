@@ -62,7 +62,7 @@ qualification; the tool reports unsupported rendering paths explicitly.
 | [Evaluation](evaluation/README.md) | Current checks and historical candidate comparison |
 | [Service schema](specs/schemas/service-request.schema.json) | Generated CLI/MCP request envelope |
 
-The commit-pinned AgentCut journal is not used as project authority. Software
-here is MIT licensed. FFmpeg, fonts, models and agent hosts retain their own
-licenses and operating costs. Keep private footage, credentials and model
-weights outside Git.
+Agent Video Workbench is [MIT licensed](LICENSE), copyright 2026 Michael Ingley.
+AgentCut's required [third-party MIT notice](licenses/agentcut-MIT.txt) is kept
+separately. FFmpeg, fonts and models retain their own licenses. Keep private
+footage, credentials and model weights outside Git.

@@ -17,9 +17,9 @@ cargo build --release --locked
 python3 scripts/check-schema.py target/release/avw
 mkdir -p "$output/avw/bin"
 cp target/release/avw "$output/avw/bin/avw"
-cp LICENSE AGENTCUT-LICENSE DEVELOPMENT.md AGENT_GUIDE.md "$output/avw/"
+cp LICENSE DEVELOPMENT.md AGENT_GUIDE.md "$output/avw/"
 cp README.md "$output/avw/"
-cp -R docs examples specs "$output/avw/"
+cp -R docs examples specs licenses "$output/avw/"
 mkdir -p "$output/avw/evaluation"
 cp evaluation/README.md evaluation/candidates.lock.json "$output/avw/evaluation/"
 cp -R evaluation/results evaluation/service-results "$output/avw/evaluation/"
