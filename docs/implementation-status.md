@@ -70,6 +70,9 @@ Historical candidate research evidence is separate from this release.
 published archive in an offline Ubuntu container and an independent MCP edit
 trial on a copy of the user demo. It records the mobile review fix in 0.3.1 and
 the measurements separately from real-camera/display/platform qualification.
+[0.3.1](https://github.com/mingley/agent-video-workbench/releases/tag/v0.3.1)
+is published with source commit `b1c17a1364225e9b1ae097c4afef7ff55c6923c9`;
+its public installer, combined HDR/sync checks and expanded MCP workflow pass.
 
 [0.3.0 is published](https://github.com/mingley/agent-video-workbench/releases/tag/v0.3.0)
 with native archives, combined checksums and dependency setup helpers.

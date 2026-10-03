@@ -30,6 +30,20 @@ playback too early at 350ms; the corrected test requires actual clock advancemen
 within ten seconds and keeps the same playback/seek/layout assertions. Patch
 publication verifies these completed results and archive/source/binary identities.
 
+[0.3.1 is published](https://github.com/mingley/agent-video-workbench/releases/tag/v0.3.1).
+Its public x86_64 archive was downloaded into another fresh installation and
+passed readiness, the official MCP workflow, the combined HDR/sync/refusal suite
+and browser checks on the prepared demo. The MCP configuration now selects
+0.3.1, with the demo still at revision 15 and its protected range intact.
+Reusable installation/start instructions were exercised, saved and read back.
+
+The [updated Node 24 workflows](https://github.com/mingley/agent-video-workbench/actions/runs/37128475887)
+passed on both native runners with zero annotations. Publication's workflow
+token could upload/edit a release but received 403 when creating its draft.
+The qualified tag and draft were created through the existing authorized
+repository connection; the publisher then verified and uploaded all seven
+assets successfully. No additional credential was needed.
+
 These are generated camera-like fixtures and Chromium viewport emulation.
 They do not certify physical phone playback, iOS Safari, real camera appearance,
 Dolby Vision/Log transforms, HDR-output masters, macOS/Windows or unspecified

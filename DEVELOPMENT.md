@@ -112,6 +112,13 @@ command ledger. Inspect outputs as well as test exit status.
 
 ## Release archive
 
+When an integration token rejects draft creation, use the already authorized
+repository connection to prepare the verified tag and draft, then rerun the
+publisher. Do not weaken verification or request another credential before
+testing existing access. The 0.3.1 publication exercised this route: the cloud
+connection created metadata, and the Actions token verified/uploaded/published
+the seven assets. Existing tags, targets and asset bytes are never overwritten.
+
 `scripts/package.sh /path/to/new-release-directory` runs required Rust/schema
 checks and creates a versioned native archive, installer, licenses, dependency
 license declarations, compiler/platform/commit manifest and SHA256SUMS. Verify

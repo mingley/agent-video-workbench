@@ -1112,7 +1112,12 @@
       "application": true,
       "combined": true
     },
-    "maintenanceBusyProjects": "deferred as required by active worker leases"
+    "maintenanceBusyProjects": "deferred as required by active worker leases",
+    "configurationSavedAndReadBack": {
+      "installMatches": true,
+      "startMatches": true,
+      "revision": 6
+    }
   },
   "nativeCiFinal": {
     "run": 37128053961,
@@ -1122,5 +1127,422 @@
     "x86Harnesses": 12,
     "armHarnesses": 11,
     "browserOnArm": "explicitly skipped"
+  },
+  "publishedPatch": {
+    "version": "0.3.1",
+    "url": "https://github.com/mingley/agent-video-workbench/releases/tag/v0.3.1",
+    "sourceCommit": "b1c17a1364225e9b1ae097c4afef7ff55c6923c9",
+    "publicationRun": 37128475899,
+    "publicationAttempts": 3,
+    "draftCreation": "Workflow-token 403 resolved with existing authorized repository connection; no new credential",
+    "assets": [
+      {
+        "name": "avw-0.3.1-linux-aarch64.tar.gz",
+        "bytes": 4454283
+      },
+      {
+        "name": "avw-0.3.1-linux-x86_64.tar.gz",
+        "bytes": 4634867
+      },
+      {
+        "name": "install-release.sh",
+        "bytes": 1817
+      },
+      {
+        "name": "native-manifests.json",
+        "bytes": 1181
+      },
+      {
+        "name": "setup-asr.sh",
+        "bytes": 1447
+      },
+      {
+        "name": "setup-media.sh",
+        "bytes": 2496
+      },
+      {
+        "name": "SHA256SUMS",
+        "bytes": 193
+      }
+    ],
+    "nativeManifests": [
+      {
+        "version": "avw 0.3.1",
+        "commit": "b1c17a1364225e9b1ae097c4afef7ff55c6923c9",
+        "rust": "rustc 1.99.0 (b940084d7 2026-09-28)",
+        "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+        "externalRuntime": [
+          "FFmpeg/ffprobe 8",
+          "licensed TTF font"
+        ],
+        "optionalRuntime": [
+          "whisper.cpp v1.9.4 and checksum-verified English model"
+        ],
+        "arch": "x86_64",
+        "archiveSha256": "5fb839062d036feed276c42f0bad83ba92767de8cde4071f1702c0b813f02d4d",
+        "binarySha256": "a3d29c8c462228734b274999e24c4bea1a7f260657be172f3a2328a6ad43381d"
+      },
+      {
+        "version": "avw 0.3.1",
+        "commit": "b1c17a1364225e9b1ae097c4afef7ff55c6923c9",
+        "rust": "rustc 1.99.0 (b940084d7 2026-09-28)",
+        "platform": "Linux-6.17.0-1022-azure-aarch64-with-glibc2.39",
+        "externalRuntime": [
+          "FFmpeg/ffprobe 8",
+          "licensed TTF font"
+        ],
+        "optionalRuntime": [
+          "whisper.cpp v1.9.4 and checksum-verified English model"
+        ],
+        "arch": "aarch64",
+        "archiveSha256": "59b8afae43aedee05e92d901aaff67817f2ca0a6c00ca2198ab69ce7e8be9695",
+        "binarySha256": "416ef084b4129d46fb30e9ea8e9d8e60ef5239048798deff67fa811dd44d6091"
+      }
+    ],
+    "publicInstall": {
+      "passed": true,
+      "binarySha256": "a3d29c8c462228734b274999e24c4bea1a7f260657be172f3a2328a6ad43381d",
+      "doctor": {
+        "checks": [
+          "ffprobe",
+          "H.264/AAC encode",
+          "drawtext captions",
+          "required HDR/audio filters",
+          "full output decode"
+        ],
+        "ffmpeg": "ffmpeg version n8.0.1-48-g0592be14ff-20260116 Copyright (c) 2000-2025 the FFmpeg developers",
+        "optionalGpuRequired": false,
+        "ready": true
+      },
+      "officialMcpWorkflow": {
+        "passed": true,
+        "officialMcpSdk": true,
+        "cliMcpOutcomeEquivalent": true,
+        "transcriptMappedCaptions": true,
+        "independentNamedOutputs": 4,
+        "defaultHdCanvasTested": true,
+        "frozenBatchDelivery": true,
+        "expandedSchemaAndAnalysis": true,
+        "cacheReused": true,
+        "decodedFrames": 180,
+        "jobId": "8a37d047-9da9-4464-9bd1-cd66b0f3fcbb",
+        "artifact": "/workspace/.onboarding/virtual-verify-20261003/public-agent/project/renders/8a37d047-9da9-4464-9bd1-cd66b0f3fcbb-1/video.mp4"
+      },
+      "combinedMedia": {
+        "passed": true,
+        "decodedFrames": 150,
+        "sourceSha256": {
+          "pq": "b9549303e6f64aa625da6e4fa9d023204ada9d80940448e21ba940cca5e844ff",
+          "hlg": "e708f3def9e61851ae5217c7b3d91e6a3bf825146f49e3f72d12e2ffa6fb6606",
+          "sdr": "c4432289e217a28372dd6b70d87eb9a17c6f02df9e715748b48d042884dbae15"
+        },
+        "outputSha256": "6dfb68f296199df0d05257a318249cf1f1de45c6804369aa6f13672e0118c5c4",
+        "artifact": "/workspace/.onboarding/virtual-verify-20261003/public-combined/project/renders/66985bff-0f9b-4b63-837c-a4d050ea68f5/video.mp4",
+        "fixture": {
+          "rotationDegrees": 90,
+          "pqBits": 10,
+          "vfrIntervalsSeconds": [
+            0.033,
+            0.1
+          ],
+          "containerStartSeconds": 2.0,
+          "audioDelaySeconds": 0.2280000000000002,
+          "masteringDisplayMetadata": true
+        },
+        "flashOnsetsSeconds": [
+          0.5,
+          2.0
+        ],
+        "toneOnsetsSeconds": [
+          0.5,
+          2.0
+        ],
+        "maxSyncErrorSeconds": 0.0,
+        "captionWhitePeaksRgb": [
+          255,
+          255,
+          255
+        ],
+        "mixedPqHlgSdr": true,
+        "originalsUnchanged": true,
+        "unsupportedPathsRejected": [
+          "HDR-output request",
+          "unqualified BT.2020 transform",
+          "basic white-balance parameter"
+        ],
+        "priorVerifiedDeliveryRetained": true,
+        "limitations": [
+          "Generated phone-like media; no real phone sensor, playback or appearance approval",
+          "Rec.709 SDR output only; no HDR-output or Dolby Vision qualification"
+        ]
+      },
+      "preparedMcpConfig": {
+        "preparedMcpConfigPassed": true,
+        "version": "0.3.1",
+        "revision": 15,
+        "hdrArtifactVerified": true,
+        "localAsrConfigured": true
+      },
+      "preparedDemoBrowser": {
+        "passed": true,
+        "browser": "151.0.7922.173",
+        "results": [
+          {
+            "label": "desktop",
+            "requestedViewport": {
+              "width": 1280,
+              "height": 900
+            },
+            "videos": [
+              {
+                "width": 360,
+                "height": 640,
+                "duration": 6,
+                "played": true,
+                "playbackWaitMs": 260.8999999985099,
+                "seekTargetSeconds": 2,
+                "seekSeconds": 2,
+                "error": null,
+                "displayedWidth": 360
+              },
+              {
+                "width": 360,
+                "height": 360,
+                "duration": 6,
+                "played": true,
+                "playbackWaitMs": 260.20000000298023,
+                "seekTargetSeconds": 2,
+                "seekSeconds": 2,
+                "error": null,
+                "displayedWidth": 360
+              }
+            ],
+            "viewport": 1280,
+            "pageWidth": 1280,
+            "pageErrors": []
+          },
+          {
+            "label": "phone",
+            "requestedViewport": {
+              "width": 390,
+              "height": 844
+            },
+            "videos": [
+              {
+                "width": 360,
+                "height": 640,
+                "duration": 6,
+                "played": true,
+                "playbackWaitMs": 263.6000000014901,
+                "seekTargetSeconds": 2,
+                "seekSeconds": 2,
+                "error": null,
+                "displayedWidth": 358
+              },
+              {
+                "width": 360,
+                "height": 360,
+                "duration": 6,
+                "played": true,
+                "playbackWaitMs": 252.70000000298023,
+                "seekTargetSeconds": 2,
+                "seekSeconds": 2,
+                "error": null,
+                "displayedWidth": 358
+              }
+            ],
+            "viewport": 390,
+            "pageWidth": 390,
+            "pageErrors": []
+          },
+          {
+            "label": "small-phone",
+            "requestedViewport": {
+              "width": 320,
+              "height": 640
+            },
+            "videos": [
+              {
+                "width": 360,
+                "height": 640,
+                "duration": 6,
+                "played": true,
+                "playbackWaitMs": 253.70000000298023,
+                "seekTargetSeconds": 2,
+                "seekSeconds": 2,
+                "error": null,
+                "displayedWidth": 288
+              },
+              {
+                "width": 360,
+                "height": 360,
+                "duration": 6,
+                "played": true,
+                "playbackWaitMs": 253,
+                "seekTargetSeconds": 2,
+                "seekSeconds": 2,
+                "error": null,
+                "displayedWidth": 288
+              }
+            ],
+            "viewport": 320,
+            "pageWidth": 320,
+            "pageErrors": []
+          }
+        ],
+        "requests": [
+          {
+            "path": "/",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/d272a340-e0ad-4463-bd61-e9416edb6d92/video.mp4",
+            "status": 206,
+            "range": "bytes=0-"
+          },
+          {
+            "path": "/22f6f635-ee72-47fe-ada9-0c168d3b9f0c/video.mp4",
+            "status": 206,
+            "range": "bytes=0-"
+          },
+          {
+            "path": "/22f6f635-ee72-47fe-ada9-0c168d3b9f0c/video.mp4",
+            "status": 206,
+            "range": "bytes=163840-"
+          },
+          {
+            "path": "/d272a340-e0ad-4463-bd61-e9416edb6d92/captions.vtt",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/d272a340-e0ad-4463-bd61-e9416edb6d92/manifest.json",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/22f6f635-ee72-47fe-ada9-0c168d3b9f0c/captions.vtt",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/22f6f635-ee72-47fe-ada9-0c168d3b9f0c/manifest.json",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/d272a340-e0ad-4463-bd61-e9416edb6d92/video.mp4",
+            "status": 206,
+            "range": "bytes=0-"
+          },
+          {
+            "path": "/22f6f635-ee72-47fe-ada9-0c168d3b9f0c/video.mp4",
+            "status": 206,
+            "range": "bytes=0-"
+          },
+          {
+            "path": "/22f6f635-ee72-47fe-ada9-0c168d3b9f0c/video.mp4",
+            "status": 206,
+            "range": "bytes=163840-"
+          },
+          {
+            "path": "/d272a340-e0ad-4463-bd61-e9416edb6d92/captions.vtt",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/d272a340-e0ad-4463-bd61-e9416edb6d92/manifest.json",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/22f6f635-ee72-47fe-ada9-0c168d3b9f0c/captions.vtt",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/22f6f635-ee72-47fe-ada9-0c168d3b9f0c/manifest.json",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/d272a340-e0ad-4463-bd61-e9416edb6d92/video.mp4",
+            "status": 206,
+            "range": "bytes=0-"
+          },
+          {
+            "path": "/22f6f635-ee72-47fe-ada9-0c168d3b9f0c/video.mp4",
+            "status": 206,
+            "range": "bytes=0-"
+          },
+          {
+            "path": "/d272a340-e0ad-4463-bd61-e9416edb6d92/video.mp4",
+            "status": 206,
+            "range": "bytes=163840-"
+          },
+          {
+            "path": "/22f6f635-ee72-47fe-ada9-0c168d3b9f0c/video.mp4",
+            "status": 206,
+            "range": "bytes=163840-"
+          },
+          {
+            "path": "/d272a340-e0ad-4463-bd61-e9416edb6d92/captions.vtt",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/d272a340-e0ad-4463-bd61-e9416edb6d92/manifest.json",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/22f6f635-ee72-47fe-ada9-0c168d3b9f0c/captions.vtt",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/22f6f635-ee72-47fe-ada9-0c168d3b9f0c/manifest.json",
+            "status": 200,
+            "range": null
+          }
+        ],
+        "limitations": [
+          "Chromium viewport emulation; no iOS Safari, physical phone, HDR display or real-camera appearance approval"
+        ]
+      }
+    }
+  },
+  "updatedActions": {
+    "run": 37128475887,
+    "sourceCommit": "2ca3a370f9ef18b9d9723a8aa6b6f2beb746369c",
+    "checks": [
+      {
+        "annotations": 0,
+        "conclusion": "success",
+        "name": "publish"
+      },
+      {
+        "annotations": 0,
+        "conclusion": "success",
+        "name": "qualify (ubuntu-24.04-arm, aarch64)"
+      },
+      {
+        "annotations": 0,
+        "conclusion": "success",
+        "name": "qualify (ubuntu-24.04, x86_64)"
+      }
+    ],
+    "nativeAppCodeMatchesRelease": true
   }
 }
