@@ -1,5 +1,7 @@
 # Agent workflow
 
+For a runnable trial, follow [the first edit](docs/first-edit.md); response
+fields are in [the interface reference](docs/agent-api.md).
 Read `agent-guide`, `capabilities` and `schema` first. CLI JSON and the MCP `avw`
 tool share the generated typed schema. `avw request FILE|-` accepts every
 operation, including those without a named CLI alias. MCP paths resolve inside
@@ -7,7 +9,8 @@ its existing workspace root. Keep sources, projects and delivery destinations
 there. Inspect JSON `ok` and job states; a PID is not completion.
 
 1. Create a project and import original media and a licensed TTF font with stable
-   IDs. Mutations use current `expectedRevision` and a unique key of 8–200 bytes.
+   IDs distinct across assets, sequences and items. Mutations use current
+   `expectedRevision` and a unique key of 8–200 bytes.
    `import-url` accepts direct HTTPS objects only on configured download hosts;
    unchanged strong ETags allow interrupted transfers to resume. Signed URLs
    are transient and do not enter project history. Import does not change originals.
@@ -24,7 +27,8 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    version explicitly with `transcript-select`; unchanged cue IDs/timing preserve
    corrections. Changed alignment requires explicit review and recomposition.
 4. `compose` takes outputId/name/fontAssetId and ordered cuts with IDs, assetId,
-   startMs/endMs. Defaults: 1080×1920, 30fps, font size 48. Source cues intersect
+   startMs/endMs as half-open intervals relative to the container origin.
+   Defaults: 1080×1920, 30fps, font size 48. Source cues intersect
    retained ranges to create captions. Cut-boundary text needs review. Captions
    wrap within 80% width, at most three lines, using owned font metrics and a dark
    stroke. Corrected, translated and restyled captions reflow; overflow refuses
@@ -63,32 +67,38 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
     verifies its hash too. Each render has matching SRT/VTT, cover, indexed sheet
     and manifest. `delivery` packages a succeeded render or batch into a new
     directory with verified copied files, manifest and local HTML review page.
-    Failed batch outputs and unresolved feedback are visible. Use host file tools
+    The delivery manifest records failed batch outputs and unresolved feedback;
+    the HTML presents succeeded videos. Use host file tools
     to return the bundle or MP4. Technical QC cannot approve content or appearance.
 11. `review-add` anchors actor/text/time interval to an exact artifact hash and
     frozen source locations. `reviews` remaps its source point after edits and
     reports resolved, removed or ambiguous placement. `review-resolve` records
     addressed/dismissed state; moving an edit does not erase original feedback.
-12. Resume with compact `resume`, paginated history/decisions, diff, job lists and
+12. Use compact `resume` for output IDs and top-level `protectedRanges`; `status`
+    returns the full project snapshot. Resume with paginated history/decisions,
+    diff, job lists and
     `request-outcome`. `studio-state` supports prefix/offset/limit and summarizes
     values over 64KiB. `catalog` discovers projects read-only. Portable libraries
     include profiles/templates and fonts, without footage. OTIO interchange covers
     normal-speed cut tracks/gaps; inspect loss reports for unsupported features.
 13. `backup` preserves consistent history and every historical original.
     `backup-restore` opens a verified fresh copy; derived jobs are unavailable and
-    must rerun. `verify-project` reports missing/corrupt objects; `relink` requires
+    need fresh render/analysis requests with new keys. Backups exclude renders,
+    analysis and delivery bundles; retain delivery separately. `verify-project` reports missing/corrupt objects; `relink` requires
     the exact retained hash. `cache-gc` defaults to a preview. Opt-in studio
     `retention` runs after workers drain; `maintain` supports scheduled collection.
     Busy project leases defer collection. Originals/history/successful artifacts
     and recoverable attempts remain retained.
 
+Raw `apply` nests an AgentCut batch with `baseRevision`/`idempotencyKey`;
+creator request envelopes use `expectedRevision`/`key`.
 Same key and same intent replays the committed outcome. Changed intent needs a
 new key. On revision conflicts read current diff and reconsider. Dry-run commits
 no history or success outcome. `restore` appends an old whole snapshot; use
 selective omission restore to retain unrelated later edits. Protected source
 coverage remains enforced; `unprotect` is explicit and audited.
 
-A restarted `avw worker PROJECT` acquires its owner lock and marks abandoned
+A restarted `avw worker /absolute/path/to/project` acquires its owner lock and marks abandoned
 attempts interrupted. `job-retry` starts a fresh attempt with the same logical
 job. Cancellation kills the owned process group and preserves earlier finals.
 On hosts that reap detached processes, enqueue with noLaunch:true and supervise

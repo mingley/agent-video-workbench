@@ -1,0 +1,18 @@
+{
+  "command": "compose",
+  "project": "project",
+  "edit": {
+    "outputId": "short",
+    "name": "First short",
+    "fontAssetId": "font",
+    "width": 360,
+    "height": 640,
+    "fontSize": 24,
+    "cuts": [
+      {"id": "opening", "assetId": "source", "startMs": 0, "endMs": 2000},
+      {"id": "demo", "assetId": "source", "startMs": 7000, "endMs": 10000}
+    ]
+  },
+  "expectedRevision": 3,
+  "key": "first-short-compose"
+}

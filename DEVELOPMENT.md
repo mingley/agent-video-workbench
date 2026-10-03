@@ -1,4 +1,4 @@
-# Develop Agent Video Workbench 0.3
+# Develop Agent Video Workbench 0.3.1
 
 The Rust application provides durable local projects, a typed CLI/JSON API,
 MCP stdio, source inspection, optional local transcription, captioned named
@@ -30,7 +30,9 @@ The generated request contract is
 Regenerate it from the `result` in `avw schema` when request types change.
 `describe OPERATION` provides examples and the domain property registry;
 `apply --dry-run` checks actual parameters, time arithmetic and project policy.
-The older draft schemas remain design documents.
+The older draft schemas remain design documents. `AGENT_GUIDE.md` is embedded
+at build time; published archives retain their release-source guide, while
+repository documentation can refine examples between binary releases.
 
 ## Media and agent checks
 
@@ -73,7 +75,7 @@ for the worker regression. That regression kills an actual worker, checks child
 termination and reconciliation, retries, cancels and preserves the earlier
 verified output. The matrix checks four rotations against upright pixels, HEVC
 SDR, VFR and missing audio; it converts 10-bit PQ/HLG and accepts nonzero stream starts with decoded reference comparisons.
-The official MCP SDK test produces three independent captioned outputs, checks
+The official MCP SDK test produces four independent captioned outputs, checks
 CLI/MCP replay equivalence, cached inspection, conflicts, policy removal,
 artifact verification and backup reopening. Node is only a test dependency.
 The combined matrix mixes PQ/HLG/SDR with burned captions and independently
@@ -114,7 +116,7 @@ command ledger. Inspect outputs as well as test exit status.
 
 When an integration token rejects draft creation, use the already authorized
 repository connection to prepare the verified tag and draft, then rerun the
-publisher. Do not weaken verification or request another credential before
+publisher. Keep verification intact or request another credential before
 testing existing access. The 0.3.1 publication exercised this route: the cloud
 connection created metadata, and the Actions token verified/uploaded/published
 the seven assets. Existing tags, targets and asset bytes are never overwritten.
@@ -150,8 +152,10 @@ separate from native CI; do not claim arbitrary camera/language/host support.
 
 Update `.github/release-request.json` only for an intended release, binding its
 version, full source commit, successful native qualification run and notes under
-`docs/releases`. The publication workflow verifies both native jobs, all ten
-functional summaries and archive/binary/source identities. It uploads the exact
+`docs/releases`. The publication workflow verifies both native jobs, required
+functional summaries and archive/binary/source identities. For 0.3.1 this is
+12 summaries on x86_64 and 11 on ARM64; the browser check is explicitly skipped
+on ARM64. Local ASR and one-hour measurements remain separate. It uploads the exact
 qualified assets through Actions, verifies existing asset bytes on retry, and
 refuses to replace different assets or a different target. A published release
 is immutable in this workflow. Run the public installer and official MCP trial

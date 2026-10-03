@@ -1,52 +1,37 @@
 # Runtime and design schemas
 
+## Current 0.3.1 contract
+
 [service-request.schema.json](service-request.schema.json) is generated from the
-Rust `Request` type. `avw schema` returns the same schema; MCP tools/list uses
-it for the `avw` tool. `scripts/check-schema.py` verifies the checked-in contract
-against the current executable. CLI flat commands map to the same service.
-The parser also rejects duplicate keys and integers outside the exact JSON
-range; JSON Schema alone does not enforce those parsing rules.
+Rust `Request` type. `avw schema` returns it in `result`; MCP `tools/list` uses
+it for the `avw` tool. `scripts/check-schema.py` compares the checked-in schema
+with an executable. CLI aliases map to the same service.
 
-The request schema describes command envelopes and typed creator workflows.
-Raw apply batches remain pinned AgentCut operations; `describe OPERATION`
-provides examples and property discovery, and `apply --dry-run` performs domain
-validation, including source protection and revision checks.
+The schema covers complete service envelopes and typed creator workflows.
+Raw `apply` embeds a pinned AgentCut operation batch; `describe OPERATION`
+provides property discovery and examples, and dry-run checks actual domain
+semantics, exact time, source policy and revision. The parser additionally
+rejects duplicate keys and integers outside the exact JSON range.
 
-The following older documents remain design artifacts, not a replacement for
-the generated runtime contract:
+Start with [current executable requests](../../examples/requests/README.md),
+[the first-edit walkthrough](../../docs/first-edit.md) and
+[the interface reference](../../docs/agent-api.md). JSON Schema validation alone
+cannot establish source availability, job completion or media quality.
 
-These JSON Schema 2020-12 documents are design artifacts for the
-[agent protocol](../../docs/specs/agent-protocol.md). They preserve the prototype's
-AgentCut batch naming and `ok` / `apiVersion` / `result` / `error` response shape.
-They are not generated from Rust types and are not yet the runtime schema API.
+## Historical design artifacts
 
-| File | Validates | Does not validate |
+These JSON Schema 2020-12 files support the
+[protocol design](../../docs/specs/agent-protocol.md). They are not generated
+runtime contracts, and their optional metadata does not guarantee fields in a
+current response. Enable format validation when checking UUIDs.
+
+| File | Draft scope | Requires application validation |
 | --- | --- | --- |
-| [edit-request.schema.json](edit-request.schema.json) | Batch envelope, required fields, operation envelope, basic types/limits | Operation existence, each `params` schema, unique IDs, exact time arithmetic, source availability, protected coverage or current revision |
-| [response.schema.json](response.schema.json) | Exclusive success/error envelope, error structure and optional metadata | Command-specific `result` semantics, actual job completion, media quality or durable commit |
+| [edit-request.schema.json](edit-request.schema.json) | AgentCut batch envelope, operation envelope and basic limits | Operation/property semantics, unique IDs, time, source availability, protection and revision |
+| [response.schema.json](response.schema.json) | Success/error envelope and proposed optional metadata | Command-specific result fields, durable commit, job completion and verified media |
 
-The stricter request limits and optional response fields are proposed contract
-rules. Current Rust parsing may accept a broader request or return a smaller
-response. Operation/property schemas must be generated or checked against their
-Rust registry before release; successful envelope validation alone cannot make
-an edit executable. JSON parsing must separately reject duplicate object keys.
-Enable format validation when checking UUIDs.
-
-Examples use synthetic identifiers and an illustrative project at revision 12
-containing `caption_demo`. The draft size change uses existing core operation
-names; substitute real IDs and validate against a real project before applying.
-Job/resume examples describe planned APIs. The `aaaaaaaa...` hash is a placeholder.
-
-| Example | Schema |
-| --- | --- |
-| [Edit request](../../examples/protocol/edit-request.json) | Edit request |
-| [Edit success](../../examples/protocol/edit-success.json) | Response; adds proposed richer outcome fields |
-| [Revision conflict](../../examples/protocol/edit-error.json) | Response; proposed recovery details |
-| [Job still verifying](../../examples/protocol/job-status.json) | Response; complete encoding does not imply delivery success |
-| [Resume context](../../examples/protocol/resume-status.json) | Response; older artifacts remain explicitly associated with older revisions |
-
-Before adopting the draft, run structural validation on these examples and
-negative cases (missing key, invalid revision/UUID, mixed success/error), then
-conformance tests against actual CLI/MCP outputs and domain operations. The
-documentation change validates structure only; no example demonstrates an
-implemented media job or hosted-agent integration.
+[Historical examples](../../examples/protocol/README.md) use a synthetic
+revision-12 project and placeholder hashes. Their richer success, conflict,
+job-progress and resume shapes are design illustrations. They are not current
+service envelopes or runtime transcripts. Preserve them for design context;
+use generated requests and observed service results for integrations.

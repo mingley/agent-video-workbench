@@ -1,0 +1,15 @@
+{
+  "command": "studio",
+  "project": "project",
+  "edit": {
+    "action": "variant",
+    "sourceRevision": 4,
+    "sequence": "short",
+    "id": "square",
+    "name": "First square",
+    "width": 360,
+    "height": 360
+  },
+  "expectedRevision": 4,
+  "key": "first-square-variant"
+}

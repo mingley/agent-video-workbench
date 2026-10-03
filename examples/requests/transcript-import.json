@@ -1,0 +1,15 @@
+{
+  "command": "transcript-import",
+  "project": "project",
+  "transcript": {
+    "assetId": "source",
+    "language": "en",
+    "provider": "reviewed-example",
+    "cues": [
+      {"id": "opening_cue", "startMs": 0, "endMs": 2000, "text": "First look"},
+      {"id": "demo_cue", "startMs": 7000, "endMs": 10000, "text": "See the demo"}
+    ]
+  },
+  "expectedRevision": 2,
+  "key": "first-reviewed-transcript"
+}

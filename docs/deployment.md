@@ -1,6 +1,6 @@
 # Install and connect an agent
 
-Version 0.3 is a local single-user Linux CLI and MCP stdio server. It persists
+Version 0.3.1 is a local single-user Linux CLI and MCP stdio server. It persists
 projects, originals, revisions, analysis, jobs and verified exports. The agent
 provides editorial decisions and uses its host's file tools for delivery.
 
@@ -14,7 +14,10 @@ The binary dynamically needs libc, libm and libgcc_s. Mac/Windows are not suppor
 
 From the checkout, `scripts/install-release.sh NEW_BIN_DIRECTORY 0.3.1`
 downloads the matching archive, verifies its checksum and installs without root.
-For offline installation, transfer the archive and SHA256SUMS, verify the
+Without a checkout, download `install-release.sh` and `setup-media.sh` from the
+[0.3.1 release](https://github.com/mingley/agent-video-workbench/releases/tag/v0.3.1).
+Run them with Bash and the same directory/version arguments; the release
+installer needs curl, SHA-256 utilities and tar. For offline installation, transfer the archive and SHA256SUMS, verify the
 matching checksum, extract, then run `avw/install.sh NEW_BIN_DIRECTORY`.
 The installer checks the binary and refuses overwrite; use versioned directories
 for upgrade/rollback. The binary needs no Cargo, Node, Python, GUI or GPU.
@@ -40,7 +43,9 @@ and packaging checks are in [DEVELOPMENT.md](../DEVELOPMENT.md).
 Put projects and input files in persistent storage outside the checkout.
 `avw --workspace ROOT request FILE|-` accepts the complete typed JSON schema;
 commands use kebab-case and fields camelCase. Flat CLI aliases are in `--help`.
-Use `schema`, `agent-guide` and `capabilities` for discovery.
+Use `schema`, `agent-guide` and `capabilities` for discovery. Follow
+[the first-edit walkthrough](first-edit.md) for import through delivery, and
+[the interface reference](agent-api.md) for exact response/retry behavior.
 
 Replace absolute paths in [examples/mcp.json](../examples/mcp.json). The root
 must exist. The MCP client launches:
@@ -95,7 +100,9 @@ The input contains schemaVersion:1, kind:analysis, task/parameters and an exact
 source path/hash. Output must contain schemaVersion:1, kind:analysis, the same
 sourceSha256 and a data object. Its executable SHA enters frozen/cache identity.
 It runs with child memory/file/time/output limits, process cancellation and
-untrusted-result review. It cannot mutate a project through this contract.
+untrusted-result review. The contract returns analysis rather than project edits.
+The executable itself is a trusted operator program with the operator's OS file
+permissions; child limits do not create a filesystem sandbox.
 Configure any remote data transfer/cost within that provider explicitly.
 
 `--download-host files.example.com` enables direct HTTPS imports for that exact
@@ -115,7 +122,9 @@ with WAL/FULL sync. Retry unchanged requests with the same key; reconsider after
 revision conflicts. Every historical managed original is immutable.
 
 Auto-launched workers require a host that retains detached processes. Otherwise
-enqueue with noLaunch:true and supervise `avw worker PROJECT --idle-seconds 60`.
+enqueue with noLaunch:true and supervise
+`avw worker /absolute/path/to/project --idle-seconds 60`. The worker path is
+used directly; service-root-relative path resolution does not apply to it.
 One owner drains each project's queue. A restarted worker reconciles abandoned
 attempts as interrupted; explicit job-retry creates a fresh attempt with the same
 logical ID. Cancellation kills the owned process group and retains earlier finals.
@@ -143,10 +152,13 @@ runner/cron; the workbench does not assume a privileged system daemon.
 
 `backup PROJECT NEW_DIRECTORY` copies a consistent database and every historical
 original, verifies hashes and seals a manifest. `backup-restore` checks a fresh
-copy. Incomplete bundles refuse open; derived jobs are unavailable and rerun.
+copy. Incomplete bundles refuse open. Backups exclude analysis, renders and
+review packages; retain delivery separately. Restored derived jobs are unavailable:
+queue fresh render/analysis requests with new keys rather than retrying the
+excluded artifacts or expecting an interrupted batch to resume.
 `verify-project` reports missing/corrupt objects; relink requires the exact hash.
 Before upgrading, stop workers, back up and retain the old binary. Schema 1–3
-migrations retain a pre-migration database; schema 4 is unchanged in 0.3. Roll
+migrations retain a pre-migration database; schema 4 is unchanged in 0.3.1. Roll
 back with a separate retained/restored project and compatible old executable.
 
 ## Supported limits
@@ -155,11 +167,14 @@ Rec.709 SDR H.264/AAC MP4; output up to one hour and 4096 pixels per canvas axis
 one worker per project/two encode threads; per-child 4GiB virtual address space
 and 32GiB output file, bounded logs/deadlines. Free-space checks estimate demand;
 the operator controls host disk and simultaneous projects. ASR sources are at
-most one hour; inspect/frame/proxy/tracking ranges at most five minutes.
+most one hour; bounded range inspection, frame-index/proxy/tracking analysis
+accept at most five-minute intervals.
 
 PQ/HLG sources retain original HDR bytes and receive an explicit recorded tone
 map before SDR composition. Nonzero starts, audio gaps and SAR/orientation have
 synthetic qualification. Dolby Vision compatible profile 8 base layers are
-recognized; profile 5 has no delivery path. HDR output, unqualified wide/Log
-transforms, other camera modes/scripts/OSs and phone appearance need additional
-qualification. Read [status](implementation-status.md) for the exact evidence.
+recognized; profile 5 has no delivery path. HDR output and unqualified wide/Log
+transforms have no supported delivery path.
+Other camera modes/scripts/OSs need implementation or dedicated qualification;
+real phone appearance needs creator review. Read
+[status](implementation-status.md) for the exact evidence.

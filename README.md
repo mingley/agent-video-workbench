@@ -14,10 +14,12 @@ and editable tracked crops. Freeze a batch and deliver MP4s, SRT/VTT, covers,
 contact sheets and a local HTML review bundle. Catalog, retention, verified
 backup/restore, relinking and supported-cut OpenTimelineIO interchange are included.
 
-Start with [installation and MCP connection](docs/deployment.md) and the
-[agent workflow](AGENT_GUIDE.md). Download checksum-verified binaries from
+Start with [installation and MCP connection](docs/deployment.md), then run
+[the first-edit walkthrough](docs/first-edit.md). The
+[agent workflow](AGENT_GUIDE.md) covers subsequent edits and recovery. Download checksum-verified binaries from
 [releases](https://github.com/mingley/agent-video-workbench/releases).
-The native binary installer needs no Rust compiler, Node, GUI or root:
+From a repository checkout, the native binary installer needs no Rust compiler,
+Node, GUI or root (see deployment for installation without a checkout):
 
 ```sh
 scripts/install-release.sh /path/to/new-bin 0.3.1
@@ -47,6 +49,8 @@ qualification; the tool reports unsupported rendering paths explicitly.
 
 | Document | Purpose |
 | --- | --- |
+| [First edit](docs/first-edit.md) | Tested import-to-delivery CLI/MCP walkthrough |
+| [Interface reference](docs/agent-api.md) | Current envelopes, revisions, jobs and verified artifacts |
 | [Agent guide](AGENT_GUIDE.md) | Source-based edits, profiles, analysis, revisions and delivery |
 | [Deployment](docs/deployment.md) | Published installation, MCP, providers, storage and maintenance |
 | [Development](DEVELOPMENT.md) | Latest stable Rust, strict checks and functional qualification |
