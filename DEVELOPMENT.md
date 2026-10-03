@@ -65,7 +65,7 @@ intentionally corrupts its original project at the end; use its intact `backup`
 for the worker regression. That regression kills an actual worker, checks child
 termination and reconciliation, retries, cancels and preserves the earlier
 verified output. The matrix checks four rotations against upright pixels, HEVC
-SDR, VFR and missing audio; it rejects tagged PQ/HLG and nonzero stream starts.
+SDR, VFR and missing audio; it converts 10-bit PQ/HLG and accepts nonzero stream starts with decoded reference comparisons.
 The official MCP SDK test produces three independent captioned outputs, checks
 CLI/MCP replay equivalence, cached inspection, conflicts, policy removal,
 artifact verification and backup reopening. Node is only a test dependency.

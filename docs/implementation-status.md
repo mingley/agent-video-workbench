@@ -79,3 +79,7 @@ upgrade/rollback and the supported limits. The generated service request schema
 is the runtime envelope contract; older schemas/examples and proposed commands
 in design specifications remain illustrative. Stable 1.0 acceptance requires
 the broader documented camera/host and operational gates.
+
+## October 3: HDR and timestamp conversion
+
+Managed import now retains PQ/HLG originals and nonzero stream starts, preserves raw stream metadata, and reports inspectable versus deliverable media. Render plans apply a versioned linear-light Mobius tone map per HDR source before SDR compositing (100-nit reference white, 1,000-nit peak, BT.2020 to BT.709, limited-range dithering). Originals stay byte-identical. Compatible Dolby Vision profile 8 base layers are selectable; profile 5 has a precise unsupported delivery report. Generated 10-bit HEVC PQ/HLG, timestamp offsets, all four rotations, VFR and SDR HEVC pass full decode/frame-count and decoded reference pixel comparisons. Evidence: `evaluation/media_matrix.py`; camera appearance remains a human qualification gate. Contact sheets preserve aspect ratio and their hashes are verified on retrieval.

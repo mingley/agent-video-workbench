@@ -60,7 +60,7 @@ pub fn inspect(
             &mut Uncontrolled,
         )?;
         return Ok(
-            json!({"assetId":asset_id,"sha256":asset.fingerprint.sha256,"metadata":asset.metadata,"raw":serde_json::from_slice::<Value>(&probe.stdout)?}),
+            json!({"assetId":asset_id,"sha256":asset.fingerprint.sha256,"metadata":asset.metadata,"capability":crate::color::capability(asset),"raw":serde_json::from_slice::<Value>(&probe.stdout)?}),
         );
     }
     let end = end_ms.unwrap_or(start_ms + 60_000);
@@ -77,7 +77,7 @@ pub fn inspect(
     let key = format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(
-            &json!({"source":asset.fingerprint.sha256,"kind":kind,"startMs":start_ms,"endMs":end,"tool":String::from_utf8_lossy(&tool.stdout),"version":1})
+            &json!({"source":asset.fingerprint.sha256,"kind":kind,"startMs":start_ms,"endMs":end,"tool":String::from_utf8_lossy(&tool.stdout),"version":2})
         )?)
     );
     let directory = root.join("analysis");
@@ -108,13 +108,11 @@ pub fn inspect(
     match kind {
         Kind::Frame => {
             let staged = directory.join(format!("{key}-{}.partial.png", uuid::Uuid::new_v4()));
+            let filter = crate::color::filter(asset)?
+                .map(|f| format!("{f},scale=1280:1280:force_original_aspect_ratio=decrease"))
+                .unwrap_or_else(|| "scale=1280:1280:force_original_aspect_ratio=decrease".into());
             command
-                .args([
-                    "-vf",
-                    "scale=1280:1280:force_original_aspect_ratio=decrease",
-                    "-frames:v",
-                    "1",
-                ])
+                .args(["-vf", &filter, "-frames:v", "1"])
                 .arg(&staged);
             process::run(&mut command, Duration::from_secs(60), &mut Uncontrolled)?;
             File::open(&staged)?.sync_all()?;

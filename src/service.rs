@@ -239,7 +239,7 @@ impl Service {
         match request {
             Request::Schema {} => Ok(serde_json::to_value(schemars::schema_for!(Request))?),
             Request::Capabilities {} => Ok(
-                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"SDR H.264/AAC","source":"local SDR video/audio/image/font","hdr":"rejected","asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
+                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"SDR H.264/AAC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"PQ/HLG tone mapped per source to Rec.709; Dolby Vision compatible profile 8 base layer only","asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
             ),
             Request::AgentGuide {} => Ok(json!({"guide":include_str!("../AGENT_GUIDE.md")})),
             Request::Doctor {} => doctor(&self.backend),
@@ -547,7 +547,12 @@ impl Service {
                 };
                 let path = self.path(&path)?;
                 let hash = media::hash_file(&path)?;
-                if !sheet && manifest["verification"]["sha256"] != hash {
+                if (if sheet {
+                    &manifest["contactSheet"]["sha256"]
+                } else {
+                    &manifest["verification"]["sha256"]
+                }) != &hash
+                {
                     return Err(Error::Invalid(
                         "artifact bytes changed since verification".into(),
                     ));

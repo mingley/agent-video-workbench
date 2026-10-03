@@ -108,7 +108,8 @@ pub fn import(
             .ok_or_else(|| Error::Invalid("missing content hash".into()))?;
         let relative = format!("originals/{hash}");
         let destination = root.join(&relative);
-        let metadata = if matches!(
+        let mut raw_probe = Value::Null;
+        let mut metadata = if matches!(
             staged.extension().and_then(|v| v.to_str()),
             Some("ttf" | "otf" | "ttc" | "otc" | "cube" | "3dl")
         ) {
@@ -135,43 +136,32 @@ pub fn import(
             )?;
             {
                 let raw: Value = serde_json::from_slice(&result.stdout)?;
-                if let Some(streams) = raw["streams"].as_array() {
-                    for stream in streams {
-                        if let Some(side) = stream["side_data_list"].as_array()
-                            && side.iter().any(|v| {
-                                v["side_data_type"]
-                                    .as_str()
-                                    .is_some_and(|s| s.to_ascii_lowercase().contains("dovi"))
-                            })
-                        {
-                            return Err(Error::Invalid(
-                                "Dolby Vision ingest is unsupported".into(),
-                            ));
-                        }
-                        if let Some(start) = stream["start_time"]
-                            .as_str()
-                            .and_then(|s| s.parse::<f64>().ok())
-                            && start.abs() > 0.001
-                        {
-                            return Err(Error::Invalid("nonzero stream start is not qualified; normalize an SDR working derivative explicitly".into()));
-                        }
-                    }
-                }
+                raw_probe = raw.clone();
                 agentcut_render::probe::normalize_probe_json(&raw)?
             }
         };
-        if let Some(video) = &metadata.video
-            && (matches!(
-                video.color_transfer.as_deref(),
-                Some("smpte2084" | "arib-std-b67")
-            ) || video
-                .color_primaries
-                .as_deref()
-                .is_some_and(|s| s.starts_with("bt2020")))
-        {
-            return Err(Error::Invalid(
-                "HDR ingest is unsupported; supply an explicitly tone-mapped SDR derivative".into(),
-            ));
+        if let Some(streams) = raw_probe["streams"].as_array() {
+            let origin = raw_probe["format"]["start_time"]
+                .as_str()
+                .and_then(|s| s.parse::<f64>().ok())
+                .unwrap_or(0.0);
+            let duration = streams
+                .iter()
+                .filter_map(|s| {
+                    let start = s["start_time"].as_str()?.parse::<f64>().ok()?;
+                    let duration = s["duration"].as_str()?.parse::<f64>().ok()?;
+                    Some(start + duration - origin)
+                })
+                .fold(0.0_f64, f64::max);
+            if duration.is_finite() && duration > 0.0 {
+                metadata.duration = Some(agentcut_core::RationalTime::new(
+                    (duration * 1_000_000.0).round() as i64,
+                    agentcut_core::RationalRate {
+                        numerator: 1_000_000,
+                        denominator: 1,
+                    },
+                ));
+            }
         }
         if destination.exists() {
             if hash_file(&destination)? != *hash {
@@ -188,7 +178,24 @@ pub fn import(
             "schemaVersion":"1.0.0", "projectId":project.project_id,"baseRevision":expected,"idempotencyKey":key,
             "description":"Managed original import", "operations":[{"id":format!("import-{id}"),"op":"asset.add","params":{"id":id,"uri":relative,"label":id,"kind":detect_kind(&metadata),"fingerprint":fp,"metadata":metadata}}]
         }))?;
-        store.apply(&batch, false)
+        store.change(
+            key,
+            expected,
+            serde_json::to_value(&batch)?,
+            false,
+            |current| {
+                let mut next = agentcut_core::apply_batch(current, &batch)?.project;
+                let asset = next
+                    .assets
+                    .iter_mut()
+                    .find(|a| a.id == id)
+                    .ok_or_else(|| Error::Invalid("imported asset missing".into()))?;
+                asset
+                    .extensions
+                    .insert(crate::color::PROBE.into(), raw_probe);
+                Ok(next)
+            },
+        )
     })();
     let _ = std::fs::remove_file(&staged);
     store.import_state(
@@ -306,6 +313,7 @@ pub(crate) fn render_attempt(
         .unwrap_or("unknown")
         .to_owned();
     let mut plan = agentcut_render::compile::compile(&ir, backend.ffmpeg_path(), &toolchain)?;
+    let color_decisions = crate::color::adapt(&mut plan, project)?;
     if plan.duration_seconds > 3600.0 {
         return Err(Error::Invalid(
             "output exceeds the one-hour worker limit".into(),
@@ -371,7 +379,7 @@ pub(crate) fn render_attempt(
     plan.plan_hash = format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(
-            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":3,"inputSeeksSeconds":seeks})
+            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":4,"colorDecisions":color_decisions,"inputSeeksSeconds":seeks})
         )?)
     );
     std::fs::write(
@@ -409,7 +417,7 @@ pub(crate) fn render_attempt(
     )?;
     let final_path = directory.join("video.mp4");
     let sheet = contact_sheet(&staged, &directory, backend, plan.frame_count, control)?;
-    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":project,"inputSeeksSeconds":seeks});
+    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":project,"inputSeeksSeconds":seeks,"colorDecisions":color_decisions});
     let mut manifest_file = File::create(directory.join("manifest.json"))?;
     manifest_file.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
     manifest_file.sync_all()?;
@@ -490,12 +498,18 @@ fn verify(
         ));
     }
     let duration = frames as f64 / seq.frame_rate.as_f64();
-    let has_audio = seq.tracks.iter().flat_map(|t| &t.items).any(|item| {
-        item.enabled
-            && matches!(&item.payload, agentcut_core::ItemPayload::Clip(clip)
+    let solo = seq.tracks.iter().any(|t| t.solo && t.enabled);
+    let has_audio = seq
+        .tracks
+        .iter()
+        .filter(|t| t.enabled && !t.muted && (!solo || t.solo))
+        .flat_map(|t| &t.items)
+        .any(|item| {
+            item.enabled
+                && matches!(&item.payload, agentcut_core::ItemPayload::Clip(clip)
             if clip.audio.enabled && project.assets.iter().any(|asset|
                 asset.id == clip.asset_id && asset.metadata.audio.is_some()))
-    });
+        });
     if has_audio {
         let audio = streams
             .iter()
@@ -528,7 +542,9 @@ fn contact_sheet(
     control: &mut dyn crate::process::Control,
 ) -> Result<Value> {
     let step = (frames / 4).max(1);
-    let filter = format!("select='not(mod(n,{step}))',scale=180:320,tile=4x1");
+    let filter = format!(
+        "select='not(mod(n,{step}))',scale=180:320:force_original_aspect_ratio=decrease,pad=180:320:(ow-iw)/2:(oh-ih)/2,tile=4x1"
+    );
     crate::process::run(
         Command::new(backend.ffmpeg_path())
             .args(["-v", "error", "-i"])
@@ -539,7 +555,7 @@ fn contact_sheet(
         control,
     )?;
     Ok(
-        json!({"path":"sheet.png","outputFrames":[0,step,step*2,step*3],"tileWidth":180,"tileHeight":320}),
+        json!({"path":"sheet.png","outputFrames":[0,step,step*2,step*3],"tileWidth":180,"tileHeight":320,"sha256":hash_file_controlled(&directory.join("sheet.png"),control)?}),
     )
 }
 

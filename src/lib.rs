@@ -1,4 +1,5 @@
 pub mod asr;
+pub mod color;
 pub mod inspect;
 pub mod jobs;
 pub mod json;

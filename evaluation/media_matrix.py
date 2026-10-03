@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthetic SDR input qualification and precise rejection regressions."""
+"""Synthetic SDR/HDR input qualification with decoded reference comparisons."""
 import argparse
 import hashlib
 import json
@@ -33,7 +33,7 @@ def main():
     base = root / 'base.mp4'
     run([args.ffmpeg, '-v', 'error', '-f', 'lavfi', '-i',
          'testsrc2=s=640x360:r=30:d=3', '-c:v', 'libx264', '-preset', 'ultrafast',
-         '-pix_fmt', 'yuv420p', '-color_primaries', 'bt709', '-color_trc', 'bt709',
+         '-pix_fmt', 'yuv420p', '-x264-params', 'colorprim=bt709:transfer=bt709:colormatrix=bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
          '-colorspace', 'bt709', base])
     accepted = []
     for rotation in (0, 90, 180, 270):
@@ -50,6 +50,16 @@ def main():
          "select='if(lt(t,1.5),not(mod(n,2)),1)'", '-fps_mode', 'vfr',
          '-c:v', 'libx264', '-preset', 'ultrafast', vfr])
     accepted.append(('vfr', vfr))
+    hdr_filter = 'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=mobius:param=0.3:desat=2:peak=10,zscale=t=bt709:m=bt709:r=limited:dither=error_diffusion,format=yuv420p'
+    for name, transfer in [('pq', 'smpte2084'), ('hlg', 'arib-std-b67')]:
+        source = root / f'{name}.mp4'
+        run([args.ffmpeg, '-v', 'error', '-i', base, '-vf',
+             f'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt2020:t={transfer}:m=bt2020nc:r=limited,format=yuv420p10le',
+             '-c:v', 'libx265', '-x265-params', f'pools=2:frame-threads=2:log-level=error:colorprim=bt2020:transfer={transfer}:colormatrix=bt2020nc', source])
+        accepted.append((name, source))
+    offset = root / 'offset.mp4'
+    run([args.ffmpeg, '-v', 'error', '-i', base, '-c', 'copy', '-output_ts_offset', '2', offset])
+    accepted.append(('offset', offset))
     results = []
     for name, source in accepted:
         digest = hashlib.sha256(source.read_bytes()).hexdigest()
@@ -74,11 +84,11 @@ def main():
         assert manifest['verification']['expectedFrames'] == 60
         assert hashlib.sha256(source.read_bytes()).hexdigest() == digest
         difference = None
-        if name.startswith('rotation_'):
+        if name.startswith('rotation_') or name in ('pq', 'hlg', 'offset'):
             def pixels(path, reference=False):
                 argv = [args.ffmpeg, '-v', 'error', '-ss', '1', '-i', path]
                 if reference:
-                    argv += ['-vf', 'scale=360:640:force_original_aspect_ratio=increase,crop=360:640,setsar=1']
+                    argv += ['-vf', (hdr_filter + ',' if name in ('pq', 'hlg') else '') + 'scale=360:640:force_original_aspect_ratio=increase,crop=360:640,setsar=1']
                 return run([*argv, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'])
             reference, actual = pixels(source, True), pixels(artifact['path'])
             assert len(reference) == len(actual) == 360 * 640 * 3
@@ -86,29 +96,9 @@ def main():
             assert difference < 8, (name, difference)
         results.append({'fixture': name, 'decodedFrames': 60,
                         'sourceUnchanged': True, 'orientationMeanAbsoluteDifference': difference})
-    rejected = []
-    for name, options, message in [
-        ('pq', ['-x264-params', 'colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc'], 'HDR'),
-        ('hlg', ['-x264-params', 'colorprim=bt2020:transfer=arib-std-b67:colormatrix=bt2020nc'], 'HDR'),
-        ('offset', ['-output_ts_offset', '2'], 'nonzero stream start'),
-    ]:
-        source = root / f'{name}.mp4'
-        run([args.ffmpeg, '-v', 'error', '-i', base, '-c:v', 'libx264',
-             '-preset', 'ultrafast', *options, source])
-        if name in ('pq', 'hlg'):
-            probe = json.loads(run([args.ffprobe, '-v', 'error', '-show_streams', '-of', 'json', source]))
-            assert probe['streams'][0]['color_transfer'] == {'pq':'smpte2084', 'hlg':'arib-std-b67'}[name], probe
-        project = root / f'reject_{name}'
-        avw('create', project, '--name', name)
-        response = avw('import', project, source, '--id', 'source',
-                       '--expected-revision', 0, '--key', 'reject-source', expected=1)
-        assert message in response['error']['message'], response
-        assert avw('status', project)['revision'] == 0
-        assert not list((project / 'originals').iterdir())
-        assert avw('imports', project)[0]['state'] == 'failed'
-        rejected.append(name)
-    summary = {'passed': True, 'accepted': results, 'rejected': rejected,
-               'limitations': ['Generated inputs only; real camera color/audio and Dolby Vision remain unqualified',
+    summary = {'passed': True, 'accepted': results,
+               'limitations': ['Generated inputs; real camera appearance/audio needs human review',
+                               'Dolby Vision profile 5 is inspectable but has no delivery path',
                                'VFR fixture verifies output cadence/count, not lip sync in real speech']}
     (root / 'summary.json').write_text(json.dumps(summary, indent=2))
     print('Media matrix passed:', root / 'summary.json')
