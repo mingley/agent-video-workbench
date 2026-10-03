@@ -7,6 +7,7 @@ use agentcut_core::{OperationBatch, Project, RationalRate, RationalTime, Roundin
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sha2::Digest;
 use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -91,7 +92,7 @@ pub fn wrap_caption(text: &str, width: f64, measure: impl Fn(&str) -> f64) -> Re
     }
     Ok(lines.join("\n"))
 }
-fn id(value: &str) -> Result<()> {
+pub(crate) fn id(value: &str) -> Result<()> {
     if value.is_empty()
         || value.len() > 80
         || !value
@@ -112,7 +113,7 @@ fn interval(start: i64, end: i64) -> Result<()> {
     }
     Ok(())
 }
-fn time(ms: i64) -> RationalTime {
+pub(crate) fn time(ms: i64) -> RationalTime {
     RationalTime::new(
         ms,
         RationalRate {
@@ -121,7 +122,7 @@ fn time(ms: i64) -> RationalTime {
         },
     )
 }
-const TRANSCRIPTS: &str = "avw.transcripts.v1";
+pub(crate) const TRANSCRIPTS: &str = "avw.transcripts.v1";
 
 pub fn transcripts(project: &Project) -> Result<Vec<Transcript>> {
     project
@@ -168,9 +169,23 @@ impl Store {
                     }
                 }
                 let mut list = transcripts(current)?;
-                list.retain(|t| t.asset_id != transcript.asset_id);
-                list.push(transcript);
                 let mut next = current.clone();
+                let version = format!(
+                    "{:x}",
+                    sha2::Sha256::digest(serde_json::to_vec(&transcript)?)
+                );
+                next.extensions.insert(
+                    format!("avw.analysis.transcript.{version}"),
+                    serde_json::to_value(&transcript)?,
+                );
+                // A new analysis never silently overwrites reviewed corrections.
+                if !current
+                    .extensions
+                    .contains_key(&format!("avw.corrections.{}", transcript.asset_id))
+                {
+                    list.retain(|t| t.asset_id != transcript.asset_id);
+                    list.push(transcript);
+                }
                 next.extensions
                     .insert(TRANSCRIPTS.into(), serde_json::to_value(list)?);
                 Ok(next)
@@ -205,53 +220,140 @@ impl Store {
         // Build inside the revision transaction. A retry hashes original intent,
         // so imported transcript updates cannot change a committed request identity.
         let root = self.root.clone();
-        self.change(key,expected,json!({"kind":"compose","compose":compose,"expectedRevision":expected}),dry_run,|project|{
-            let font=project.require_asset(&compose.font_asset_id)?;
-            if font.kind!=agentcut_core::AssetKind::Font{return Err(Error::Invalid("fontAssetId must name an imported font".into()));}
-            crate::media::verify_asset(&root, font)?;
-            let metrics=agentcut_render::probe::font_metrics(&root.join(&font.uri)).ok_or_else(||Error::Invalid("caption font has no readable width metrics".into()))?;
-            let vtrack=format!("{}_video",compose.output_id);let ctrack=format!("{}_captions",compose.output_id);
-            let mut ops=vec![json!({"op":"sequence.add","params":{"id":compose.output_id,"name":compose.name,"width":compose.width,"height":compose.height,"frameRate":{"numerator":30,"denominator":1}}}),
-                json!({"op":"track.add","params":{"id":vtrack,"sequence":compose.output_id,"type":"video"}}),
-                json!({"op":"track.add","params":{"id":ctrack,"sequence":compose.output_id,"type":"caption"}})];
-            let transcripts=transcripts(project)?;let mut at=RationalTime::zero(RationalRate::frames(30)?);let mut cut_ids=BTreeSet::new();
-            for cut in &compose.cuts {
-                id(&cut.id)?;interval(cut.start_ms,cut.end_ms)?;
-                if !cut_ids.insert(&cut.id){return Err(Error::Invalid("cut IDs must be unique".into()));}
-                let source=project.require_asset(&cut.asset_id)?;
-                if source.kind!=agentcut_core::AssetKind::Video{return Err(Error::Invalid("cuts require a video asset".into()));}
-                let duration=time(cut.end_ms-cut.start_ms).rescale_to(at.rate,RoundingMode::Nearest)?;
-                if duration.is_zero(){return Err(Error::Invalid("cut is shorter than one output frame".into()));}
-                let clip_id=format!("{}_{}",compose.output_id,cut.id);
-                ops.push(json!({"op":"clip.add","params":{"id":clip_id,"asset":cut.asset_id,"track":vtrack,"at":at,"sourceIn":time(cut.start_ms),"duration":duration,"fit":"cover"}}));
-                for transcript in transcripts.iter().filter(|t|t.asset_id==cut.asset_id) {
-                    for cue in &transcript.cues {
-                        let start=cue.start_ms.max(cut.start_ms);let end=cue.end_ms.min(cut.end_ms);
-                        if start>=end{continue;}
-                        let local=time(start-cut.start_ms).rescale_to(at.rate,RoundingMode::Nearest)?;
-                        let end=time(end-cut.start_ms).rescale_to(at.rate,RoundingMode::Nearest)?;
-                        let cue_duration=end.checked_sub(local)?;
-                        if cue_duration.is_zero(){continue;}
-                        if ops.len() > 4990 { return Err(Error::Invalid("composed edit exceeds 5000 operations; use shorter cuts or fewer caption cues".into())); }
-                        let cue_id=format!("{}_{}_{}",compose.output_id,cut.id,cue.id);
-                        let text=wrap_caption(&cue.text,compose.width as f64 * 0.8,|line|metrics.run_width(line,compose.font_size as f64,0.0))?;
-                        if text.lines().count() as f64 * compose.font_size as f64 * 1.2 > compose.height as f64 * 0.3 {return Err(Error::Invalid("caption exceeds the safe height; reduce fontSize".into()));}
-                        ops.push(json!({"op":"caption.add","params":{"id":cue_id,"track":ctrack,"at":at.checked_add(local)?,"duration":cue_duration,"text":text}}));
-                        ops.push(json!({"op":"item.set","target":cue_id,"params":{"property":"text.style.fontAssetId","value":compose.font_asset_id}}));
-                        ops.push(json!({"op":"item.set","target":cue_id,"params":{"property":"text.style.fontSize","value":compose.font_size}}));
-                        for (property,value) in [("text.style.stroke.enabled",json!(true)),("text.style.stroke.color",json!("#000000FF")),("text.style.stroke.width",json!((compose.font_size as f64 * 0.06).max(1.0)))] {
-                            ops.push(json!({"op":"item.set","target":cue_id,"params":{"property":property,"value":value}}));
-                        }
-                    }
-                }
-                at=at.checked_add(duration)?;
-            }
-            if at.as_seconds_f64()>3600.0{return Err(Error::Invalid("output exceeds one hour".into()));}
-            for (n,op) in ops.iter_mut().enumerate(){op["id"]=json!(format!("compose-{n}"));}
-            let batch:OperationBatch=serde_json::from_value(json!({"schemaVersion":"1.0.0","projectId":project.project_id,"baseRevision":expected,"idempotencyKey":key,"description":format!("Compose {}",compose.name),"operations":ops}))?;
-            let mut next=agentcut_core::apply_batch(project,&batch)?.project;
-            next.extensions.insert(format!("avw.output.{}",compose.output_id),json!({"cuts":compose.cuts,"fontAssetId":compose.font_asset_id,"fontSize":compose.font_size,"captionSafeWidthFraction":0.8,"captionMaxLines":3,"captionMapping":"source cue intersections; cut-boundary cues may require review"}));
-            Ok(next)
-        })
+        self.change(
+            key,
+            expected,
+            json!({"kind":"compose","compose":compose,"expectedRevision":expected}),
+            dry_run,
+            |project| compose_project(project, &root, compose, expected, key),
+        )
     }
+}
+
+pub(crate) fn compose_project(
+    project: &Project,
+    root: &std::path::Path,
+    compose: &Compose,
+    expected: u64,
+    key: &str,
+) -> Result<Project> {
+    if compose.cuts.is_empty()
+        || compose.cuts.len() > 100
+        || compose.width == 0
+        || compose.height == 0
+        || compose.width > 4096
+        || compose.height > 4096
+        || !compose.width.is_multiple_of(2)
+        || !compose.height.is_multiple_of(2)
+        || compose.font_size == 0
+        || compose.font_size > 200
+    {
+        return Err(Error::Invalid(
+            "invalid compose dimensions, cut count or font size".into(),
+        ));
+    }
+    id(&compose.output_id)?;
+    let font = project.require_asset(&compose.font_asset_id)?;
+    if font.kind != agentcut_core::AssetKind::Font {
+        return Err(Error::Invalid(
+            "fontAssetId must name an imported font".into(),
+        ));
+    }
+    crate::media::verify_asset(root, font)?;
+    let metrics = agentcut_render::probe::font_metrics(&root.join(&font.uri))
+        .ok_or_else(|| Error::Invalid("caption font has no readable width metrics".into()))?;
+    let vtrack = format!("{}_video", compose.output_id);
+    let ctrack = format!("{}_captions", compose.output_id);
+    let mut ops = vec![
+        json!({"op":"sequence.add","params":{"id":compose.output_id,"name":compose.name,"width":compose.width,"height":compose.height,"frameRate":{"numerator":30,"denominator":1}}}),
+        json!({"op":"track.add","params":{"id":vtrack,"sequence":compose.output_id,"type":"video"}}),
+        json!({"op":"track.add","params":{"id":ctrack,"sequence":compose.output_id,"type":"caption"}}),
+    ];
+    let mut cue_bindings = Vec::new();
+    let transcripts = transcripts(project)?;
+    let mut at = RationalTime::zero(RationalRate::frames(30)?);
+    let mut cut_ids = BTreeSet::new();
+    for cut in &compose.cuts {
+        id(&cut.id)?;
+        interval(cut.start_ms, cut.end_ms)?;
+        if !cut_ids.insert(&cut.id) {
+            return Err(Error::Invalid("cut IDs must be unique".into()));
+        }
+        let source = project.require_asset(&cut.asset_id)?;
+        if source.kind != agentcut_core::AssetKind::Video {
+            return Err(Error::Invalid("cuts require a video asset".into()));
+        }
+        let duration =
+            time(cut.end_ms - cut.start_ms).rescale_to(at.rate, RoundingMode::Nearest)?;
+        if duration.is_zero() {
+            return Err(Error::Invalid(
+                "cut is shorter than one output frame".into(),
+            ));
+        }
+        let clip_id = format!("{}_{}", compose.output_id, cut.id);
+        ops.push(json!({"op":"clip.add","params":{"id":clip_id,"asset":cut.asset_id,"track":vtrack,"at":at,"sourceIn":time(cut.start_ms),"duration":duration,"fit":"cover"}}));
+        for transcript in transcripts.iter().filter(|t| t.asset_id == cut.asset_id) {
+            for cue in &transcript.cues {
+                let start = cue.start_ms.max(cut.start_ms);
+                let end = cue.end_ms.min(cut.end_ms);
+                if start >= end {
+                    continue;
+                }
+                let local =
+                    time(start - cut.start_ms).rescale_to(at.rate, RoundingMode::Nearest)?;
+                let end = time(end - cut.start_ms).rescale_to(at.rate, RoundingMode::Nearest)?;
+                let cue_duration = end.checked_sub(local)?;
+                if cue_duration.is_zero() {
+                    continue;
+                }
+                if ops.len() > 4990 {
+                    return Err(Error::Invalid("composed edit exceeds 5000 operations; use shorter cuts or fewer caption cues".into()));
+                }
+                let cue_id = format!("{}_{}_{}", compose.output_id, cut.id, cue.id);
+                cue_bindings.push((cue_id.clone(),json!({"assetId":cut.asset_id,"cueId":cue.id,"sourceStartMs":start,"sourceEndMs":cue.end_ms.min(cut.end_ms),"language":transcript.language})));
+                let text = wrap_caption(&cue.text, compose.width as f64 * 0.8, |line| {
+                    metrics.run_width(line, compose.font_size as f64, 0.0)
+                })?;
+                if text.lines().count() as f64 * compose.font_size as f64 * 1.2
+                    > compose.height as f64 * 0.3
+                {
+                    return Err(Error::Invalid(
+                        "caption exceeds the safe height; reduce fontSize".into(),
+                    ));
+                }
+                ops.push(json!({"op":"caption.add","params":{"id":cue_id,"track":ctrack,"at":at.checked_add(local)?,"duration":cue_duration,"text":text}}));
+                ops.push(json!({"op":"item.set","target":cue_id,"params":{"property":"text.style.fontAssetId","value":compose.font_asset_id}}));
+                ops.push(json!({"op":"item.set","target":cue_id,"params":{"property":"text.style.fontSize","value":compose.font_size}}));
+                for (property, value) in [
+                    ("text.style.stroke.enabled", json!(true)),
+                    ("text.style.stroke.color", json!("#000000FF")),
+                    (
+                        "text.style.stroke.width",
+                        json!((compose.font_size as f64 * 0.06).max(1.0)),
+                    ),
+                ] {
+                    ops.push(json!({"op":"item.set","target":cue_id,"params":{"property":property,"value":value}}));
+                }
+            }
+        }
+        at = at.checked_add(duration)?;
+    }
+    if at.as_seconds_f64() > 3600.0 {
+        return Err(Error::Invalid("output exceeds one hour".into()));
+    }
+    for (n, op) in ops.iter_mut().enumerate() {
+        op["id"] = json!(format!("compose-{n}"));
+    }
+    let batch: OperationBatch = serde_json::from_value(
+        json!({"schemaVersion":"1.0.0","projectId":project.project_id,"baseRevision":expected,"idempotencyKey":key,"description":format!("Compose {}",compose.name),"operations":ops}),
+    )?;
+    let mut next = agentcut_core::apply_batch(project, &batch)?.project;
+    for (id, binding) in cue_bindings {
+        next.find_item_mut(&id)
+            .ok_or_else(|| Error::Invalid("composed caption missing".into()))?
+            .extensions
+            .insert("avw.sourceCue".into(), binding);
+    }
+    next.extensions.insert(format!("avw.output.{}",compose.output_id),json!({"cuts":compose.cuts,"fontAssetId":compose.font_asset_id,"fontSize":compose.font_size,"captionSafeWidthFraction":0.8,"captionMaxLines":3,"captionMapping":"source cue intersections; cut-boundary cues may require review"}));
+    Ok(next)
 }

@@ -23,6 +23,23 @@ const EDITS: &[&str] = &[
     "item.remove",
     "text.add",
     "caption.add",
+    "item.trim",
+    "item.split",
+    "item.duplicate",
+    "track.reorder",
+    "track.remove",
+    "effect.add",
+    "effect.set",
+    "effect.remove",
+    "keyframe.set",
+    "keyframe.remove",
+    "bus.add",
+    "bus.set",
+    "bus.remove",
+    "transition.add",
+    "transition.remove",
+    "marker.add",
+    "marker.remove",
 ];
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(
@@ -184,9 +201,88 @@ pub enum Request {
         project: PathBuf,
         destination: PathBuf,
     },
+    InterchangeExport {
+        project: PathBuf,
+        sequence: String,
+    },
+    InterchangeImport {
+        project: PathBuf,
+        document: Value,
+        id: String,
+        expected_revision: u64,
+        key: String,
+        #[serde(default)]
+        dry_run: bool,
+    },
+    Catalog {
+        workspace: PathBuf,
+        #[serde(default)]
+        query: String,
+        #[serde(default)]
+        offset: u32,
+        #[serde(default = "limit")]
+        limit: u32,
+    },
+    VerifyProject {
+        project: PathBuf,
+    },
+    Relink {
+        project: PathBuf,
+        source: PathBuf,
+        sha256: String,
+    },
+    CacheGc {
+        project: PathBuf,
+        #[serde(default = "grace")]
+        grace_seconds: u64,
+        #[serde(default = "yes")]
+        dry_run: bool,
+    },
+    BackupRestore {
+        source: PathBuf,
+        destination: PathBuf,
+    },
+    BatchStart {
+        project: PathBuf,
+        sequences: Vec<String>,
+        expected_revision: u64,
+        key: String,
+        #[serde(default)]
+        no_launch: bool,
+    },
+    BatchStatus {
+        project: PathBuf,
+        id: String,
+    },
+    Delivery {
+        project: PathBuf,
+        id: String,
+        destination: PathBuf,
+    },
+    Studio {
+        project: PathBuf,
+        edit: crate::studio::Edit,
+        expected_revision: u64,
+        key: String,
+        #[serde(default)]
+        dry_run: bool,
+    },
+    StudioState {
+        project: PathBuf,
+    },
+    Reviews {
+        project: PathBuf,
+        sequence: String,
+    },
     Describe {
         capability: String,
     },
+}
+fn yes() -> bool {
+    true
+}
+fn grace() -> u64 {
+    86400
 }
 fn sequence() -> String {
     "seq_main".into()
@@ -237,9 +333,104 @@ impl Service {
     }
     pub fn execute(&self, request: Request) -> Result<Value> {
         match request {
+            Request::InterchangeExport { project, sequence } => crate::interchange::export(
+                &Store::open(&self.path(&project)?)?.project()?,
+                &sequence,
+            ),
+            Request::InterchangeImport {
+                project,
+                document,
+                id,
+                expected_revision,
+                key,
+                dry_run,
+            } => Ok(serde_json::to_value(
+                Store::open(&self.path(&project)?)?.interchange_import(
+                    &document,
+                    &id,
+                    expected_revision,
+                    &key,
+                    dry_run,
+                )?,
+            )?),
+            Request::Catalog {
+                workspace,
+                query,
+                offset,
+                limit,
+            } => crate::storage::catalog(&self.path(&workspace)?, &query, offset, limit),
+            Request::VerifyProject { project } => crate::storage::verify(&self.path(&project)?),
+            Request::Relink {
+                project,
+                source,
+                sha256,
+            } => crate::storage::relink(&self.path(&project)?, &self.path(&source)?, &sha256),
+            Request::CacheGc {
+                project,
+                grace_seconds,
+                dry_run,
+            } => crate::storage::gc(&self.path(&project)?, grace_seconds, dry_run),
+            Request::BackupRestore {
+                source,
+                destination,
+            } => media::backup(&self.path(&source)?, &self.path(&destination)?),
+            Request::BatchStart {
+                project,
+                sequences,
+                expected_revision,
+                key,
+                no_launch,
+            } => {
+                let root = self.path(&project)?;
+                let inputs: Vec<_> = sequences
+                    .into_iter()
+                    .map(|sequence| jobs::RenderInput {
+                        sequence,
+                        expected_revision,
+                        ffmpeg: self.backend.ffmpeg_path().into(),
+                        ffprobe: self.backend.ffprobe_path().into(),
+                        asr: None,
+                    })
+                    .collect();
+                let batch = Store::open(&root)?.enqueue_batch(&key, &inputs)?;
+                if !no_launch {
+                    self.launch(&root)?;
+                }
+                Ok(serde_json::to_value(batch)?)
+            }
+            Request::BatchStatus { project, id } => {
+                Store::open(&self.path(&project)?)?.batch_status(&id)
+            }
+            Request::Delivery {
+                project,
+                id,
+                destination,
+            } => crate::delivery::package(&self.path(&project)?, &id, &self.path(&destination)?),
+            Request::Studio {
+                project,
+                edit,
+                expected_revision,
+                key,
+                dry_run,
+            } => Ok(serde_json::to_value(
+                Store::open(&self.path(&project)?)?.studio(
+                    &edit,
+                    expected_revision,
+                    &key,
+                    dry_run,
+                )?,
+            )?),
+            Request::StudioState { project } => {
+                let p = Store::open(&self.path(&project)?)?.project()?;
+                Ok(json!({"revision":p.revision,"decisions":p.extensions}))
+            }
+            Request::Reviews { project, sequence } => crate::studio::remap_reviews(
+                &Store::open(&self.path(&project)?)?.project()?,
+                &sequence,
+            ),
             Request::Schema {} => Ok(serde_json::to_value(schemars::schema_for!(Request))?),
             Request::Capabilities {} => Ok(
-                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"SDR H.264/AAC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"PQ/HLG tone mapped per source to Rec.709; Dolby Vision compatible profile 8 base layer only","asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
+                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"SDR H.264/AAC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"PQ/HLG tone mapped per source to Rec.709; Dolby Vision compatible profile 8 base layer only","asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
             ),
             Request::AgentGuide {} => Ok(json!({"guide":include_str!("../AGENT_GUIDE.md")})),
             Request::Doctor {} => doctor(&self.backend),
@@ -658,11 +849,48 @@ fn operation_description(operation: &str) -> Result<Value> {
         "text.add" | "caption.add" => {
             json!({"id":"caption","track":"captions","at":time,"duration":time,"text":"Literal caption"})
         }
+        "item.trim" => json!({"sourceIn":time}),
+        "item.split" => json!({"at":time,"leftId":"left","rightId":"right"}),
+        "item.duplicate" => json!({"id":"copy","at":time}),
+        "track.reorder" => json!({"position":1}),
+        "effect.add" => json!({"id":"gain","effect":"audio.gain","params":{"gainDb":-3}}),
+        "effect.set" => json!({"enabled":false}),
+        "keyframe.set" => {
+            json!({"property":"transform.position","at":time,"value":{"x":180,"y":320},"interpolation":"linear"})
+        }
+        "keyframe.remove" => json!({"property":"transform.position"}),
+        "bus.add" => json!({"id":"dialogue","sequence":"output","gainDb":0}),
+        "bus.set" => json!({"gainDb":-3}),
+        "transition.add" => {
+            json!({"id":"dissolve","sequence":"output","left":"left","right":"right","type":"transition.dissolve","duration":time,"handlePolicy":"reject"})
+        }
+        "marker.add" => json!({"id":"note","sequence":"output","at":time,"name":"Review"}),
+        "track.remove" | "effect.remove" | "bus.remove" | "transition.remove" | "marker.remove" => {
+            json!({})
+        }
         _ => return Err(Error::Invalid("unsupported operation".into())),
     };
     let target_required = matches!(
         operation,
-        "sequence.set" | "track.set" | "item.set" | "item.move" | "item.remove"
+        "sequence.set"
+            | "track.set"
+            | "item.set"
+            | "item.move"
+            | "item.remove"
+            | "item.trim"
+            | "item.split"
+            | "item.duplicate"
+            | "track.reorder"
+            | "track.remove"
+            | "effect.add"
+            | "effect.set"
+            | "effect.remove"
+            | "keyframe.set"
+            | "keyframe.remove"
+            | "bus.set"
+            | "bus.remove"
+            | "transition.remove"
+            | "marker.remove"
     );
     let mut example = json!({"id":"edit-1","op":operation,"params":params});
     if target_required {
@@ -674,7 +902,7 @@ fn operation_description(operation: &str) -> Result<Value> {
         json!([])
     };
     Ok(
-        json!({"operation":operation,"targetRequired":target_required,"example":example,"itemProperties":properties,"validation":"The pinned domain engine validates parameters, IDs, time ranges, collisions and media references. Use apply dryRun against the current revision before committing unfamiliar edits.","coreRevision":"20ecdffc9d770bc280b294ee00414cafe4ce36ed"}),
+        json!({"operation":operation,"targetRequired":target_required,"example":example,"itemProperties":properties,"validation":"The pinned domain engine validates parameters, IDs, time ranges, collisions and media references. Use apply dryRun against the current revision before committing unfamiliar edits.","coreRevision":"20ecdffc9d770bc280b294ee00414cafe4ce36ed","effects":agentcut_core::capabilities::registry().iter().filter(|c| c.id.starts_with("audio.") || c.id.starts_with("video.") || c.id.starts_with("transition.")).collect::<Vec<_>>()}),
     )
 }
 

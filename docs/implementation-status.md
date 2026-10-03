@@ -83,3 +83,25 @@ the broader documented camera/host and operational gates.
 ## October 3: HDR and timestamp conversion
 
 Managed import now retains PQ/HLG originals and nonzero stream starts, preserves raw stream metadata, and reports inspectable versus deliverable media. Render plans apply a versioned linear-light Mobius tone map per HDR source before SDR compositing (100-nit reference white, 1,000-nit peak, BT.2020 to BT.709, limited-range dithering). Originals stay byte-identical. Compatible Dolby Vision profile 8 base layers are selectable; profile 5 has a precise unsupported delivery report. Generated 10-bit HEVC PQ/HLG, timestamp offsets, all four rotations, VFR and SDR HEVC pass full decode/frame-count and decoded reference pixel comparisons. Evidence: `evaluation/media_matrix.py`; camera appearance remains a human qualification gate. Contact sheets preserve aspect ratio and their hashes are verified on retrieval.
+
+## October 3: Creator decisions and delivery
+
+The typed `studio` API adds immutable profile/template versions, explicit profile
+upgrades, independent format/language variants from frozen revisions, recorded
+omissions with selective ripple restoration, visual-only B-roll replacement,
+transcript corrections retained across reanalysis, artifact-anchored review and
+source-based remapping. Raw edit discovery includes trim/split, effects, buses,
+keyframes and transitions. Audio profiles use measured two-pass loudness and
+peak QC. Sidechain ducking is implemented; its separate audible test is pending.
+Every render includes SRT/VTT, a cover, aspect-preserving contact sheet and hashes.
+Batch enqueue freezes all outputs atomically; independent jobs can be packaged
+into a static local review bundle. Catalog, conservative cache collection,
+backup manifests, restore and hash-based relinking are available. OpenTimelineIO
+cut/track interchange has explicit loss reports for unsupported styling/effects.
+
+`evaluation/studio_smoke.py` passes fresh-process selective restore, review remap,
+correction/reanalysis, profile/template instantiation, identical dialogue samples
+across B-roll replacement, measured loudness, vertical/square/Spanish-caption
+landscape frozen exports, package hashes, backup restore, relinking and catalog.
+The existing remaining-scope table above describes the prior 0.2 release and
+will be replaced by the final qualification matrix after the integration checks.

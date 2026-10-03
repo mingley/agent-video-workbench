@@ -26,6 +26,8 @@ struct Cli {
     whisper_model: Option<PathBuf>,
     #[arg(long, global = true, requires = "whisper")]
     whisper_model_sha256: Option<String>,
+    #[arg(long, global = true, default_value = "en")]
+    whisper_language: String,
     #[command(subcommand)]
     command: Action,
 }
@@ -38,6 +40,74 @@ struct Cli {
 )]
 enum Action {
     Doctor,
+    Catalog {
+        workspace: PathBuf,
+        #[arg(long, default_value = "")]
+        query: String,
+        #[arg(long, default_value_t = 0)]
+        offset: u32,
+        #[arg(long, default_value_t = 50)]
+        limit: u32,
+    },
+    VerifyProject {
+        project: PathBuf,
+    },
+    Relink {
+        project: PathBuf,
+        source: PathBuf,
+        #[arg(long)]
+        sha256: String,
+    },
+    CacheGc {
+        project: PathBuf,
+        #[arg(long, default_value_t = 86400)]
+        grace_seconds: u64,
+        #[arg(long,default_value_t=true,action=clap::ArgAction::Set)]
+        dry_run: bool,
+    },
+    BackupRestore {
+        source: PathBuf,
+        destination: PathBuf,
+    },
+    BatchStart {
+        project: PathBuf,
+        #[arg(long, value_delimiter = ',')]
+        sequences: Vec<String>,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        no_launch: bool,
+    },
+    BatchStatus {
+        project: PathBuf,
+        id: String,
+    },
+    Delivery {
+        project: PathBuf,
+        id: String,
+        destination: PathBuf,
+    },
+    Studio {
+        project: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    StudioState {
+        project: PathBuf,
+    },
+    Reviews {
+        project: PathBuf,
+        #[arg(long, default_value = "seq_main")]
+        sequence: String,
+    },
     Mcp {
         #[arg(long)]
         root: PathBuf,
@@ -258,6 +328,19 @@ fn execute(cli: Cli) -> Result<Value> {
                 agent_video_workbench::json::read(&file)?
             }
         }
+        Action::Studio {
+            project,
+            request,
+            expected_revision,
+            key,
+            dry_run,
+        } => Request::Studio {
+            project,
+            edit: agent_video_workbench::json::read(&request)?,
+            expected_revision,
+            key,
+            dry_run,
+        },
         Action::Apply {
             project,
             request,
@@ -371,6 +454,6 @@ fn asr_config(cli: &Cli) -> Result<Option<agent_video_workbench::asr::Config>> {
         program_sha256: agent_video_workbench::media::hash_file(program)?,
         model: model.canonicalize()?,
         model_sha256: hash,
-        language: "en".into(),
+        language: cli.whisper_language.clone(),
     }))
 }

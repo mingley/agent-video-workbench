@@ -52,6 +52,122 @@ fn now() -> Result<i64> {
 }
 
 impl Store {
+    /// Freeze the entire export set atomically before any worker can claim it.
+    pub fn enqueue_batch(&mut self, key: &str, inputs: &[RenderInput]) -> Result<Job> {
+        if key.trim().is_empty() || key.len() > 256 || inputs.is_empty() || inputs.len() > 32 {
+            return Err(Error::Invalid(
+                "batch requires a key and 1..32 outputs".into(),
+            ));
+        }
+        let hash = format!(
+            "{:x}",
+            Sha256::digest(serde_json::to_vec(
+                &json!({"kind":"render-batch","inputs":inputs})
+            )?)
+        );
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if let Some((old, id)) = tx
+            .query_row(
+                "SELECT hash,job_id FROM job_requests WHERE key=?1",
+                [key],
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+            )
+            .optional()?
+        {
+            if old != hash {
+                return Err(Error::KeyConflict);
+            }
+            drop(tx);
+            return self.job(&id);
+        }
+        let current: i64 = tx.query_row("SELECT revision FROM head", [], |r| r.get(0))?;
+        let snapshot: String = tx.query_row(
+            "SELECT snapshot FROM revisions WHERE id=?1",
+            [current],
+            |r| r.get(0),
+        )?;
+        let project: agentcut_core::Project = serde_json::from_str(&snapshot)?;
+        let mut sequences = std::collections::BTreeSet::new();
+        for input in inputs {
+            if input.expected_revision != project.revision {
+                return Err(Error::Conflict {
+                    expected: input.expected_revision,
+                    current: project.revision,
+                });
+            }
+            if input.asr.is_some() || !sequences.insert(&input.sequence) {
+                return Err(Error::Invalid(
+                    "batch requires distinct render sequences".into(),
+                ));
+            }
+            let seq = project.require_sequence(&input.sequence)?;
+            if seq.canvas.width > 4096
+                || seq.canvas.height > 4096
+                || seq.content_duration()?.as_seconds_f64() > 3600.0
+            {
+                return Err(Error::Invalid("batch output exceeds worker limits".into()));
+            }
+        }
+        let id = uuid::Uuid::new_v4().to_string();
+        let mut children = Vec::new();
+        for input in inputs {
+            let child = uuid::Uuid::new_v4().to_string();
+            tx.execute(
+                "INSERT INTO jobs(id,revision,state,input,updated) VALUES(?1,?2,'queued',?3,?4)",
+                params![child, current, serde_json::to_string(input)?, now()?],
+            )?;
+            children.push(child);
+        }
+        tx.execute(
+            "INSERT INTO jobs(id,revision,state,result,updated) VALUES(?1,?2,'batch',?3,?4)",
+            params![
+                id,
+                current,
+                serde_json::to_string(&json!({"kind":"render-batch","jobIds":children}))?,
+                now()?
+            ],
+        )?;
+        tx.execute(
+            "INSERT INTO job_requests VALUES(?1,?2,?3)",
+            params![key, hash, id],
+        )?;
+        tx.commit()?;
+        self.job(&id)
+    }
+
+    pub fn batch_status(&self, id: &str) -> Result<Value> {
+        let batch = self.job(id)?;
+        if batch.state != "batch" {
+            return Err(Error::Invalid("job is not a batch".into()));
+        }
+        let mut items = Vec::new();
+        for child in batch
+            .result
+            .as_ref()
+            .and_then(|r| r["jobIds"].as_array())
+            .ok_or_else(|| Error::Invalid("batch children missing".into()))?
+        {
+            items.push(
+                self.job(
+                    child
+                        .as_str()
+                        .ok_or_else(|| Error::Invalid("invalid child ID".into()))?,
+                )?,
+            );
+        }
+        let complete = items.iter().all(|j| {
+            matches!(
+                j.state.as_str(),
+                "succeeded" | "failed" | "cancelled" | "interrupted" | "unavailable"
+            )
+        });
+        Ok(
+            json!({"batchId":batch.id,"revision":batch.revision,"complete":complete,"succeeded":items.iter().filter(|j|j.state=="succeeded").count(),"items":items}),
+        )
+    }
+
     pub fn job(&self, id: &str) -> Result<Job> {
         let row = self.conn.query_row("SELECT id,revision,state,attempt,generation,cancel_requested,updated,input,result,error FROM jobs WHERE id=?1",[id], |r| Ok((r.get::<_,String>(0)?,r.get::<_,i64>(1)?,r.get::<_,String>(2)?,r.get::<_,i64>(3)?,r.get::<_,i64>(4)?,r.get::<_,bool>(5)?,r.get::<_,i64>(6)?,r.get::<_,Option<String>>(7)?,r.get::<_,Option<String>>(8)?,r.get::<_,Option<String>>(9)?)))?;
         Ok(Job {

@@ -312,8 +312,15 @@ pub(crate) fn render_attempt(
         .next()
         .unwrap_or("unknown")
         .to_owned();
+    if ir.warnings.iter().any(|w| w.code == "W_FONT_GLYPH_MISSING") {
+        return Err(Error::Invalid(
+            "caption font lacks required glyphs; bind a font covering every authored character"
+                .into(),
+        ));
+    }
     let mut plan = agentcut_render::compile::compile(&ir, backend.ffmpeg_path(), &toolchain)?;
     let color_decisions = crate::color::adapt(&mut plan, project)?;
+    crate::audio::adapt(&mut plan, &ir, project.require_sequence(sequence)?)?;
     if plan.duration_seconds > 3600.0 {
         return Err(Error::Invalid(
             "output exceeds the one-hour worker limit".into(),
@@ -406,6 +413,12 @@ pub(crate) fn render_attempt(
     let output = execution?;
     std::fs::write(directory.join("stderr.log"), &output.stderr)?;
     std::fs::rename(&plan.temporary_output, &staged)?;
+    let audio_qc = crate::audio::finish(
+        &staged,
+        backend,
+        project.require_sequence(sequence)?,
+        control,
+    )?;
     control.stage("verifying")?;
     let verified = verify(
         &staged,
@@ -416,8 +429,15 @@ pub(crate) fn render_attempt(
         control,
     )?;
     let final_path = directory.join("video.mp4");
+    let delivery = crate::delivery::extras(
+        &staged,
+        &directory,
+        project.require_sequence(sequence)?,
+        backend,
+        control,
+    )?;
     let sheet = contact_sheet(&staged, &directory, backend, plan.frame_count, control)?;
-    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":project,"inputSeeksSeconds":seeks,"colorDecisions":color_decisions});
+    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":project,"inputSeeksSeconds":seeks,"colorDecisions":color_decisions,"audioQc":audio_qc,"delivery":delivery});
     let mut manifest_file = File::create(directory.join("manifest.json"))?;
     manifest_file.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
     manifest_file.sync_all()?;
@@ -591,6 +611,11 @@ pub fn backup(root: &Path, destination: &Path) -> Result<Value> {
             }
         }
     }
+    let objects=hashes.iter().map(|uri|Ok(json!({"path":uri,"sha256":hash_file(&destination.join(uri))?,"bytes":std::fs::metadata(destination.join(uri))?.len()}))).collect::<Result<Vec<_>>>()?;
+    let manifest = json!({"format":"avw-portable-project","version":1,"projectId":copied.project()?.project_id,"revision":copied.project()?.revision,"objects":objects,"derivedArtifactsIncluded":false});
+    let mut manifest_file = File::create(destination.join("backup-manifest.json"))?;
+    manifest_file.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
+    manifest_file.sync_all()?;
     // Keep artifact records truthful: derived files were intentionally omitted.
     copied.mark_backup_jobs_unavailable()?;
     File::open(destination.join("originals"))?.sync_all()?;

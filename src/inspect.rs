@@ -31,6 +31,13 @@ pub fn inspect(
     if start_ms < 0 {
         return Err(Error::Invalid("startMs must be nonnegative".into()));
     }
+    let lease = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(root.join("analysis.lock"))?;
+    lease.lock_shared()?;
     let project = Store::open(root)?.project()?;
     let asset = project.require_asset(asset_id)?;
     media::verify_asset(root, asset)?;
