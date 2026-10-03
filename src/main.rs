@@ -1,6 +1,9 @@
-use agent_video_workbench::{Result, store::Store};
-use agentcut_core::OperationBatch;
+use agent_video_workbench::{
+    Result,
+    service::{Request, Service},
+};
 use clap::{Parser, Subcommand};
+use serde::Serialize;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 
@@ -15,13 +18,86 @@ struct Cli {
     ffmpeg: PathBuf,
     #[arg(long, default_value = "ffprobe", global = true)]
     ffprobe: PathBuf,
+    #[arg(long, global = true)]
+    workspace: Option<PathBuf>,
     #[command(subcommand)]
     command: Action,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Serialize)]
+#[serde(
+    tag = "command",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 enum Action {
     Doctor,
+    Mcp {
+        #[arg(long)]
+        root: PathBuf,
+    },
+    Request {
+        file: PathBuf,
+    },
+    Schema,
+    AgentGuide,
+    Resume {
+        project: PathBuf,
+    },
+    RequestOutcome {
+        project: PathBuf,
+        key: String,
+    },
+    Compose {
+        project: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    TranscriptImport {
+        project: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+    },
+    TranscriptSearch {
+        project: PathBuf,
+        query: String,
+        #[arg(long)]
+        asset_id: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        offset: u32,
+        #[arg(long, default_value_t = 50)]
+        limit: u32,
+    },
+    Inspect {
+        project: PathBuf,
+        #[arg(long)]
+        asset_id: String,
+        #[arg(long, default_value = "metadata")]
+        kind: String,
+        #[arg(long, default_value_t = 0)]
+        start_ms: i64,
+        #[arg(long)]
+        end_ms: Option<i64>,
+    },
+    Artifacts {
+        project: PathBuf,
+    },
+    Artifact {
+        project: PathBuf,
+        id: String,
+        #[arg(long)]
+        sheet: bool,
+    },
     Worker {
         project: PathBuf,
         #[arg(long, default_value_t = 0)]
@@ -49,6 +125,8 @@ enum Action {
     JobRetry {
         project: PathBuf,
         id: String,
+        #[arg(long)]
+        no_launch: bool,
     },
     Jobs {
         project: PathBuf,
@@ -122,8 +200,12 @@ enum Action {
 }
 
 fn execute(cli: Cli) -> Result<Value> {
-    let backend = agent_video_workbench::media::backend(cli.ffmpeg, cli.ffprobe);
-    match cli.command {
+    let service = Service {
+        root: cli.workspace,
+        backend: agent_video_workbench::media::backend(cli.ffmpeg, cli.ffprobe),
+        executable: std::env::current_exe()?,
+    };
+    let request = match cli.command {
         Action::Worker {
             project,
             idle_seconds,
@@ -132,108 +214,67 @@ fn execute(cli: Cli) -> Result<Value> {
             let signal = stop.clone();
             ctrlc::set_handler(move || signal.store(true, std::sync::atomic::Ordering::Relaxed))
                 .map_err(|e| agent_video_workbench::Error::Invalid(e.to_string()))?;
-            agent_video_workbench::jobs::worker(&project, stop, idle_seconds)
+            return agent_video_workbench::jobs::worker(&project, stop, idle_seconds);
         }
-        Action::RenderStart {
-            project,
-            sequence,
-            expected_revision,
-            key,
-            no_launch,
-        } => {
-            let job = Store::open(&project)?.enqueue(
-                &key,
-                &agent_video_workbench::jobs::RenderInput {
-                    sequence,
-                    expected_revision,
-                    ffmpeg: backend.ffmpeg_path().into(),
-                    ffprobe: backend.ffprobe_path().into(),
-                },
-            )?;
-            if !no_launch && job.state == "queued" {
-                agent_video_workbench::jobs::launch(&project, &std::env::current_exe()?)?;
+        Action::Request { file } => {
+            if file.as_os_str() == "-" {
+                use std::io::Read;
+                let mut bytes = Vec::new();
+                std::io::stdin()
+                    .take(8 * 1024 * 1024 + 1)
+                    .read_to_end(&mut bytes)?;
+                agent_video_workbench::json::parse(&bytes)?
+            } else {
+                agent_video_workbench::json::read(&file)?
             }
-            Ok(serde_json::to_value(job)?)
         }
-        Action::JobStatus { project, id } => {
-            Ok(serde_json::to_value(Store::open(&project)?.job(&id)?)?)
-        }
-        Action::JobCancel { project, id } => Ok(serde_json::to_value(
-            Store::open(&project)?.cancel_job(&id)?,
-        )?),
-        Action::JobRetry { project, id } => Ok(serde_json::to_value(
-            Store::open(&project)?.retry_job(&id)?,
-        )?),
-        Action::Jobs { project } => Ok(json!(Store::open(&project)?.jobs()?)),
-        Action::Backup {
+        Action::Apply {
             project,
-            destination,
-        } => agent_video_workbench::media::backup(&project, &destination),
+            request,
+            dry_run,
+        } => Request::Apply {
+            project,
+            batch: agent_video_workbench::json::read(&request)?,
+            dry_run,
+        },
         Action::Protect {
             project,
             request,
             expected_revision,
             key,
-        } => {
-            let range = agent_video_workbench::json::read(&request)?;
-            Ok(serde_json::to_value(Store::open(&project)?.protect(
-                range,
-                expected_revision,
-                &key,
-            )?)?)
-        }
-        Action::Capabilities => Ok(
-            json!({"apiVersion":"1","operations":agentcut_core::capabilities::registry(),"limitations":["SDR only","synchronous render; crashed running jobs require manual reconciliation","no ASR or hosted-bot validation"]}),
-        ),
-        Action::Describe { capability } => Ok(agentcut_core::capabilities::describe(&capability)?),
-        Action::Doctor => Ok(serde_json::to_value(agentcut_render::doctor(&backend))?),
-        Action::Import {
+        } => Request::Protect {
             project,
-            source,
-            id,
+            range: agent_video_workbench::json::read(&request)?,
             expected_revision,
             key,
-        } => Ok(serde_json::to_value(agent_video_workbench::media::import(
-            &project,
-            &source,
-            &id,
-            expected_revision,
-            &key,
-            &backend,
-        )?)?),
-        Action::Render { project, sequence } => {
-            agent_video_workbench::media::render(&project, &sequence, &backend)
-        }
-        Action::Create { project, name } => Ok(serde_json::to_value(
-            Store::create(&project, &name)?.project()?,
-        )?),
-        Action::Status { project } => Ok(serde_json::to_value(Store::open(&project)?.project()?)?),
-        Action::History { project } => Ok(json!(Store::open(&project)?.history()?)),
-        Action::Apply {
+        },
+        Action::Compose {
             project,
             request,
-            dry_run,
-        } => {
-            let batch: OperationBatch = agent_video_workbench::json::read(&request)?;
-            Ok(serde_json::to_value(
-                Store::open(&project)?.apply(&batch, dry_run)?,
-            )?)
-        }
-        Action::Restore {
-            project,
-            revision,
             expected_revision,
             key,
-        } => Ok(serde_json::to_value(Store::open(&project)?.restore(
-            revision,
+            dry_run,
+        } => Request::Compose {
+            project,
+            edit: agent_video_workbench::json::read(&request)?,
             expected_revision,
-            &key,
-        )?)?),
-        Action::Diff { project, from, to } => {
-            let store = Store::open(&project)?;
-            Ok(json!({"from":store.revision(from)?,"to":store.revision(to)?}))
-        }
-    }
+            key,
+            dry_run,
+        },
+        Action::TranscriptImport {
+            project,
+            request,
+            expected_revision,
+            key,
+        } => Request::TranscriptImport {
+            project,
+            transcript: agent_video_workbench::json::read(&request)?,
+            expected_revision,
+            key,
+        },
+        other => serde_json::from_value(serde_json::to_value(other)?)?,
+    };
+    service.execute(request)
 }
 
 fn main() {
@@ -251,14 +292,29 @@ fn main() {
             return;
         }
     };
-    match execute(cli) {
-        Ok(result) => println!("{}", json!({"ok":true,"apiVersion":"1","result":result})),
-        Err(e) => {
-            println!(
-                "{}",
-                json!({"ok":false,"apiVersion":"1","error":{"code":e.code(),"message":e.to_string()}})
-            );
+    if let Action::Mcp { root } = &cli.command {
+        let result = (|| {
+            std::fs::create_dir_all(root)?;
+            let service = Service {
+                root: Some(root.canonicalize()?),
+                backend: agent_video_workbench::media::backend(cli.ffmpeg, cli.ffprobe),
+                executable: std::env::current_exe()?,
+            };
+            agent_video_workbench::mcp::serve(
+                &service,
+                &mut std::io::stdin().lock(),
+                &mut std::io::stdout().lock(),
+            )
+        })();
+        if let Err(error) = result {
+            eprintln!("{error}");
             std::process::exit(1);
         }
+        return;
+    }
+    let result = agent_video_workbench::service::envelope(execute(cli));
+    println!("{result}");
+    if result["ok"] == false {
+        std::process::exit(1);
     }
 }

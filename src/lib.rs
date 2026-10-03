@@ -1,9 +1,13 @@
+pub mod inspect;
 pub mod jobs;
 pub mod json;
+pub mod mcp;
 pub mod media;
 pub mod policy;
 pub mod process;
+pub mod service;
 pub mod store;
+pub mod workflow;
 
 use thiserror::Error;
 

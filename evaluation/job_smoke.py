@@ -76,7 +76,7 @@ def main():
     recovery.communicate(timeout=10)
     assert recovery.returncode == 0
     assert command('job-status', project, job['id'])['state'] == 'interrupted'
-    command('job-retry', project, job['id'])
+    command('job-retry', project, job['id'], '--no-launch')
     retry = worker()
     retry.communicate(timeout=90)
     assert retry.returncode == 0

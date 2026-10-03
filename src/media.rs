@@ -127,20 +127,34 @@ pub fn import(
 
 pub fn verify_assets(root: &Path, project: &Project) -> Result<()> {
     for asset in &project.assets {
-        let expected = asset
-            .fingerprint
-            .sha256
-            .as_deref()
-            .ok_or_else(|| Error::Invalid(format!("asset {} has no SHA-256", asset.id)))?;
-        if asset.uri != format!("originals/{expected}") {
-            return Err(Error::Invalid(format!(
-                "asset {} is not a managed original",
-                asset.id
-            )));
-        }
-        if hash_file(&root.join(&asset.uri))? != expected {
-            return Err(Error::Invalid(format!("asset {} bytes changed", asset.id)));
-        }
+        verify_asset(root, asset)?;
+    }
+    Ok(())
+}
+
+pub fn verify_asset(root: &Path, asset: &agentcut_core::Asset) -> Result<()> {
+    let expected = asset
+        .fingerprint
+        .sha256
+        .as_deref()
+        .ok_or_else(|| Error::Invalid(format!("asset {} has no SHA-256", asset.id)))?;
+    if expected.len() != 64 || !expected.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return Err(Error::Invalid("invalid asset content identity".into()));
+    }
+    let target = root.join(&asset.uri);
+    if std::fs::symlink_metadata(&target)?.file_type().is_symlink() {
+        return Err(Error::Invalid(
+            "managed originals cannot be symbolic links".into(),
+        ));
+    }
+    if asset.uri != format!("originals/{expected}") {
+        return Err(Error::Invalid(format!(
+            "asset {} is not a managed original",
+            asset.id
+        )));
+    }
+    if hash_file(&root.join(&asset.uri))? != expected {
+        return Err(Error::Invalid(format!("asset {} bytes changed", asset.id)));
     }
     Ok(())
 }

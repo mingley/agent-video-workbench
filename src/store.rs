@@ -16,6 +16,10 @@ pub struct Outcome {
     pub project_id: uuid::Uuid,
     pub previous_revision: u64,
     pub revision: u64,
+    #[serde(default)]
+    pub created_ids: Vec<String>,
+    #[serde(default)]
+    pub changed_ids: Vec<String>,
 }
 
 impl Store {
@@ -198,7 +202,7 @@ impl Store {
         )
     }
 
-    fn change(
+    pub(crate) fn change(
         &mut self,
         key: &str,
         expected: u64,
@@ -249,6 +253,16 @@ impl Store {
             project_id: current.project_id,
             previous_revision: current.revision,
             revision: next.revision,
+            created_ids: {
+                let previous: std::collections::BTreeSet<_> =
+                    current.entity_ids().into_iter().collect();
+                next.entity_ids()
+                    .into_iter()
+                    .filter(|id| !previous.contains(id))
+                    .map(str::to_owned)
+                    .collect()
+            },
+            changed_ids: crate::service::changed_ids(&current, &next)?,
         };
         if !dry_run {
             tx.execute(
@@ -323,6 +337,35 @@ impl Store {
             Ok(json!({"id":id,"revision":revision,"state":state,"result":result,"error":error}))
         })
         .collect()
+    }
+
+    pub fn request_outcome(&self, key: &str) -> Result<Option<Outcome>> {
+        let value: Option<String> = self
+            .conn
+            .query_row("SELECT outcome FROM requests WHERE key=?1", [key], |r| {
+                r.get(0)
+            })
+            .optional()?;
+        value
+            .map(|v| serde_json::from_str(&v).map_err(Error::from))
+            .transpose()
+    }
+
+    pub fn history_page(&self, after: u64, through: u64, limit: u32) -> Result<Vec<Value>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id,parent,request FROM revisions WHERE id>?1 AND id<=?2 ORDER BY id LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(
+            params![sql_revision(after)?, sql_revision(through)?, limit],
+            |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, Option<i64>>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
+            },
+        )?;
+        rows.map(|row|{let (revision,parent,text)=row?;let request:Value=serde_json::from_str(&text)?;Ok(json!({"revision":revision,"parent":parent,"description":request.get("description"),"kind":request.get("kind"),"operationCount":request.get("operations").and_then(|v|v.as_array()).map(Vec::len)}))}).collect()
     }
 
     pub fn backup(&self, destination: &Path) -> Result<()> {
