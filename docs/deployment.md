@@ -100,7 +100,7 @@ Configure any remote data transfer/cost within that provider explicitly.
 
 `--download-host files.example.com` enables direct HTTPS imports for that exact
 host; repeat for legitimate redirect destinations. By default none is enabled.
-URLs may be signed, but embedded username/password are refused. Content length
+Remote imports additionally need curl and working system TLS trust. URLs may be signed, but embedded username/password are refused. Content length
 and byte/free-space bounds are required. Strong ETags permit range resume;
 changed identity restarts. Sharing HTML pages fail with a precise error. A supplied
 SHA verifies bytes before ingest. Signed URLs do not enter SQLite/portable history.

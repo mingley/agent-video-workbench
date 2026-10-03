@@ -631,6 +631,7 @@
               "height": 640,
               "duration": 6,
               "played": true,
+              "playbackWaitMs": 252.70000000298023,
               "seekTargetSeconds": 2,
               "seekSeconds": 2,
               "error": null,
@@ -641,6 +642,7 @@
               "height": 360,
               "duration": 6,
               "played": true,
+              "playbackWaitMs": 250.60000000149012,
               "seekTargetSeconds": 2,
               "seekSeconds": 2,
               "error": null,
@@ -663,6 +665,7 @@
               "height": 640,
               "duration": 6,
               "played": true,
+              "playbackWaitMs": 253.30000000447035,
               "seekTargetSeconds": 2,
               "seekSeconds": 2,
               "error": null,
@@ -673,6 +676,7 @@
               "height": 360,
               "duration": 6,
               "played": true,
+              "playbackWaitMs": 263.5,
               "seekTargetSeconds": 2,
               "seekSeconds": 2,
               "error": null,
@@ -695,6 +699,7 @@
               "height": 640,
               "duration": 6,
               "played": true,
+              "playbackWaitMs": 258.8999999985099,
               "seekTargetSeconds": 2,
               "seekSeconds": 2,
               "error": null,
@@ -705,6 +710,7 @@
               "height": 360,
               "duration": 6,
               "played": true,
+              "playbackWaitMs": 262.30000000447035,
               "seekTargetSeconds": 2,
               "seekSeconds": 2,
               "error": null,
@@ -868,6 +874,7 @@
               "height": 640,
               "duration": 5,
               "played": true,
+              "playbackWaitMs": 259.5,
               "seekTargetSeconds": 2,
               "seekSeconds": 2,
               "error": null,
@@ -890,6 +897,7 @@
               "height": 640,
               "duration": 5,
               "played": true,
+              "playbackWaitMs": 259.8999999985099,
               "seekTargetSeconds": 2,
               "seekSeconds": 2,
               "error": null,
@@ -912,6 +920,7 @@
               "height": 640,
               "duration": 5,
               "played": true,
+              "playbackWaitMs": 255.80000000447035,
               "seekTargetSeconds": 2,
               "seekSeconds": 2,
               "error": null,
@@ -930,17 +939,17 @@
           "range": null
         },
         {
-          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/video.mp4",
+          "path": "/8d795255-bde8-4091-91a6-b6e364f093aa/video.mp4",
           "status": 206,
           "range": "bytes=0-"
         },
         {
-          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/captions.vtt",
+          "path": "/8d795255-bde8-4091-91a6-b6e364f093aa/captions.vtt",
           "status": 200,
           "range": null
         },
         {
-          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/manifest.json",
+          "path": "/8d795255-bde8-4091-91a6-b6e364f093aa/manifest.json",
           "status": 200,
           "range": null
         },
@@ -950,22 +959,22 @@
           "range": null
         },
         {
-          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/video.mp4",
+          "path": "/8d795255-bde8-4091-91a6-b6e364f093aa/video.mp4",
           "status": 206,
           "range": "bytes=0-"
         },
         {
-          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/video.mp4",
+          "path": "/8d795255-bde8-4091-91a6-b6e364f093aa/video.mp4",
           "status": 206,
           "range": "bytes=65536-"
         },
         {
-          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/captions.vtt",
+          "path": "/8d795255-bde8-4091-91a6-b6e364f093aa/captions.vtt",
           "status": 200,
           "range": null
         },
         {
-          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/manifest.json",
+          "path": "/8d795255-bde8-4091-91a6-b6e364f093aa/manifest.json",
           "status": 200,
           "range": null
         },
@@ -975,22 +984,17 @@
           "range": null
         },
         {
-          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/video.mp4",
+          "path": "/8d795255-bde8-4091-91a6-b6e364f093aa/video.mp4",
           "status": 206,
           "range": "bytes=0-"
         },
         {
-          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/video.mp4",
-          "status": 206,
-          "range": "bytes=65536-"
-        },
-        {
-          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/captions.vtt",
+          "path": "/8d795255-bde8-4091-91a6-b6e364f093aa/captions.vtt",
           "status": 200,
           "range": null
         },
         {
-          "path": "/d0a1305b-409a-4efd-9b52-f0541735d07a/manifest.json",
+          "path": "/8d795255-bde8-4091-91a6-b6e364f093aa/manifest.json",
           "status": 200,
           "range": null
         }
@@ -1057,12 +1061,66 @@
         "Generated phone-like media; no real phone sensor, playback or appearance approval",
         "Rec.709 SDR output only; no HDR-output or Dolby Vision qualification"
       ]
-    }
+    },
+    "sourceCommit": "b1c17a1364225e9b1ae097c4afef7ff55c6923c9"
   },
   "limitations": [
     "Generated media and Chromium viewport emulation do not certify physical phone appearance, iOS Safari or actual camera capture",
     "HDR-output masters and Dolby Vision/Log transforms are not implemented/qualified by these tests",
     "No usable macOS/Windows guest, Wine, QEMU or KVM was available; native Linux x86_64/ARM64 is the supported route",
     "Official local MCP SDK is exercised; no unspecified hosted consumer-agent account trial"
-  ]
+  ],
+  "actualHttpsTransfer": {
+    "passed": true,
+    "httpsHost": "raw.githubusercontent.com",
+    "sourcePinnedCommit": "b1ce57cb1226346206375e380d3b1c35d6ea12d1",
+    "tlsVerificationEnabled": true,
+    "explicitHostScope": true,
+    "bytes": 161975,
+    "sourceSha256": "3edb64ec03cdcf021edff872e81e7942ba97feddf987348f144cb7a5f7d0d9da",
+    "decodedFrames": 60,
+    "artifact": {
+      "bytes": 55626,
+      "jobId": "5a4673cd-1372-4af3-9844-071fd4e6809b",
+      "manifest": "/workspace/.onboarding/virtual-verify-20261003/https/project/renders/5a4673cd-1372-4af3-9844-071fd4e6809b/manifest.json",
+      "mimeType": "video/mp4",
+      "path": "/workspace/.onboarding/virtual-verify-20261003/https/project/renders/5a4673cd-1372-4af3-9844-071fd4e6809b/video.mp4",
+      "revision": 3,
+      "sha256": "fd4c98799c28d62b619da3dcfa990d284d33b7cb8d7b267162f1a2d65587bc58",
+      "verified": true
+    },
+    "limit": "Public generated repository sample; no authenticated private media service exercised"
+  },
+  "nativeCiInitial": {
+    "run": 37127682396,
+    "sourceCommit": "4b43c2c19cf90b730272c05ca10fac01d1bf236f",
+    "arm64": "passed",
+    "x86_64": "browser test failed",
+    "diagnosis": "Fixed 350ms playback sample was too early during cold browser startup; replaced with required actual clock advancement within 10s; assertions retained"
+  },
+  "reusableSetup": {
+    "passed": true,
+    "script": "/workspace/.onboarding/install-service.sh",
+    "freshOutput": "/workspace/.onboarding/service-setup-check-WGz50A",
+    "summaries": {
+      "agent": true,
+      "browser": true,
+      "studio": true,
+      "audio": true,
+      "analysis": true,
+      "asr": true,
+      "application": true,
+      "combined": true
+    },
+    "maintenanceBusyProjects": "deferred as required by active worker leases"
+  },
+  "nativeCiFinal": {
+    "run": 37128053961,
+    "sourceCommit": "b1c17a1364225e9b1ae097c4afef7ff55c6923c9",
+    "x86_64": "passed",
+    "arm64": "passed",
+    "x86Harnesses": 12,
+    "armHarnesses": 11,
+    "browserOnArm": "explicitly skipped"
+  }
 }
