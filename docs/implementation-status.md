@@ -1,149 +1,90 @@
-# Version 0.2 implementation and qualification
+# Version 0.3 implementation and qualification
 
-October 3, 2026. This release provides an agent-testable local Linux SDR editing
-service through a CLI and MCP stdio. The external agent owns conversation and
-editorial decisions. It is a supported implementation slice of the
-[product plan](product-plan.md), not completion of its M1–M5 camera, host and
-advanced creator-workflow milestones.
+October 3, 2026. This release provides a durable agent-operated Linux CLI/MCP
+workbench. It closes the prior implementation gaps for HDR-to-SDR conversion,
+creator workflows, transfer, analysis, maintenance, portability and delivery.
+The external agent owns editorial decisions and file delivery. Claims below
+are limited to executed tests; broad camera/host/appearance milestones still
+require their own samples and accounts.
 
-## Implemented behavior
+## Implemented contracts
 
-| Area | Current contract and evidence |
+| Area | Current behavior |
 | --- | --- |
-| Project authority | SQLite schema 4; immutable revisions and atomic head/history/request outcomes; exact rational source time; WAL/FULL sync |
-| Editing and recovery | Validated atomic batches, dry-run, optimistic conflicts, same-key replay, request-outcome lookup, restore as a new revision, created/changed IDs, semantic diff |
-| Agent interfaces | Shared strict typed JSON request API, CLI, MCP stdio; generated request schema; official MCP SDK integration; guide resource and supported operation examples |
-| Resume and discovery | Compact resume; bounded history with through-revision pagination; bounded transcript search and job/artifact lists; capability/limit discovery |
-| Ingest | Regular local files copied to content-addressed originals; staged import records and owner lock; owned abandoned staging recovery; original hashes checked before work; HDR/DOVI/stream-offset rejection |
-| Source evidence | Metadata, bounded source frames, silence and scene evidence; cache keys include source/tool/parameters; cached frame hash validation; suggestions never edit automatically |
-| Transcription | Optional pinned local whisper.cpp process adapter; model/executable/source fingerprints, bounded process and scratch checks; normalized source cues, cache hash validation and reuse; explicit attachment to project history |
-| Creator workflow | Reviewed source transcripts; ordered source cuts into independent named outputs; 30 fps output mapping; imported font, measured caption wrapping within 80% canvas width, dark stroke, at most three lines; overflow refuses the transaction |
-| Source protection | Exact source interval union in enabled, visible-opacity, normal-speed video tracks; respects solo; rejects lost coverage in edits/restores; explicit audited unprotect request |
-| Jobs | Frozen revision/tool inputs; idempotent enqueue; per-project OS execution lock, heartbeat and generation fence; cancellation, interrupted-owner recovery and explicit retry with fresh attempts |
-| Execution | Linux owned process groups, parent-death child termination, bounded stdout/stderr, deadlines and cancellation checks including file hashes; two render threads; duration/canvas/free-space checks |
-| Export | H.264/yuv420p, constant frame cadence, square pixels, Rec.709 tags; full decode, planned frame/dimension checks and expected AAC duration; atomic final publish, manifest, indexed contact sheet and artifact hashes |
-| Backup/migration | Consistent SQLite backup plus every historical original, hash validation, incomplete-copy guard, copied artifact jobs unavailable; schema 1–3 upgrades with pre-migration database backup |
-| Distribution | Native 0.2 archive with checksums, no-root installer, licenses, dependency declarations, schema/agent guide and compiler/platform/commit manifest; tested runtime paths and MCP configuration |
+| Authority/history | SQLite schema 4, exact rational source coordinates, immutable revisions, atomic head/history/request outcomes, optimistic conflicts, dry-run, semantic diff and replay |
+| Ingest | Owned content-addressed originals; staged copy/probe/hash/recovery; raw stream metadata; regular-file/hash checks; local or scoped HTTPS downloads |
+| Transfer | Host/redirect scope, byte/space limits, strong-ETag range resume, changed-identity restart, optional SHA verification; transient signed URLs excluded from durable state |
+| Color/geometry | PQ/HLG per-source linear-light Mobius tone map, BT.2020→BT.709, 100-nit reference/1000-nit peak, dithered limited range; SAR/orientation applied once; explicit RGB→BT.709 YUV conversion; nonzero starts and initial audio-gap padding |
+| Source evidence | Bounded metadata/frame/silence/scenes, original-PTS frame indexes, mapped SDR proxies, hash-verified cache/attachments |
+| ASR/corrections | Optional pinned whisper.cpp; model/program/source identities; reviewed transcript import/search; immutable analysis versions; corrections survive reanalysis; explicit reviewed selection and alignment checks |
+| Creator edits | Independent named outputs, recorded omissions/selective ripple restoration, versioned profiles/templates, explicit upgrades, visual-only B-roll replacement, independent aspect/language variants |
+| Captions | Source-linked cues, owned fonts, measured safe-area wrapping, reflow after corrections/style/translation, overflow/glyph refusal, burned text and matching SRT/VTT with style-loss report |
+| Narrative/audio | Independent video/dialogue routes for J/L cuts, gain/EQ/compression/limiting/fades/buses, measured music sidechain ducking, optional measured two-pass loudness/peak QC |
+| Framing/grade | Reversible basic SDR grade; selected-region CPU tracking with confidence/held fallback; accepted editable proposals render crop pans; linear/step position and constant viewport crop animation |
+| Review/delivery | Exact-artifact feedback with source-point remapping and resolution state; atomic frozen batches; independent child outcomes; covers, indexed aspect-preserving sheets, sidecars and hash-verified HTML review bundle |
+| Jobs/resources | Frozen revisions/tool inputs, persistent queue and priorities, OS owner lock, generation fence/heartbeat, bounded cancellation, interrupted-owner recovery/retry; child 4GiB address-space/32GiB file limits and bounded logs/deadlines |
+| Lifecycle | Read-only project catalog, lease-aware cache planning/collection, opt-in collection after worker drain and schedulable workspace maintenance; historical originals and succeeded artifacts retained |
+| Portability | Consistent verified backup manifest/restore, missing/corrupt verification and hash-based relink; portable profiles/templates/fonts; OTIO normal-speed cuts/gaps with exact-time extensions and explicit loss reports |
+| Interfaces/releases | Shared strict generated CLI/MCP schema, scoped paths, compact resume and paginated discovery; official SDK integration; native x86_64/ARM64 archives, checksums, licenses and no-root installer |
 
-The supported raw editing surface is project.rename, sequence.add/set,
-track.add/set, clip.add, item.set/move/remove, text.add and caption.add.
-Property discovery exposes the pinned domain registry. Rendering of every
-possible property combination is not implied. Managed assets must enter
-through import. Source protection certifies temporal coverage, not visibility
-under another track, crop choices or editorial quality.
+Raw editing discovery covers trim/split/duplicate, tracks, effects, buses,
+keyframes, transitions and markers as well as core clip/text/caption edits.
+A domain property declaration is not a promise that every rendering combination
+works: unsupported animation and track-effect paths fail precisely. Use item
+effects or audio buses. Source protection certifies temporal coverage, not crop
+visibility, overlay occlusion or editorial quality.
 
-## Executed acceptance
+## Executed evidence
 
-The release qualification runs on Debian 13 x86_64, latest stable Rust 1.99.0,
-FFmpeg n8.0.1 CPU/libx264 and DejaVu Sans. The application includes 21 passing
-Rust tests with formatting and strict Clippy (`-D warnings`), covering atomic
-rollback/concurrent writers, persistence/migration, queue ownership/retry,
-exact protection, bounded subprocess cancellation, JSON/path conformance,
-operation discovery, abandoned imports and caption overflow.
+Latest stable Rust **1.99.0**, rustfmt and strict Clippy `-D warnings` pass;
+**30 Rust tests**, zero ignored. FFmpeg is checksum-pinned CPU n8.0.1 with
+libx264/libx265, zscale/tonemap and audio/caption filters. DejaVu Sans is the
+qualified generated-fixture font; local ASR uses whisper.cpp v1.9.4 and tiny.en.
 
-| Executed harness | Verified result | Practical limit |
+| Harness | Executed acceptance | Limit |
 | --- | --- | --- |
-| application_smoke.py | Two-minute import; 30/31-second edit/revise/undo; 900/930 decoded frames; unchanged source, byte-identical undo, backup reopen/render, corrupt-source and protection rejection, upright rotation | Generated SDR fixture |
-| job_smoke.py | SIGKILL worker, owned child terminates; next worker reconciles interrupted attempt; retry succeeds at attempt 2; cancellation finishes within five seconds and retains prior final | Linux process ownership and filesystem |
-| agent_smoke.mjs | Official MCP SDK 1.32.0 handshake and tool schema; same CLI/MCP replay, key conflicts, cached frame, transcript/search, three independent captioned outputs, verified artifacts, explicit protection removal, scoped paths and backup | Real local MCP integration; no hosted-bot certification |
-| media_matrix.py | Rotation 0/90/180/270 pixel comparison, synthetic HEVC SDR and VFR, video without audio; all outputs decode 60 frames; tagged PQ/HLG and nonzero starts rejected without committed assets | Does not prove real-camera color or speech lip sync |
-| asr_smoke.py | Real tiny.en model on generated speech; recognized product/video; searchable source cues; analysis leaves history unchanged; cache reuse, wrong-model and altered-artifact/cache rejection | Machine text needs review; English fixture only |
-| long_input.py | One-hour 256×144/10 fps source; five-second output at source 59:00; input seek at 3540 seconds; 150 decoded frames; render about 1.7 s and sampled process-tree peak about 145 MiB | Low-resolution CPU fixture, not 4K/iPhone performance or a hard memory reservation |
-| Native bundle installation | Archive extraction and archive/binary SHA-256 validation; no-root installation, doctor with system-only PATH, official MCP workflow using the installed binary, including default 1080×1920 output | Same Debian 13 x86_64 host, not a separate machine qualification |
+| application_smoke.py | Two-minute ingest; 30/31s edits; 900/930 decoded frames; byte-identical undo, unchanged sources, rotation, protection/corruption refusal and backup reopen/render | Generated media |
+| job_smoke.py | Actual SIGKILL stops owned child; interrupted recovery, successful attempt 2, cancellation within five seconds and prior final retained | Linux process/lock contract |
+| media_matrix.py | PQ/HLG 10-bit HEVC tone mapping, rotations 0/90/180/270, normal/rotated SAR, HEVC SDR, VFR, missing audio, nonzero start, delayed audio; full decode and reference pixel comparisons | Generated HDR; no real-camera visual approval |
+| studio_smoke.py | Selective restore retains another omission/later style, correction/reanalysis/selection, review remap, three sources, identical dialogue across B-roll replacement, loudness QC, pinned profiles/templates, vertical/square/Spanish landscape batch, verified review package, restore/relink/catalog/library and OTIO roundtrip | Supplied Latin-script translations; no translation model |
+| audio_smoke.py | Frequency-measured music attenuation during speech, preserved dialogue and silence music, reversible mix and effect-based in/out fades | Generated tones; human speech A/B still required |
+| timeline_smoke.py | Incoming/outgoing dialogue measured across J/L cuts, no duplicate embedded route, image/logo replacement retains decoded dialogue, crossfade handles and blended pixels | Synthetic narrative |
+| transfer_smoke.py | Interrupted resume, changed ETag restart, checksum and scope rejection, tokenized URL absent from SQLite | Local development HTTP fixture; HTTPS required in normal configuration |
+| analysis_smoke.py | PTS indexes, mapped proxy/cache, attachment tamper rejection, textured product tracking, occlusion hold, grade-plus-pan pixels, provider cache/validation/cancel without history changes | CPU template tracker; explicitly selected region |
+| agent_smoke.mjs | Official SDK 1.32.0 CLI/MCP replay and errors, scoped paths, captions, four named outputs including full-HD default, profiles, frozen batch/review package, source index and portable reopen | Actual local stdio client, not every hosted product |
+| asr_smoke.py | Real tiny.en recognition, searchable source cues, analysis leaves history unchanged, cache/model/artifact integrity checks | Generated English speech |
+| long_input.py | One-hour 256×144/10fps source, five-second output from 59:00; source seek at 3540s; 150 decoded frames; about 1.1s render and 139MiB sampled process-tree RSS locally | Not one-hour 4K or a host memory reservation |
+| highres_smoke.py | 3840×2160/60fps source to 1080×1920/30fps full decode, original unchanged; about 2.3s render locally | Two-second generated SDR source |
+| Native CI/install | Actual Ubuntu x86_64 and ARM64 runners pass Rust/schema and media/creator/transfer/analysis/official-MCP checks; each installs its native archive without Cargo | Linux glibc route; no macOS/Windows claim |
 
-[Release evidence](../evaluation/service-results/qualification.json) records
-summaries and provenance. Generated footage, models and project databases stay
-outside Git. Historical candidate evaluation results remain separate.
-CI executes Rust/schema plus application, worker, media-matrix and official MCP
-checks and packages a native archive. Local ASR and the one-hour benchmark are
-separate release checks. A checked-in CI workflow does not establish that a
-remote Actions run passed; local execution is the evidence here.
+[Qualification JSON](../evaluation/service-results/qualification.json) records
+current summaries and provenance. Actions artifacts carry their own source
+commit/platform manifests; successful workflow execution is observed before
+release publication. Local ASR and one-hour measurements are separate checks.
+Generated footage, model weights and project databases stay outside Git.
+Historical candidate research evidence is separate from this release.
 
-## Remaining product scope
+## Explicit support boundaries
 
-Real creator-supplied phone footage, phone appearance/audio review, a tested
-HDR conversion path and an actual hosted-agent delivery trial remain open.
-This build rejects unsupported HDR/offset paths clearly. There is no broad
-claim of iPhone support, arbitrary languages or universal platform support.
+Delivery is **Rec.709 SDR H.264/AAC**, up to one hour per output and 4096 pixels
+per canvas axis. Linux x86_64 and ARM64 with persistent local filesystem locking
+are qualified. Mac/Windows binaries, arbitrary consumer-agent accounts and
+phone playback/appearance are not certified by these Linux tests.
 
-Higher-level B-roll/audio narrative workflows, reusable versioned profiles,
-selective source restoration helpers, named format/language variant operations,
-timestamped review comments, workspace catalog, resumable remote transfer,
-retention automation, published cross-platform installers and timeline
-interchange remain in the [expanded backlog](implementation-backlog.md).
-Projects can already contain multiple managed sources and independent outputs;
-that does not certify all advanced composition or delivery combinations.
+Dolby Vision profile 8 with HDR10/HLG compatible base layer is recognized;
+actual Dolby Vision footage is not in the generated qualification matrix.
+Profile 5, unqualified BT.2020 non-PQ/HLG or Log transforms, ProRes/Log/Cinematic
+metadata, HDR-output masters and GPU encoders need additional implementation
+and sample qualification. This release does not advertise those paths.
 
-[Deployment](deployment.md) documents local access, worker supervision, storage,
-upgrade/rollback and the supported limits. The generated service request schema
-is the runtime envelope contract; older schemas/examples and proposed commands
-in design specifications remain illustrative. Stable 1.0 acceptance requires
-the broader documented camera/host and operational gates.
+Basic grade covers brightness/exposure/contrast/saturation; other color parameters
+and unsupported keyframes refuse delivery. Geometry pans require linear/step,
+normal-speed footage, constant viewport and no simultaneous transition.
+Tracking is an optional selected-region template matcher with visible uncertainty.
+Language variants require explicit translations; complex shaping/RTL and arbitrary
+scripts/fonts need dedicated fixtures. OTIO covers normal-speed clips/tracks/gaps,
+reports omitted captions/effects/transitions, and requires SHA bindings for import.
 
-## October 3: HDR and timestamp conversion
-
-Managed import now retains PQ/HLG originals and nonzero stream starts, preserves raw stream metadata, and reports inspectable versus deliverable media. Render plans apply a versioned linear-light Mobius tone map per HDR source before SDR compositing (100-nit reference white, 1,000-nit peak, BT.2020 to BT.709, limited-range dithering). Originals stay byte-identical. Compatible Dolby Vision profile 8 base layers are selectable; profile 5 has a precise unsupported delivery report. Generated 10-bit HEVC PQ/HLG, timestamp offsets, all four rotations, VFR and SDR HEVC pass full decode/frame-count and decoded reference pixel comparisons. Evidence: `evaluation/media_matrix.py`; camera appearance remains a human qualification gate. Contact sheets preserve aspect ratio and their hashes are verified on retrieval.
-
-## October 3: Creator decisions and delivery
-
-The typed `studio` API adds immutable profile/template versions, explicit profile
-upgrades, independent format/language variants from frozen revisions, recorded
-omissions with selective ripple restoration, visual-only B-roll replacement,
-transcript corrections retained across reanalysis, artifact-anchored review and
-source-based remapping. Raw edit discovery includes trim/split, effects, buses,
-keyframes and transitions. Audio profiles use measured two-pass loudness and
-peak QC. Sidechain ducking passes a separate frequency/amplitude test: music attenuates during speech, stays present in silence, dialogue amplitude remains stable, and undo restores the unprocessed mix.
-Every render includes SRT/VTT, a cover, aspect-preserving contact sheet and hashes.
-Batch enqueue freezes all outputs atomically; independent jobs can be packaged
-into a static local review bundle. Catalog, conservative cache collection,
-backup manifests, restore and hash-based relinking are available. OpenTimelineIO
-cut/track interchange has explicit loss reports for unsupported styling/effects.
-
-`evaluation/studio_smoke.py` passes fresh-process selective restore, review remap,
-correction/reanalysis, profile/template instantiation, identical dialogue samples
-across B-roll replacement, measured loudness, vertical/square/Spanish-caption
-landscape frozen exports, package hashes, backup restore, relinking and catalog.
-The existing remaining-scope table above describes the prior 0.2 release and
-will be replaced by the final qualification matrix after the integration checks.
-
-
-## October 3: Transfer and reusable libraries
-
-`import-url` scopes HTTPS hosts and every redirect to operator configuration,
-checks remote byte/space limits, resumes against a strong unchanged ETag, restarts
-changed identities, and verifies an optional supplied SHA-256 before managed
-import. URLs/credentials do not enter SQLite or portable history. Interrupted
-partials are retained for retry. Loopback HTTP is an explicit development-only
-flag used by the local transfer fixture. `evaluation/transfer_smoke.py` passes
-interrupted resume, changed validator, checksum failure, redirect/host scope and
-URL exclusion. Profile/template libraries export font objects and validated
-settings without footage; another project can import them with independent IDs.
-The creator fixture also passes reusable library import and OTIO cut roundtrip.
-Native Linux aarch64 qualification has been added to CI alongside x86_64; its
-successful execution must be observed before publishing a supported ARM release.
-Child media processes now have 4-GiB address-space and 32-GiB file-size limits.
-
-## October 3: Analysis, tracking and maintenance
-
-Persistent analysis jobs provide original-PTS frame indexes, bounded source-mapped
-SDR proxies, selected-region CPU template tracking and an operator-configured
-provider process contract. Provider/source/tool fingerprints, cancellation,
-malformed-output rejection and cache/attachment hashes are enforced. Tracking
-returns confidence, editable source coordinates and explicit held-position
-findings; accepted proposals become rendered crop keyframes. Linear/step position
-and constant-viewport crop animation render explicitly. Unsupported animation
-or basic-grade parameters are refused instead of silently frozen. Basic grading
-is reversible and occurs in the display-referred SDR composite. Source SAR and
-orientation are normalized once before placement; output RGB-to-YUV conversion
-uses the BT.709 matrix.
-
-The analysis fixture passes moving-product placement, occlusion fallback,
-proxy tamper rejection, grade-plus-pan rendering, provider cache reuse, malformed
-results and cancellation without history changes. The expanded media fixture
-passes rotated non-square pixels and an initial delayed-audio gap. Creator
-corrections can explicitly select a newer analysis; mismatched correction
-alignment refuses atomically until reviewed. Changed captions reflow against
-owned font metrics and safe layout bounds. Studio decisions are paginated and
-large analysis values summarized. Opt-in per-project retention runs when a
-worker drains; workspace `maintain` supports scheduled collection and reports
-busy projects for retry. Thirty Rust tests pass, with formatting and strict Clippy.
+The [backlog](implementation-backlog.md) records these qualification/extensions
+without retaining stale claims that implemented 0.3 features are still missing.
+[Deployment](deployment.md) describes workers, storage, maintenance and rollback.

@@ -44,6 +44,85 @@ pub fn validate(duck: &Ducking) -> Result<()> {
     }
     Ok(())
 }
+pub fn adapt_fades(plan: &mut RenderPlan, ir: &RenderIr) -> Result<()> {
+    let position = plan
+        .args
+        .iter()
+        .position(|a| a == "-filter_complex")
+        .ok_or_else(|| Error::Invalid("audio graph missing".into()))?
+        + 1;
+    let graph = plan
+        .args
+        .get_mut(position)
+        .ok_or_else(|| Error::Invalid("audio graph missing".into()))?;
+    let mut chains = graph.split(';').map(str::to_owned).collect::<Vec<_>>();
+    let mut inject = |label: String,
+                      effects: &[agentcut_core::Effect],
+                      start: f64,
+                      duration: f64|
+     -> Result<()> {
+        let mut filters = Vec::new();
+        for effect in effects
+            .iter()
+            .filter(|e| e.enabled && e.capability == "audio.fade")
+        {
+            for (name, direction) in [("inSeconds", "in"), ("outSeconds", "out")] {
+                let seconds = effect
+                    .parameters
+                    .get(name)
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.0);
+                if !seconds.is_finite() || seconds < 0.0 || seconds > duration {
+                    return Err(Error::Invalid(
+                        "fade effect requires lengths within the audio item/bus duration".into(),
+                    ));
+                }
+                if seconds > 0.0 {
+                    filters.push(format!(
+                        "afade=t={direction}:st={}:d={seconds}",
+                        if direction == "in" {
+                            start
+                        } else {
+                            start + duration - seconds
+                        }
+                    ));
+                }
+            }
+        }
+        if filters.is_empty() {
+            return Ok(());
+        }
+        let suffix = format!("[{label}]");
+        let branch = chains
+            .iter_mut()
+            .find(|s| s.ends_with(&suffix))
+            .ok_or_else(|| Error::Invalid("audio fade producer missing".into()))?;
+        branch.truncate(branch.len() - suffix.len());
+        branch.push_str(&format!(
+            "[avw_fade_{label}];[avw_fade_{label}]{}[{label}]",
+            filters.join(",")
+        ));
+        Ok(())
+    };
+    for (n, element) in ir.audio_elements.iter().enumerate() {
+        inject(
+            format!("a{n}"),
+            &element.effects,
+            element.timeline_range.start.as_seconds_f64() - ir.range.start.as_seconds_f64(),
+            element.timeline_range.duration.as_seconds_f64(),
+        )?;
+    }
+    for (n, bus) in ir.buses.iter().enumerate() {
+        inject(
+            format!("bus{n}out"),
+            &bus.effects,
+            0.0,
+            ir.range.duration.as_seconds_f64(),
+        )?;
+    }
+    *graph = chains.join(";");
+    Ok(())
+}
 pub fn adapt(
     plan: &mut RenderPlan,
     ir: &RenderIr,

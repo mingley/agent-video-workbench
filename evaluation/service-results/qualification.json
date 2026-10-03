@@ -1,14 +1,14 @@
 {
-  "applicationVersion": "0.2.0",
+  "applicationVersion": "0.3.0",
   "date": "2026-10-03",
-  "platform": "Debian 13 Linux x86_64",
+  "localPlatform": "Debian 13 Linux x86_64",
   "rust": "latest stable 1.99.0",
   "ffmpeg": "n8.0.1-48-g0592be14ff-20260116",
   "whisperSourceCommit": "927cfce34f31707e17f2bff35c349632fb9e2c3a",
   "rustChecks": {
     "fmt": true,
     "strictClippy": true,
-    "testsPassed": 21,
+    "testsPassed": 30,
     "ignored": 0
   },
   "functionalChecks": {
@@ -37,11 +37,13 @@
       "officialMcpSdk": true,
       "cliMcpOutcomeEquivalent": true,
       "transcriptMappedCaptions": true,
-      "independentNamedOutputs": 3,
+      "independentNamedOutputs": 4,
       "defaultHdCanvasTested": true,
+      "frozenBatchDelivery": true,
+      "expandedSchemaAndAnalysis": true,
       "cacheReused": true,
       "decodedFrames": 180,
-      "jobId": "4211d6ec-8497-48c7-8c6e-8530022fa28f"
+      "jobId": "57d44898-46cf-4ad5-9d4b-8b346d421215"
     },
     "mediaMatrix": {
       "passed": true,
@@ -50,47 +52,169 @@
           "fixture": "rotation_0",
           "decodedFrames": 60,
           "sourceUnchanged": true,
-          "orientationMeanAbsoluteDifference": 2.2048119212962964
+          "orientationMeanAbsoluteDifference": 4.307452256944444,
+          "audioGap": null
         },
         {
           "fixture": "rotation_90",
           "decodedFrames": 60,
           "sourceUnchanged": true,
-          "orientationMeanAbsoluteDifference": 1.4562109375
+          "orientationMeanAbsoluteDifference": 1.173062789351852,
+          "audioGap": null
         },
         {
           "fixture": "rotation_180",
           "decodedFrames": 60,
           "sourceUnchanged": true,
-          "orientationMeanAbsoluteDifference": 2.172243923611111
+          "orientationMeanAbsoluteDifference": 6.02322337962963,
+          "audioGap": null
         },
         {
           "fixture": "rotation_270",
           "decodedFrames": 60,
           "sourceUnchanged": true,
-          "orientationMeanAbsoluteDifference": 1.5193619791666666
+          "orientationMeanAbsoluteDifference": 1.215234375,
+          "audioGap": null
+        },
+        {
+          "fixture": "sar",
+          "decodedFrames": 60,
+          "sourceUnchanged": true,
+          "orientationMeanAbsoluteDifference": 3.1305772569444446,
+          "audioGap": null
+        },
+        {
+          "fixture": "sar_rotated",
+          "decodedFrames": 60,
+          "sourceUnchanged": true,
+          "orientationMeanAbsoluteDifference": 0.9245992476851852,
+          "audioGap": null
         },
         {
           "fixture": "hevc_sdr",
           "decodedFrames": 60,
           "sourceUnchanged": true,
-          "orientationMeanAbsoluteDifference": null
+          "orientationMeanAbsoluteDifference": null,
+          "audioGap": null
         },
         {
           "fixture": "vfr",
           "decodedFrames": 60,
           "sourceUnchanged": true,
-          "orientationMeanAbsoluteDifference": null
+          "orientationMeanAbsoluteDifference": null,
+          "audioGap": null
+        },
+        {
+          "fixture": "pq",
+          "decodedFrames": 60,
+          "sourceUnchanged": true,
+          "orientationMeanAbsoluteDifference": 4.718817997685186,
+          "audioGap": null
+        },
+        {
+          "fixture": "hlg",
+          "decodedFrames": 60,
+          "sourceUnchanged": true,
+          "orientationMeanAbsoluteDifference": 4.45927662037037,
+          "audioGap": null
+        },
+        {
+          "fixture": "offset",
+          "decodedFrames": 60,
+          "sourceUnchanged": true,
+          "orientationMeanAbsoluteDifference": 4.307452256944444,
+          "audioGap": null
+        },
+        {
+          "fixture": "delayed_audio",
+          "decodedFrames": 60,
+          "sourceUnchanged": true,
+          "orientationMeanAbsoluteDifference": null,
+          "audioGap": {
+            "initialSilenceRms": 0.0,
+            "laterToneRms": 2130.2556026703305
+          }
         }
       ],
-      "rejected": [
-        "pq",
-        "hlg",
-        "offset"
-      ],
       "limitations": [
-        "Generated inputs only; real camera color/audio and Dolby Vision remain unqualified",
+        "Generated inputs; real camera appearance/audio needs human review",
+        "Dolby Vision profile 5 is inspectable but has no delivery path",
         "VFR fixture verifies output cadence/count, not lip sync in real speech"
+      ]
+    },
+    "studio": {
+      "passed": true,
+      "checks": [
+        "selective restore with later style",
+        "corrections survive reanalysis",
+        "review source remap",
+        "B-roll preserves dialogue samples",
+        "measured loudness",
+        "versioned profile/template",
+        "frozen batch in three formats with Spanish captions",
+        "sidecars/covers/hash-verified review package",
+        "verified backup restore and relink",
+        "catalog and safe cache planning",
+        "portable reusable font/profile library",
+        "OTIO supported cut roundtrip with loss report"
+      ]
+    },
+    "audio": {
+      "passed": true,
+      "musicAttenuationDb": -16.342175791678425,
+      "speechAmplitudeRatio": 0.9999861148146902,
+      "checks": [
+        "real sidechain attenuation during speech",
+        "effect-based in/out fades",
+        "music retained in silence",
+        "dialogue amplitude/timing retained",
+        "history restores unprocessed mix"
+      ]
+    },
+    "timeline": {
+      "passed": true,
+      "checks": [
+        "measured J-cut incoming dialogue",
+        "measured L-cut outgoing dialogue",
+        "no duplicate embedded audio",
+        "logo replacement preserves dialogue PCM",
+        "crossfade handles and blended pixels/full decode"
+      ]
+    },
+    "transfer": {
+      "passed": true,
+      "checks": [
+        "partial transfer resumes with strong ETag",
+        "changed validator restarts",
+        "wrong checksum preserves head/originals",
+        "redirect destinations and initial hosts scoped",
+        "signed URL absent from SQLite"
+      ]
+    },
+    "analysis": {
+      "passed": true,
+      "trackingCenterErrorsSourcePixels": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "renderedProductCenters": [
+        177.0188450561051,
+        180.99203000468825,
+        180.99953137813878
+      ],
+      "checks": [
+        "PTS-based frame index",
+        "mapped SDR proxy/cache reuse",
+        "selected-region tracking with occlusion hold",
+        "proxy attachment tamper rejection",
+        "grade with pan",
+        "accepted pan renders motion",
+        "provider version/hash contract/cache",
+        "malformed result and cancellation preserve history"
       ]
     },
     "asr": {
@@ -113,54 +237,76 @@
       "inputSeekSeconds": 3540,
       "measurements": [
         {
-          "command": "one-hour.mp4",
-          "elapsedSeconds": 35.652,
-          "peakProcessTreeRssBytes": 33140736
+          "command": "$RUN/final-03/hour/one-hour.mp4",
+          "elapsedSeconds": 31.955,
+          "peakProcessTreeRssBytes": 34050048
         },
         {
           "command": "One-hour fixture",
-          "elapsedSeconds": 0.103,
-          "peakProcessTreeRssBytes": 1769472
+          "elapsedSeconds": 0.102,
+          "peakProcessTreeRssBytes": 3239936
         },
         {
           "command": "long-source",
-          "elapsedSeconds": 1.137,
-          "peakProcessTreeRssBytes": 19398656
+          "elapsedSeconds": 0.204,
+          "peakProcessTreeRssBytes": 7290880
         },
         {
           "command": "long-font",
-          "elapsedSeconds": 0.104,
-          "peakProcessTreeRssBytes": 5373952
+          "elapsedSeconds": 0.102,
+          "peakProcessTreeRssBytes": 3272704
         },
         {
           "command": "late-compose",
           "elapsedSeconds": 0.103,
-          "peakProcessTreeRssBytes": 5046272
+          "peakProcessTreeRssBytes": 3342336
         },
         {
           "command": "late_short",
-          "elapsedSeconds": 1.656,
-          "peakProcessTreeRssBytes": 151605248
+          "elapsedSeconds": 1.121,
+          "peakProcessTreeRssBytes": 145346560
         }
       ],
       "limitations": [
         "256x144 10fps synthetic SDR, 360x640 output; not a 4K/iPhone benchmark",
         "Linux /proc sampled RSS, not a hard memory reservation"
       ]
+    },
+    "highResolution": {
+      "passed": true,
+      "sourceSize": [
+        3840,
+        2160
+      ],
+      "sourceFps": 60,
+      "sourceSeconds": 2,
+      "outputSize": [
+        1080,
+        1920
+      ],
+      "outputFrames": 30,
+      "renderWallSeconds": 2.344,
+      "sourceUnchanged": true,
+      "limitations": [
+        "Short generated SDR fixture; no one-hour 4K performance or camera appearance claim"
+      ]
     }
   },
-  "releaseInstallation": {
-    "status": "passed",
-    "binarySha256": "2b555f1cd7088b59dc519eeaa9d8142dd17a04dbe532fff9a9ebbf0ecb9e0a2b",
-    "scope": "same-host native no-Cargo install and official MCP loop; full-HD default output included",
-    "archiveChecksumVerified": true,
-    "extractedBinaryChecksumVerified": true,
-    "doctorPassed": true,
-    "officialMcpWorkflowPassed": true,
-    "testedSourceCommit": "56597b9e9408adb2197f1835e008d6981405aec0"
-  },
+  "nativeCI": [
+    {
+      "url": "https://github.com/mingley/agent-video-workbench/actions/runs/37096028863",
+      "head": "fd469469e26a2e1ad431145546dadb250b7a6ffc",
+      "platforms": [
+        "Linux x86_64",
+        "Linux aarch64"
+      ],
+      "conclusion": "success",
+      "scope": "source analysis/tracking/retention baseline; final 0.3 release run recorded after completion"
+    }
+  ],
   "limits": [
-    "Generated fixtures; real camera appearance/color/audio and hosted bots remain unqualified",
-    "The one-hour benchmark is low-resolution and measures sampled RSS, not a hard reservation"
+    "Generated camera/color/narrative fixtures; real phone appearance requires review",
+    "HDR-output masters, profile 5/Log transforms, complex scripts, Mac/Windows and arbitrary consumer-agent accounts are outside the support matrix",
+    "One-hour benchmark is low-resolution; short 4K input does not qualify one-hour 4K performance"
   ]
 }

@@ -1,7 +1,7 @@
 # Proposed architecture
 
 This document describes the target Rust application. The `avw` SDR editing
-prototype implements a subset documented in [DEVELOPMENT.md](../DEVELOPMENT.md)
+service implements the qualified subset documented in [DEVELOPMENT.md](../DEVELOPMENT.md)
 and [implementation status](implementation-status.md). The broader interface
 and advanced workflows below remain proposed. Detailed contracts appear in the
 [agent protocol](specs/agent-protocol.md), [lifecycle](specs/project-lifecycle.md),
@@ -119,8 +119,7 @@ every long video can cost more time/disk than it saves.
 SDR output is the initial delivery policy. HDR HLG/PQ needs an explicit
 color-managed, tested tone-map path, accurate tags, and phone review. Treat Dolby
 Vision variants and other unsupported modes as named capability failures.
-The current AgentCut compiler's basic pixel-format conversion does not establish
-HDR correctness. Keep original HDR bytes even when the working proxy/output is
+The 0.3 Rust adapter adds a versioned per-source linear-light PQ/HLG tone map and BT.709 matrix conversion; upstream pixel-format conversion alone does not establish HDR correctness. Keep original HDR bytes even when the working proxy/output is
 SDR. Publish a supported-input matrix based on fixtures and actual phone samples.
 
 Analysis is an independently cached job. Provide ffprobe metadata, timestamped

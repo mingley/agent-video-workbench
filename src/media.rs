@@ -303,8 +303,11 @@ pub(crate) fn render_attempt(
     let prepared = crate::color::geometry(&prepared);
     let mut normalized = agentcut_core::normalize::normalize_sequence(&prepared, sequence)?;
     layout_caption_lines(&mut normalized)?;
-    let ir =
+    let mut ir =
         agentcut_render::ir::build(&prepared, &normalized, root, preset, &staged, None, false)?;
+    for bus in &mut ir.buses {
+        bus.effects.retain(|e| e.enabled);
+    }
     let info = crate::process::run(
         Command::new(backend.ffmpeg_path()).arg("-version"),
         std::time::Duration::from_secs(10),
@@ -323,6 +326,7 @@ pub(crate) fn render_attempt(
     }
     let mut plan = agentcut_render::compile::compile(&ir, backend.ffmpeg_path(), &toolchain)?;
     let color_decisions = crate::color::adapt(&mut plan, project)?;
+    crate::audio::adapt_fades(&mut plan, &ir)?;
     crate::audio::adapt(&mut plan, &ir, project.require_sequence(sequence)?)?;
     crate::animation::adapt(&mut plan, &ir, &prepared)?;
     if plan.duration_seconds > 3600.0 {
@@ -337,8 +341,8 @@ pub(crate) fn render_attempt(
         ));
     }
 
-    // Upstream already compiles display-matrix transforms. Disable FFmpeg's
-    // implicit autorotation so each input is rotated exactly once.
+    // The source adapter normalizes physical geometry before placement.
+    // Disable implicit autorotation so each input is rotated exactly once.
     let mut args = vec![
         "-nostdin".into(),
         "-v".into(),
@@ -390,7 +394,7 @@ pub(crate) fn render_attempt(
     plan.plan_hash = format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(
-            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":5,"colorDecisions":color_decisions,"inputSeeksSeconds":seeks})
+            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":6,"colorDecisions":color_decisions,"inputSeeksSeconds":seeks})
         )?)
     );
     std::fs::write(

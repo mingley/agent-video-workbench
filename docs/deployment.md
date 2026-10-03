@@ -1,144 +1,165 @@
 # Install and connect an agent
 
-Version 0.2 is a local, single-user Linux tool with a CLI and an MCP stdio
-server. The external agent supplies conversation, editorial choices and file
-delivery. The workbench persists projects, history, original bytes, analysis,
-jobs and verified exports. No web listener or account credentials are required.
+Version 0.3 is a local single-user Linux CLI and MCP stdio server. It persists
+projects, originals, revisions, analysis, jobs and verified exports. The agent
+provides editorial decisions and uses its host's file tools for delivery.
 
-## Installation
+## Published installation
 
-Build a native bundle with `scripts/package.sh NEW_DIRECTORY`, or use the
-prepared bundle in the cloud environment. Verify the adjacent SHA256SUMS,
-extract the archive, and run `avw/install.sh NEW_BIN_DIRECTORY`. The installer
-verifies the binary and refuses replacement of an existing binary. A versioned
-bin directory permits switching back to a previous executable without
-modifying it. The qualified binary is Debian 13 x86_64 and dynamically needs
-libc, libm and libgcc_s; it is not a universal Linux/macOS/Windows archive.
+[Releases](https://github.com/mingley/agent-video-workbench/releases) provide
+Linux x86_64 and aarch64 archives and a combined SHA256SUMS. Native Ubuntu
+x86_64/ARM64 CI qualifies each archive through installed-binary workflows.
+Use Ubuntu 24.04 or newer/glibc-compatible Linux; Debian 13 x86_64 is also tested.
+The binary dynamically needs libc, libm and libgcc_s. Mac/Windows are not supported.
 
-Set FFmpeg/ffprobe paths explicitly. `scripts/setup-media.sh TOOL_DIRECTORY`
-provides the tested checksum-verified FFmpeg 8 route for Linux x86_64. Keep its
-FFmpeg license obligations when distributing that separate backend. Import a
-licensed TTF font for reproducible captions. Run readiness against the actual
-paths:
+From the checkout, `scripts/install-release.sh NEW_BIN_DIRECTORY 0.3.0`
+downloads the matching archive, verifies its checksum and installs without root.
+For offline installation, transfer the archive and SHA256SUMS, verify the
+matching checksum, extract, then run `avw/install.sh NEW_BIN_DIRECTORY`.
+The installer checks the binary and refuses overwrite; use versioned directories
+for upgrade/rollback. The binary needs no Cargo, Node, Python, GUI or GPU.
+
+Configure FFmpeg/ffprobe explicitly. `scripts/setup-media.sh TOOL_DIRECTORY`
+uses a pinned checksum-verified FFmpeg 8 Linux x86_64/ARM64 distribution. That
+optional dependency setup uses Bash, curl, unzip and Python 3; a qualified
+system FFmpeg is another route. Keep the backend's separate license obligations.
+Import a licensed TTF font for repeatable captions; fonts and model weights are
+not bundled with the application.
 
 ```sh
 /path/to/avw --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe doctor
 /path/to/avw capabilities
 ```
 
-`doctor` performs a real H.264/AAC captioned encode and full decode; check the
-JSON `ok` and `ready` values. A process start alone is insufficient. Generated
-media qualification on this route is recorded in
-[implementation status](implementation-status.md).
+`doctor` checks required HDR/audio/caption filters and performs a real H.264/AAC
+captioned encode/full decode. Require JSON ok:true and ready:true. Source builds
+and packaging checks are in [DEVELOPMENT.md](../DEVELOPMENT.md).
 
 ## CLI and MCP
 
-Create a directory for projects and input files outside the source checkout.
-`avw --workspace ROOT request FILE` runs a typed JSON command; `FILE` may be
-`-` for stdin. Requests use camelCase fields and a kebab-case `command`.
-`avw schema` returns the shared request schema; `agent-guide` returns the
-workflow. Flat CLI commands are also available through `avw --help`.
+Put projects and input files in persistent storage outside the checkout.
+`avw --workspace ROOT request FILE|-` accepts the complete typed JSON schema;
+commands use kebab-case and fields camelCase. Flat CLI aliases are in `--help`.
+Use `schema`, `agent-guide` and `capabilities` for discovery.
 
-Use [examples/mcp.json](../examples/mcp.json) as the agent's configuration and
-replace its absolute paths. The workspace root must exist. Start
-`avw --ffmpeg FFMPEG --ffprobe FFPROBE mcp --root ROOT` through the MCP client.
-The server offers one typed `avw` tool and the `avw://guide` resource. Stdout
-contains only JSON-RPC; diagnostics use stderr. Paths requested through MCP
-must resolve under ROOT, including source imports, backups and artifacts.
-This is local filesystem access for a trusted agent. Use the host's normal
-process and filesystem isolation for independently managed users.
+Replace absolute paths in [examples/mcp.json](../examples/mcp.json). The root
+must exist. The MCP client launches:
 
-Suggested first agent task:
+```sh
+/path/to/avw --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe \
+  mcp --root /path/to/workspace
+```
 
-> Read agent-guide and capabilities, inspect resume for project `project`,
-> review its three named outputs and their artifacts, then make a new named
-> short from the supplied source without removing protected source ranges.
-> Render it, wait for succeeded, inspect the sheet, and return the verified
-> MP4 path with its revision and SHA-256.
+The server exposes one typed `avw` tool and `avw://guide`. Stdout is JSON-RPC;
+diagnostics use stderr. Every path, including imports, providers' result
+artifacts, backups and delivery destinations, is scoped to the root. This is
+trusted local filesystem access; it is not an Internet listener.
 
-On a clean workspace, start with `create` and import the recording and font.
-The agent guide describes transcript import, composition, revisions and jobs.
-Artifacts are returned as paths and hashes; the host must provide file delivery.
-Technical QC cannot choose content or approve transcription and appearance.
+Suggested agent trial:
 
-## Optional local transcription
+> Read agent-guide and capabilities, then resume the supplied project. Inspect
+> original source frames and its source transcripts. Create a new named short,
+> preserve protected source ranges, apply the saved profile, and make an
+> independent square variant. Freeze both in a batch. Poll until succeeded,
+> retrieve verified artifacts and sheets, package delivery, and return its
+> MP4s and HTML review bundle with revisions and hashes. Reopen the project
+> in a fresh session and selectively restore an omitted clip without undoing style.
 
-Build `scripts/setup-asr.sh PROVIDER_DIRECTORY` with CMake and C/C++. It pins
-whisper.cpp v1.9.4 at `927cfce34f31707e17f2bff35c349632fb9e2c3a` and verifies
-the public English tiny.en model SHA-256. Whisper and model licenses remain
-with their publishers; the application bundle does not redistribute weights.
-Keep the build's library directories alongside `build/bin/whisper-cli`.
+On a clean workspace, create a project and import the recording and font first.
+The [guide](../AGENT_GUIDE.md) supplies workflow and mutation/retry rules.
+Actual CLI/MCP conformance uses the official SDK; other hosts need their own
+shell/custom-MCP and file-delivery trial. No remote HTTP MCP transport is included.
 
-Before the command or `mcp`, add these global arguments:
+## Providers and transfers
+
+Optional local transcription: build `scripts/setup-asr.sh PROVIDER_DIRECTORY`
+with CMake/C/C++. It pins whisper.cpp v1.9.4 at
+`927cfce34f31707e17f2bff35c349632fb9e2c3a` and verifies public tiny.en weights.
+Keep build libraries beside the executable. Global arguments before the command:
 
 ```sh
 --whisper /path/to/providers/whisper/build/bin/whisper-cli \
 --whisper-model /path/to/providers/whisper/models/ggml-tiny.en.bin \
---whisper-model-sha256 921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f
+--whisper-model-sha256 921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f \
+--whisper-language en
 ```
 
-`transcribe-start` queues a source-audio analysis against an exact revision.
-The worker verifies model, program and source hashes, then writes normalized
-source cues. Poll the job and obtain `artifact`; inspect its transcript before
-`transcript-import`. Analysis does not change project history. Matching source
-and provider fingerprints reuse analysis; changing caption style does not
-transcribe again. English generated speech is tested; recognition quality on
-real voices, other models and languages requires review. Imported reviewed
-transcripts work without an ASR provider.
+`transcribe-start` verifies source/model/program, caches normalized source cues
+and leaves editing history unchanged. Review before transcript-import. Model
+language compatibility is operator responsibility; English generated speech is
+qualified. Imported reviewed transcripts require no provider.
 
-## Persistence and restart
+Generic analysis uses optional `--analysis-provider /absolute/executable`.
+The executable receives `--avw-request INPUT.json --avw-result OUTPUT.json`.
+The input contains schemaVersion:1, kind:analysis, task/parameters and an exact
+source path/hash. Output must contain schemaVersion:1, kind:analysis, the same
+sourceSha256 and a data object. Its executable SHA enters frozen/cache identity.
+It runs with child memory/file/time/output limits, process cancellation and
+untrusted-result review. It cannot mutate a project through this contract.
+Configure any remote data transfer/cost within that provider explicitly.
 
-Projects must live on persistent local block storage with working file locks.
-SQLite is the authority; keep the entire project directory and never modify
-its originals. Revision, request hash/outcome and head commit together with
-WAL/FULL sync. JSON exports are snapshots. Same request/key replays its result;
-changed intent needs a new key. Use resume/diff after a revision conflict.
+`--download-host files.example.com` enables direct HTTPS imports for that exact
+host; repeat for legitimate redirect destinations. By default none is enabled.
+URLs may be signed, but embedded username/password are refused. Content length
+and byte/free-space bounds are required. Strong ETags permit range resume;
+changed identity restarts. Sharing HTML pages fail with a precise error. A supplied
+SHA verifies bytes before ingest. Signed URLs do not enter SQLite/portable history.
+Use storage connectors to materialize authenticated original files when necessary.
+`--download-loopback-http` is only for explicit local development fixtures.
 
-`render-start` launches a worker when the host allows detached processes.
-For hosts that reap subprocesses at request completion, use `noLaunch: true`
-and supervise `avw worker PROJECT --idle-seconds 60` in the host's job runner.
-This command drains the queue and exits after the idle timeout; invoke it again
-for later queued work. There is one execution owner per project. A restarted
-worker acquires its OS lock, marks abandoned attempts interrupted, and requires
-explicit job-retry. The logical job ID stays stable and attempts increment.
-Cancellation kills the owned process group and leaves previous finals intact.
-No live process is assumed to survive cloud snapshot publication.
+## Persistence, maintenance and rollback
 
-Import uses a separate owner lock and records copying/verifying/ready/terminal
-stages. The next import reconciles abandoned staged files. The committed
-request outcome is authoritative if a crash occurred between its transaction
-and the final import-stage update. Retry with the original request key and
-bytes. Imports do not overwrite the caller's source.
+Use persistent local block storage with working OS locks. Keep complete projects;
+SQLite is authority and JSON is a derived snapshot. Edits/history/outcomes commit
+with WAL/FULL sync. Retry unchanged requests with the same key; reconsider after
+revision conflicts. Every historical managed original is immutable.
 
-Outputs publish only after full decode, frame/dimension/rate/codec/color/audio
-checks and a synced manifest/contact sheet. Only a succeeded job exposes a
-verified artifact. Artifact reads recheck its hash. Failed or interrupted
-attempt directories can retain diagnostics and scratch; monitor free space
-and manage disposable cache/attempt data during maintenance with workers
-stopped. There is no automatic retention policy in 0.2. Never prune originals
-or the database to reclaim render space.
+Auto-launched workers require a host that retains detached processes. Otherwise
+enqueue with noLaunch:true and supervise `avw worker PROJECT --idle-seconds 60`.
+One owner drains each project's queue. A restarted worker reconciles abandoned
+attempts as interrupted; explicit job-retry creates a fresh attempt with the same
+logical ID. Cancellation kills the owned process group and retains earlier finals.
+Native batch output jobs freeze all revisions atomically and recover independently.
+No live process is assumed to survive a cloud snapshot.
 
-`backup PROJECT NEW_DIRECTORY` snapshots the database and copies every original
-referenced throughout history, verifies bytes and removes the incomplete
-marker only on completion. Open the copied directory to restore. Derived
-artifacts and analysis caches are omitted; copied jobs are unavailable. Before
-upgrading, stop workers and keep a portable backup plus the earlier executable.
-Schema 1–3 upgrades retain a pre-migration database copy. Back up before migration
-and use a separate restored project with the earlier executable for rollback;
-older executables cannot open schema 4.
+Imports and transfers have independent owner locks and managed staging. Query
+request-outcome after an uncertain reply, then retry original intent/key/bytes.
+Strong-ETag partials survive transfer interruption. Do not manually prune managed
+originals or the database to free space.
+
+`cache-gc PROJECT` defaults to dry-run. Enable automatic collection through a
+studio retention edit with enabled:true and graceSeconds (minimum 60); it runs
+when a worker drains. A daily scheduler can also invoke:
+
+```sh
+/path/to/avw maintain /path/to/workspace --grace-seconds 86400 --dry-run false
+```
+
+Inspect deferred-project errors; busy worker/import/transfer/inspection leases
+are retried on a later invocation. Collection retains all originals/history,
+succeeded artifacts, quarantine bytes and recoverable attempts. It removes only
+aged reproducible analysis or terminal scratch. Schedule with the host's job
+runner/cron; the workbench does not assume a privileged system daemon.
+
+`backup PROJECT NEW_DIRECTORY` copies a consistent database and every historical
+original, verifies hashes and seals a manifest. `backup-restore` checks a fresh
+copy. Incomplete bundles refuse open; derived jobs are unavailable and rerun.
+`verify-project` reports missing/corrupt objects; relink requires the exact hash.
+Before upgrading, stop workers, back up and retain the old binary. Schema 1–3
+migrations retain a pre-migration database; schema 4 is unchanged in 0.3. Roll
+back with a separate retained/restored project and compatible old executable.
 
 ## Supported limits
 
-The supported delivery path is SDR H.264/AAC MP4, up to one hour per output and
-4096 pixels per canvas axis. Render encoding uses two threads and one worker
-per project; process logs and analysis requests are bounded. Free-space checks
-are estimates, not reserved capacity. The operator controls workspace disk and
-the number of projects running in parallel. Local ASR accepts up to one hour
-of source audio; inspection analysis accepts at most five minutes per request.
+Rec.709 SDR H.264/AAC MP4; output up to one hour and 4096 pixels per canvas axis;
+one worker per project/two encode threads; per-child 4GiB virtual address space
+and 32GiB output file, bounded logs/deadlines. Free-space checks estimate demand;
+the operator controls host disk and simultaneous projects. ASR sources are at
+most one hour; inspect/frame/proxy/tracking ranges at most five minutes.
 
-PQ/HLG/BT.2020, detected Dolby Vision and nonzero stream starts are rejected
-before an edit commits. Supply an explicitly normalized SDR derivative for
-these inputs and preserve the original separately. Real iPhone color/audio,
-complex camera modes, scripts/fonts beyond the tested font, hosted-bot storage
-and file-delivery behavior remain outside the qualified matrix. The broader
-product milestones remain listed in the backlog.
+PQ/HLG sources retain original HDR bytes and receive an explicit recorded tone
+map before SDR composition. Nonzero starts, audio gaps and SAR/orientation have
+synthetic qualification. Dolby Vision compatible profile 8 base layers are
+recognized; profile 5 has no delivery path. HDR output, unqualified wide/Log
+transforms, other camera modes/scripts/OSs and phone appearance need additional
+qualification. Read [status](implementation-status.md) for the exact evidence.

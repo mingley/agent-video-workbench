@@ -9,7 +9,7 @@ The MVP described here is the first milestone within the expanded
 recordings, B-roll, creator libraries, alternate hooks, review comments,
 multilingual captions, batch delivery and portable workers. The
 [expanded backlog](implementation-backlog.md) defines their dependencies and
-acceptance criteria. The Rust store prototype now provides part of the foundation;
+acceptance criteria. The Rust service now implements the qualified creator foundation;
 see [current status](implementation-status.md).
 
 **Extend AgentCut's Rust libraries in this new application.** Reuse its pure
@@ -70,8 +70,7 @@ Vision profiles get a precise error before edits/rendering. Do not silently
 reinterpret HDR as SDR, and do not claim all camera modes until tested.
 ProRes/Log, Cinematic/depth data, multicam, face tracking, automatic animated
 reframing, complicated motion graphics, music generation, and direct posting
-are later work. The first prototype can reject HDR clearly; the creator MVP
-needs a tested HDR conversion path before “iPhone support” becomes broad.
+remain extension targets, except selected-region CPU tracking and animated crop proposals now implemented in 0.3. The tested HDR-to-SDR path is in the current status; actual phone appearance remains a qualification gate.
 
 The agent chooses content and crop intent. Deterministic software applies it.
 Source transcripts, semantic annotations, crop proposals, and silence results

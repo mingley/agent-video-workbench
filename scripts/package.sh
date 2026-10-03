@@ -41,6 +41,8 @@ metadata=json.load(sys.stdin)
 packages=[{"name":p["name"],"version":p["version"],"license":p["license"],"repository":p["repository"]} for p in metadata["packages"]]
 json.dump(sorted(packages,key=lambda p:(p["name"],p["version"])),sys.stdout,indent=2)
 ' > "$output/avw/dependency-licenses.json"
+mkdir -p "$output/avw/scripts"
+cp scripts/setup-media.sh scripts/setup-asr.sh scripts/install-release.sh "$output/avw/scripts/"
 cp scripts/install-binary.sh "$output/avw/install.sh"
 (cd "$output/avw" && sha256sum bin/avw > SHA256SUMS)
 version=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')

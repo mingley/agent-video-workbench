@@ -1,5 +1,14 @@
 # Hosted agent compatibility and assumptions
 
+October 3, 2026 execution evidence: this Codex cloud workspace runs Debian 13
+x86_64 with persistent `/workspace`, a no-root native binary, FFmpeg/Whisper,
+CLI editing and actual official MCP stdio integration. The expanded trial
+retrieves verified MP4s, analysis and a frozen HTML/sidecar review package, and
+reopens a portable project. Native Ubuntu x86_64/ARM64 CI repeats installed-binary
+workflows. This qualifies that execution route; the consumer account observations
+below remain separate research and do not certify those products.
+
+
 The intended agent is a hosted product, possibly an OpenAI dot, Grok Bot, or
 Meta Muse. None was exercised through an account during this evaluation.
 Official documentation establishes useful capabilities, but it does not

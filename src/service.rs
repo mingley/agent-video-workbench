@@ -589,7 +589,7 @@ impl Service {
             ),
             Request::Schema {} => Ok(serde_json::to_value(schemars::schema_for!(Request))?),
             Request::Capabilities {} => Ok(
-                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"SDR H.264/AAC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"PQ/HLG tone mapped per source to Rec.709; Dolby Vision compatible profile 8 base layer only","asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
+                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"SDR H.264/AAC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"PQ/HLG tone mapped per source to Rec.709; Dolby Vision compatible profile 8 base layer only","asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"analysisProviderConfigured":self.provider.is_some(),"renderAnimation":"opacity; linear/step position and constant-viewport crop; other channels refused", "downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
             ),
             Request::AgentGuide {} => Ok(json!({"guide":include_str!("../AGENT_GUIDE.md")})),
             Request::Doctor {} => doctor(&self.backend),
@@ -1102,6 +1102,29 @@ fn doctor(backend: &FfmpegBackend) -> Result<Value> {
         Duration::from_secs(10),
         &mut crate::process::Uncontrolled,
     )?;
+    let filters = crate::process::run(
+        Command::new(backend.ffmpeg_path()).args(["-filters"]),
+        Duration::from_secs(10),
+        &mut crate::process::Uncontrolled,
+    )?;
+    let filters = String::from_utf8_lossy(&filters.stdout);
+    for required in [
+        "drawtext",
+        "zscale",
+        "tonemap",
+        "loudnorm",
+        "sidechaincompress",
+        "afade",
+    ] {
+        if !filters
+            .lines()
+            .any(|line| line.split_whitespace().nth(1) == Some(required))
+        {
+            return Err(Error::Invalid(format!(
+                "configured FFmpeg lacks required filter {required}"
+            )));
+        }
+    }
     let directory = std::env::temp_dir().join(format!("avw-doctor-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir(&directory)?;
     let path = directory.join("test.mp4");
@@ -1142,7 +1165,7 @@ fn doctor(backend: &FfmpegBackend) -> Result<Value> {
             &mut crate::process::Uncontrolled,
         )?;
         Ok(
-            json!({"ready":true,"ffmpeg":String::from_utf8_lossy(&version.stdout).lines().next(),"checks":["ffprobe","H.264/AAC encode","drawtext captions","full output decode"],"optionalGpuRequired":false}),
+            json!({"ready":true,"ffmpeg":String::from_utf8_lossy(&version.stdout).lines().next(),"checks":["ffprobe","H.264/AAC encode","drawtext captions","required HDR/audio filters","full output decode"],"optionalGpuRequired":false}),
         )
     })();
     let _ = std::fs::remove_dir_all(directory);

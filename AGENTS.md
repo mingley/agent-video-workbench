@@ -1,10 +1,10 @@
 # Repository instructions
 
-This repository contains an initial Rust SDR editing prototype, research,
+This repository contains the Rust CLI/MCP editing service, research,
 product specifications and evaluation harnesses. Read DEVELOPMENT.md for the
-verified prototype scope, then README.md, docs/implementation-status.md,
-docs/decision.md and docs/product-plan.md before implementation. Real phone/host
-acceptance and most broader capabilities remain open. A later user request can
+verified release scope, then README.md, docs/implementation-status.md,
+docs/decision.md and docs/product-plan.md before implementation. Real phone appearance, additional operating systems and account-specific host
+acceptance remain separate qualification gates. A later user request can
 change scope.
 
 - Use Rust for application logic, project state, interfaces, and job execution.

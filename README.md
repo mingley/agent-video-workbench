@@ -1,58 +1,64 @@
 # Agent Video Workbench
 
-A Rust video tool for an external agent. It owns original media, editable
-projects, revision history, analysis, background jobs and verified exports.
-The agent owns conversation, content choices and file delivery. A GUI and a
-proprietary model service are unnecessary.
+A Rust video tool for an external agent, available through CLI JSON and MCP
+stdio. It owns immutable originals, editable projects, revision history,
+analysis, persistent jobs and verified delivery. The agent chooses content and
+uses its host's file tools to deliver results.
 
-**Version 0.2: local Linux CLI and MCP service, October 3, 2026.** Import footage,
-inspect source frames/scenes/silence, import a reviewed transcript or run local
-Whisper, compose independent named captioned shorts, render in the background,
-revise after restarting, and reopen portable backups. SQLite commits edits,
-history and retry outcomes together. Render workers support cancellation,
-crash recovery and retries; completed exports include technical QC, source
-snapshots and contact sheets.
+**Version 0.3: Linux x86_64 and ARM64, October 3, 2026.** Import local or
+resumable HTTPS originals, convert PQ/HLG HDR to Rec.709 SDR, inspect source
+frames/PTS/scenes/silence, transcribe locally, and compose captioned shorts.
+Revise with selective source restoration, saved profiles/templates, B-roll,
+independent format/language variants, audio ducking/loudness, reversible grades
+and editable tracked crops. Freeze a batch and deliver MP4s, SRT/VTT, covers,
+contact sheets and a local HTML review bundle. Catalog, retention, verified
+backup/restore, relinking and supported-cut OpenTimelineIO interchange are included.
 
 Start with [installation and MCP connection](docs/deployment.md) and the
-[agent workflow](AGENT_GUIDE.md). The native installer needs no Rust compiler,
-Node, GUI or root. Building from source uses latest stable Rust:
+[agent workflow](AGENT_GUIDE.md). Download checksum-verified binaries from
+[releases](https://github.com/mingley/agent-video-workbench/releases).
+The native binary installer needs no Rust compiler, Node, GUI or root:
 
 ```sh
-cargo build --release --locked
-./target/release/avw --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe doctor
-./target/release/avw create ../avw-project --name "First short"
-./target/release/avw agent-guide
+scripts/install-release.sh /path/to/new-bin 0.3.0
+scripts/setup-media.sh /path/to/tools
+/path/to/new-bin/avw --ffmpeg /path/to/tools/ffmpeg8/linux/ffmpeg \
+  --ffprobe /path/to/tools/ffmpeg8/linux/ffprobe doctor
+/path/to/new-bin/avw create /path/to/project --name "First short"
+/path/to/new-bin/avw agent-guide
 ```
 
-Use FFmpeg/ffprobe 8 with libx264/AAC and an imported licensed TTF font.
-`scripts/setup-media.sh TOOL_DIRECTORY` prepares the qualified Linux backend.
-Optional `scripts/setup-asr.sh PROVIDER_DIRECTORY` installs pinned local English
-Whisper with checksum-verified weights. Paths, transcripts, jobs and exports
-are available through the same typed CLI/JSON and MCP operations.
+Building uses latest stable Rust, rustfmt and strict Clippy. Runtime uses FFmpeg
+8 with the required caption/HDR/audio filters and an imported licensed TTF font.
+Optional `scripts/setup-asr.sh PROVIDER_DIRECTORY` prepares pinned whisper.cpp
+and checksum-verified English weights. Other analysis providers use an explicit
+versioned process contract. No proprietary model account is required.
 
-The qualified route is Debian 13 x86_64 and local persistent storage, delivering
-SDR H.264/AAC. Tests cover real CLI/worker processes, the official MCP client,
-generated H.264/HEVC/VFR and four rotations, local ASR, backup recovery, and
-bounded editing of a one-hour fixture. HDR and nonzero stream starts are
-rejected. Real phone footage/appearance and hosted-bot delivery still need
-qualification; the full creator product roadmap remains in progress. Read the
-[acceptance matrix](docs/implementation-status.md) for precise evidence and limits.
+SQLite commits edits, history and retry outcomes together. Workers freeze input
+revisions, fence ownership, bound child memory/files/logs, and support cancellation,
+crash recovery and retries. Exports publish only after full decode and technical
+QC. Originals and historical references survive cache collection.
+
+The [acceptance matrix](docs/implementation-status.md) records actual generated
+media, official MCP SDK, native CI, local ASR, short 4K/60fps and one-hour-source
+tests. Delivery is SDR H.264/AAC. Real phone appearance and additional scripts,
+camera profiles, operating systems and hosted agent products need their own
+qualification; the tool reports unsupported rendering paths explicitly.
 
 | Document | Purpose |
 | --- | --- |
-| [Agent guide](AGENT_GUIDE.md) | Requests, source cues, named outputs, revision conflicts and jobs |
-| [Deployment](docs/deployment.md) | Native installation, MCP configuration, storage, restart and upgrade |
-| [Development](DEVELOPMENT.md) | Latest stable Rust, strict Clippy, generated schema and functional checks |
-| [Implementation status](docs/implementation-status.md) | Implemented contracts, acceptance evidence and remaining scope |
-| [Product plan](docs/product-plan.md) | Creator workflows and longer-term milestones |
-| [Backlog](docs/implementation-backlog.md) | Remaining epics and acceptance criteria |
-| [Architecture](docs/architecture.md) | Rust boundaries, exact time and durable state design |
-| [Foundation decision](docs/decision.md) | Why the pinned MIT AgentCut core/render libraries were selected |
-| [Research](docs/research.md) | Historical candidate source audit and evaluation |
-| [Evaluation](evaluation/README.md) | Application checks and the separate candidate harness |
-| [Service schema](specs/schemas/service-request.schema.json) | Generated request envelope shared by CLI and MCP |
+| [Agent guide](AGENT_GUIDE.md) | Source-based edits, profiles, analysis, revisions and delivery |
+| [Deployment](docs/deployment.md) | Published installation, MCP, providers, storage and maintenance |
+| [Development](DEVELOPMENT.md) | Latest stable Rust, strict checks and functional qualification |
+| [Implementation status](docs/implementation-status.md) | Executed evidence and precise support limits |
+| [Product plan](docs/product-plan.md) | Broader creator milestones |
+| [Backlog](docs/implementation-backlog.md) | Feature completion and remaining qualification gates |
+| [Architecture](docs/architecture.md) | Rust boundaries, exact time and durable state |
+| [Foundation decision](docs/decision.md) | Pinned MIT AgentCut libraries |
+| [Evaluation](evaluation/README.md) | Current checks and historical candidate comparison |
+| [Service schema](specs/schemas/service-request.schema.json) | Generated CLI/MCP request envelope |
 
-The application's AgentCut dependency is commit-pinned; its best-effort journal
-is not used as project authority. Software here is MIT licensed. FFmpeg, fonts,
-models and agent hosts retain their own licenses and operating costs. Never
-commit private footage, credentials or model weights.
+The commit-pinned AgentCut journal is not used as project authority. Software
+here is MIT licensed. FFmpeg, fonts, models and agent hosts retain their own
+licenses and operating costs. Keep private footage, credentials and model
+weights outside Git.

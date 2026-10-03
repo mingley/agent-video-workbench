@@ -1,4 +1,4 @@
-# Develop Agent Video Workbench 0.2
+# Develop Agent Video Workbench 0.3
 
 The Rust application provides durable local projects, a typed CLI/JSON API,
 MCP stdio, source inspection, optional local transcription, captioned named
@@ -12,7 +12,7 @@ MCP configuration and restart behavior. The qualified scope is in
 Use latest stable Rust (`rustup update stable`); the manifest currently requires
 Rust 1.99+. The stable toolchain file includes rustfmt and Clippy. A C compiler
 builds bundled SQLite. Runtime needs FFmpeg/ffprobe 8 with libx264, AAC and
-caption filters, plus an imported, licensed TTF font. Linux x86_64 on persistent
+caption filters, plus an imported, licensed TTF font. Linux x86_64/ARM64 on persistent
 local block storage is the qualified route. No GUI, GPU, Node or model service
 is needed to run the binary.
 
@@ -104,10 +104,23 @@ license declarations, compiler/platform/commit manifest and SHA256SUMS. Verify
 and extract the archive; run `avw/install.sh /path/to/new-user-bin`. The installer
 verifies the binary and refuses to overwrite an existing installation. Cargo,
 Node and root are unnecessary on the destination host. The bundle excludes
-FFmpeg, fonts and models. Only the native Debian 13 x86_64 build has been
-installed and exercised here; other platform builds need qualification.
+FFmpeg, fonts and models. Native Ubuntu x86_64/ARM64 bundles are installed and exercised by CI; Debian 13 x86_64 also runs locally. Other OS builds need implementation and qualification.
 
-CI runs the Rust/schema, generated application, worker, media and official MCP
-checks, then retains the native bundle. Local ASR and one-hour measurements
+CI runs native x86_64/ARM64 Rust/schema, application, worker, media, studio, audio, transfer, analysis, timeline, short 4K and official MCP checks, then retains each native bundle. Local ASR and one-hour measurements
 are separate release qualification checks. Product roadmaps and historical
 candidate results describe additional work; they are not runtime contracts.
+
+## Expanded creator and analysis qualification
+
+The same release-binary/backend arguments and fresh `--output` directories apply
+to `evaluation/studio_smoke.py` (also `--font`), `audio_smoke.py`,
+`transfer_smoke.py`, `analysis_smoke.py`, `timeline_smoke.py` and
+`highres_smoke.py` (also `--font`). These exercise selective restore/reanalysis,
+profiles/templates/libraries, three formats/language variants, frozen delivery,
+review remapping, hash repair/backup/OTIO, measured ducking/fades/J/L cuts,
+resumable scoped transfers, PTS/proxies/tracker/provider contracts and short
+4K/60fps-to-full-HD rendering. Inspect summary.json and actual generated frames.
+Transfer tests explicitly enable local development HTTP; production configuration
+requires HTTPS and operator-approved hosts. Analysis provider fixtures are generated
+executables and do not supply a semantic model. Local model/hour checks remain
+separate from native CI; do not claim arbitrary camera/language/host support.

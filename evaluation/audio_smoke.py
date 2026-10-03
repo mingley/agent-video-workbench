@@ -74,9 +74,18 @@ def main():
     call('restore', project=str(project), revision=3, expectedRevision=4, key='undo-duck')
     undo = call('render', project=str(project))
     assert abs(amplitude(undo['path'], 1.5, 880) / music_before - 1) < 0.01
+    p = call('status', project=str(project))
+    call('apply', project=str(project), batch={'schemaVersion':'1.0.0','projectId':p['projectId'],
+         'baseRevision':p['revision'],'idempotencyKey':'fade-music-effect','operations':[
+         {'id':'fade','op':'effect.add','target':'music_clip','params':{'id':'fade','effect':'audio.fade',
+          'params':{'inSeconds':1,'outSeconds':1}}}]})
+    faded = call('render', project=str(project))
+    assert amplitude(faded['path'], 0.1, 880)/amplitude(before['path'], 0.1, 880)<.5
+    assert .9<amplitude(faded['path'], 1.5, 880)/music_before<1.1
+    assert amplitude(faded['path'], 3.4, 880)/amplitude(before['path'], 3.4, 880)<.5
     summary = {'passed': True, 'musicAttenuationDb': attenuation,
                'speechAmplitudeRatio': speech_after / speech_before,
-               'checks': ['real sidechain attenuation during speech', 'music retained in silence',
+               'checks': ['real sidechain attenuation during speech', 'effect-based in/out fades', 'music retained in silence',
                           'dialogue amplitude/timing retained', 'history restores unprocessed mix']}
     (root / 'summary.json').write_text(json.dumps(summary, indent=2))
     print('Audio passed:', root / 'summary.json')

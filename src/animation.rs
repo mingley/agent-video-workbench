@@ -48,6 +48,15 @@ pub fn validate(project: &Project, sequence: &str) -> Result<()> {
     if selected
         .tracks
         .iter()
+        .any(|t| t.effects.iter().any(|e| e.enabled))
+    {
+        return Err(invalid(
+            "track effects require explicit item effects or an audio bus; this compiler does not apply track effects",
+        ));
+    }
+    if selected
+        .tracks
+        .iter()
         .flat_map(|t| &t.effects)
         .chain(selected.buses.iter().flat_map(|b| &b.effects))
         .any(|e| !e.keyframes.is_empty())
@@ -78,12 +87,16 @@ pub fn validate(project: &Project, sequence: &str) -> Result<()> {
                 )));
             }
         }
-        if item.effects.iter().any(|e| !e.keyframes.is_empty()) {
+        if item
+            .effects
+            .iter()
+            .any(|e| e.enabled && !e.keyframes.is_empty())
+        {
             return Err(invalid(
                 "effect parameter animation is outside the supported renderer",
             ));
         }
-        for effect in &item.effects {
+        for effect in item.effects.iter().filter(|e| e.enabled) {
             if effect.capability == "video.color.basic"
                 && ["temperature", "tint", "highlights", "shadows"]
                     .iter()

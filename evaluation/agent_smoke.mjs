@@ -75,8 +75,34 @@ try {
  finalRevision=removed.revision;
  await call({command:'resume',project:'project'});await call({command:'history',project:'project',limit:2});
  const escape=await call({command:'status',project:'../outside'},true);if(escape.ok!==false)throw new Error('workspace escape accepted');
+ // Qualify the expanded request schema through the actual official MCP client.
+ let outcome=await call({command:'studio',project:'project',expectedRevision:finalRevision,key:'mcp-save-profile',edit:{action:'profile-put',profile:{id:'brand',version:1,fontAssetId:'font',fontSize:24,color:'#FFFFFFFF',fit:'cover'}}});
+ finalRevision=outcome.revision;
+ outcome=await call({command:'studio',project:'project',expectedRevision:finalRevision,key:'mcp-use-profile',edit:{action:'profile-apply',sequence:'product_demo',profileId:'brand',version:1}});
+ finalRevision=outcome.revision;
+ outcome=await call({command:'studio',project:'project',expectedRevision:finalRevision,key:'mcp-square-variant',edit:{action:'variant',sourceRevision:finalRevision,sequence:'product_demo',id:'square',name:'Square',width:360,height:360}});
+ finalRevision=outcome.revision;
+ const decisions=await call({command:'studio-state',project:'project',prefix:'avw.profile.',limit:2});
+ if(!decisions.decisions['avw.profile.brand.1'])throw new Error('profile discovery missing');
+ const frozen=finalRevision;
+ const batch=await call({command:'batch-start',project:'project',sequences:['product_demo','square'],expectedRevision:frozen,key:'mcp-batch-delivery',noLaunch:true});
+ // Later edits must not change the frozen delivery inputs.
+ p=await state();outcome=await call({command:'apply',project:'project',batch:{schemaVersion:'1.0.0',projectId:p.projectId,baseRevision:finalRevision,idempotencyKey:'mcp-after-batch',operations:[{id:'rename',op:'project.rename',params:{name:'After queued delivery'}}]}});
+ finalRevision=outcome.revision;
+ const worker=spawnSync(avw,['worker',path.join(root,'project')],{encoding:'utf8'});if(worker.status!==0)throw new Error(worker.stderr);
+ let batchStatus;for(let i=0;i<240;i++){batchStatus=await call({command:'batch-status',project:'project',id:batch.id});if(batchStatus.complete)break;await new Promise(resolve=>setTimeout(resolve,250));}
+ if(!batchStatus.complete||batchStatus.succeeded!==2||batchStatus.items.some(j=>j.revision!==frozen))throw new Error(JSON.stringify(batchStatus));
+ await call({command:'delivery',project:'project',id:batch.id,destination:'review-set'});
+ if(!fs.existsSync(path.join(root,'review-set','index.html')))throw new Error('delivery bundle missing');
+ const index=await call({command:'analyze-start',project:'project',expectedRevision:finalRevision,key:'mcp-source-index',noLaunch:true,task:{kind:'frame-index',assetId:'phone',startMs:1000,endMs:2000}});
+ const analysisWorker=spawnSync(avw,['worker',path.join(root,'project')],{encoding:'utf8'});if(analysisWorker.status!==0)throw new Error(analysisWorker.stderr);
+ let indexed;for(let i=0;i<240;i++){indexed=await call({command:'job-status',project:'project',id:index.id});if(['succeeded','failed','cancelled'].includes(indexed.state))break;await new Promise(resolve=>setTimeout(resolve,250));}if(indexed.state!=='succeeded')throw new Error(JSON.stringify(indexed));
+ const indexArtifact=await call({command:'artifact',project:'project',id:index.id});
+ if(JSON.parse(fs.readFileSync(indexArtifact.path,'utf8')).data.frames.length!==30)throw new Error('MCP original PTS index wrong');
+ await call({command:'verify-project',project:'project'});
+ await call({command:'maintain',workspace:'.',dryRun:true});
  await call({command:'backup',project:'project',destination:'backup'});
  const reopened=await call({command:'status',project:'backup'});if(reopened.revision!==finalRevision)throw new Error('backup lost revision');
- fs.writeFileSync(path.join(root,'summary.json'),JSON.stringify({passed:true,officialMcpSdk:true,cliMcpOutcomeEquivalent:true,transcriptMappedCaptions:true,independentNamedOutputs:3,defaultHdCanvasTested:true,cacheReused:true,decodedFrames:180,jobId:job.id,artifact:artifact.path},null,2));
+ fs.writeFileSync(path.join(root,'summary.json'),JSON.stringify({passed:true,officialMcpSdk:true,cliMcpOutcomeEquivalent:true,transcriptMappedCaptions:true,independentNamedOutputs:4,defaultHdCanvasTested:true,frozenBatchDelivery:true,expandedSchemaAndAnalysis:true,cacheReused:true,decodedFrames:180,jobId:job.id,artifact:artifact.path},null,2));
  console.log('Agent interface smoke passed:',path.join(root,'summary.json'));
 } finally {await client.close();}

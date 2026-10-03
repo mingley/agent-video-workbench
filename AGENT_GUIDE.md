@@ -1,61 +1,103 @@
 # Agent workflow
 
-Call `agent-guide` and `capabilities` first. The JSON request API and the MCP
-`avw` tool share one schema returned by `schema`. Paths in MCP are restricted
-to the configured workspace. Put source media and projects inside that root.
-Never infer success from a process ID; inspect the JSON envelope and job state.
+Read `agent-guide`, `capabilities` and `schema` first. CLI JSON and the MCP `avw`
+tool share the generated typed schema. `avw request FILE|-` accepts every
+operation, including those without a named CLI alias. MCP paths resolve inside
+its existing workspace root. Keep sources, projects and delivery destinations
+there. Inspect JSON `ok` and job states; a PID is not completion.
 
-1. `create`: choose a new project directory and name.
-2. `import`: import a source and a licensed TTF font with stable caller IDs.
-   Each mutation supplies the current `expectedRevision` and a unique `key`.
-3. Optionally `transcribe-start`: queue local ASR if configured, poll the job,
-   and read its transcript artifact. Review machine text; analysis does not
-   change history. `transcript-import` attaches reviewed cues with IDs, startMs,
-   endMs and literal text, plus assetId/language/provider. `transcript-search`
-   finds source cues. `inspect` offers metadata, source frames, silence and scene
-   evidence. Suggestions do not cut automatically.
-4. `compose`: provide outputId/name/fontAssetId and an ordered cuts array
-   (id, assetId, startMs, endMs). Defaults are 1080x1920, 30 fps and font size 48.
-   Imported transcript cues intersecting retained ranges become captions.
-   A cue split by a cut may need text review. Each output has independent IDs.
-   Captions use a dark stroke and wrap within 80% canvas width, at most three
-   lines. If overflow is rejected, split the source cue or reduce fontSize.
-5. `render-start`: name the sequence, expectedRevision and key; save the job ID.
-   It launches a local worker where process lifetime allows. Poll `job-status`
-   until succeeded, failed, cancelled or interrupted. Verification is a separate
-   phase; encoding completion alone does not establish success.
-6. `artifact`: use the succeeded job ID to get the verified MP4 or sheet path,
-   MIME type, content hash and revision. Review the actual output and deliver it
-   using the agent host's file tools. No media bytes are embedded in JSON.
-7. On resume, `resume` shows outputs, sources, protection, recent edits and jobs.
-   Read `history`, `diff`, `transcript-search` or `request-outcome` before editing.
-   `apply` accepts the pinned typed batch format and supported operation names.
-   `restore` appends an old snapshot as a new revision; redo restores the prior
-   edited revision. Protected source coverage remains enforced on restores. `protect` adds an
-   exact source-coverage requirement; `unprotect` removes it explicitly in an
-   audited revision.
-8. `backup` creates a portable project with all historical original bytes.
-   Open and render that copied directory to restore editing. Derived artifacts
-   are omitted and copied job records are labeled unavailable.
+1. Create a project and import original media and a licensed TTF font with stable
+   IDs. Mutations use current `expectedRevision` and a unique key of 8–200 bytes.
+   `import-url` accepts direct HTTPS objects only on configured download hosts;
+   unchanged strong ETags allow interrupted transfers to resume. Signed URLs
+   are transient and do not enter project history. Import does not change originals.
+2. Inspect metadata, source frames, scenes and silence. `analyze-start` queues a
+   `frame-index`, `proxy`, `track` or configured `provider` task. Requests identify
+   `assetId`; frame/proxy/tracking ranges are at most five minutes. Frame indexes
+   retain original PTS; proxies are previews with explicit source maps. Analysis
+   returns evidence and never edits history. Poll and retrieve its verified artifact.
+3. Optionally queue `transcribe-start` when local Whisper is configured. Review
+   machine text before `transcript-import`. Cues contain ID, startMs, endMs and
+   literal text, plus assetId/language/provider. `transcript-search` is bounded.
+   `studio` action `transcript-correct` updates reviewed words and selected bound
+   outputs. New analysis is archived without replacing corrections. Choose a
+   version explicitly with `transcript-select`; unchanged cue IDs/timing preserve
+   corrections. Changed alignment requires explicit review and recomposition.
+4. `compose` takes outputId/name/fontAssetId and ordered cuts with IDs, assetId,
+   startMs/endMs. Defaults: 1080×1920, 30fps, font size 48. Source cues intersect
+   retained ranges to create captions. Cut-boundary text needs review. Captions
+   wrap within 80% width, at most three lines, using owned font metrics and a dark
+   stroke. Corrected, translated and restyled captions reflow; overflow refuses
+   atomically. Bind a font covering every authored character.
+5. Revise with a typed `studio` edit or validated `apply` batch. `describe` shows
+   raw operations and properties; dry-run unfamiliar batches. Profiles and
+   templates have immutable explicit versions. Apply upgrades intentionally;
+   templates bind fresh source slots. `variant` clones a frozen sourceRevision
+   into independent vertical, square or landscape IDs. Language variants require
+   a supplied translation for every caption and preserve original speech.
+6. `omit` records a whole clip and its linked captions, then ripples the timeline.
+   Split partial omissions first. `restore-omission` inserts only that recorded
+   source at atMs, retaining other omissions and later styling. Ripple edits that
+   cross a continuous layer/transition refuse until its relationship is resolved.
+   `layer` and `replace-layer` explicitly keep B-roll/image audio disabled. J/L
+   cuts use independent video and dialogue clips with embedded audio disabled;
+   avoid mixing the same dialogue twice. Exact source protection still applies.
+7. Audio clips/buses expose gain, EQ, compression, limiting and fades. The
+   `audio-duck` studio action names dialogue/music item IDs and sidechain settings.
+   Optional profile loudness/true-peak targets trigger measured two-pass processing
+   and QC. `grade` adds reversible SDR brightness/exposure/contrast/saturation.
+   PQ/HLG inputs receive a recorded per-source tone map before SDR compositing.
+8. `track` analyzes an explicitly selected textured region in upright normalized
+   source coordinates; inspect confidence and held-position findings. It is CPU
+   template matching, not automatic semantic face selection. `reframe-apply`
+   explicitly accepts an editable proposal into crop keyframes. Supported animated
+   geometry is linear/step position and constant-size crop pans, normal blend,
+   without simultaneous transitions. Unsupported channels/effect animation,
+   easing, viewport resizing and basic white-balance parameters refuse delivery.
+9. `render-start` freezes a sequence at expectedRevision and returns a durable job.
+   Priority is -100..100; larger values run first, with stable ties. `batch-start`
+   freezes 1..32 distinct sequences in one transaction. Poll `job-status` or
+   `batch-status`; retry/cancel children independently. Later edits do not change
+   queued snapshots. Encoding is followed by full decode and verification.
+10. `artifact` returns verified path, MIME, SHA-256 and revision; sheet retrieval
+    verifies its hash too. Each render has matching SRT/VTT, cover, indexed sheet
+    and manifest. `delivery` packages a succeeded render or batch into a new
+    directory with verified copied files, manifest and local HTML review page.
+    Failed batch outputs and unresolved feedback are visible. Use host file tools
+    to return the bundle or MP4. Technical QC cannot approve content or appearance.
+11. `review-add` anchors actor/text/time interval to an exact artifact hash and
+    frozen source locations. `reviews` remaps its source point after edits and
+    reports resolved, removed or ambiguous placement. `review-resolve` records
+    addressed/dismissed state; moving an edit does not erase original feedback.
+12. Resume with compact `resume`, paginated history/decisions, diff, job lists and
+    `request-outcome`. `studio-state` supports prefix/offset/limit and summarizes
+    values over 64KiB. `catalog` discovers projects read-only. Portable libraries
+    include profiles/templates and fonts, without footage. OTIO interchange covers
+    normal-speed cut tracks/gaps; inspect loss reports for unsupported features.
+13. `backup` preserves consistent history and every historical original.
+    `backup-restore` opens a verified fresh copy; derived jobs are unavailable and
+    must rerun. `verify-project` reports missing/corrupt objects; `relink` requires
+    the exact retained hash. `cache-gc` defaults to a preview. Opt-in studio
+    `retention` runs after workers drain; `maintain` supports scheduled collection.
+    Busy project leases defer collection. Originals/history/successful artifacts
+    and recoverable attempts remain retained.
 
-Same key and same request replays its committed outcome. Changed intent needs
-another key. On a revision conflict, inspect current state/diff and reconsider
-before submitting another edit. `dryRun` commits no state or success outcome.
-Lost render-start replies replay the logical job. Job retry keeps the job ID and
-increments attempts. Cancellation preserves earlier outputs.
+Same key and same intent replays the committed outcome. Changed intent needs a
+new key. On revision conflicts read current diff and reconsider. Dry-run commits
+no history or success outcome. `restore` appends an old whole snapshot; use
+selective omission restore to retain unrelated later edits. Protected source
+coverage remains enforced; `unprotect` is explicit and audited.
 
-A killed worker leaves a running attempt until the next worker acquires its
-owner lock and marks it interrupted. `avw worker PROJECT` performs that
-reconciliation; retry then starts a new attempt. A foreground worker can be
-supervised by the host. Detached workers are appropriate only when the host
-permits background process lifetime. Imports record copying/verifying/ready/terminal stages; `imports` shows recent
-records. A new import reconciles abandoned staging under its owner lock. Query
-request-outcome and retry the original key after an uncertain import reply.
+A restarted `avw worker PROJECT` acquires its owner lock and marks abandoned
+attempts interrupted. `job-retry` starts a fresh attempt with the same logical
+job. Cancellation kills the owned process group and preserves earlier finals.
+On hosts that reap detached processes, enqueue with noLaunch:true and supervise
+the foreground worker. Keep the complete project on persistent local storage
+with working locks; no live process is assumed to survive cloud snapshots.
 
-Local CLI/MCP is single-user filesystem
-access, not an unauthenticated Internet service.
-
-Supported output is SDR H.264/AAC. HDR is rejected. Sources with complicated
-stream starts, VFR, unusual color, fonts/scripts or real iPhone camera profiles
-require review against the documented input matrix. Never claim semantic,
-caption accuracy or phone appearance from automated technical QC alone.
+The qualified delivery route is Linux x86_64/ARM64, Rec.709 SDR H.264/AAC.
+Compatible Dolby Vision profile 8 base layers are recognized but real camera
+qualification is separate. Profile 5, unqualified wide-color transforms, HDR
+output, complex script shaping and other platforms are outside this release's
+support matrix. Source coverage is a temporal guarantee; inspect crops,
+occlusion, speech, captions and actual appearance before approving a result.
