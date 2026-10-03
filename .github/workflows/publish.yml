@@ -1,0 +1,24 @@
+name: Publish qualified native release
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/release-request.json]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: native-release-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify qualification and download native artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/publish-release.py "$RUNNER_TEMP/native-release"
