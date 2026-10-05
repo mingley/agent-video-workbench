@@ -206,5 +206,86 @@
       "tests/assembly.rs": "5e36fd1fc1984c300acfec33edc580edcd5d84df2550f2d0897d4d65c9e4dca7",
       "evaluation/combined_media_smoke.py": "262d4e964beefd8197b24bc7e838c8cadd1fc2cac2b453ec7fe2243122b4fcd0"
     }
+  },
+  "finalNativeQualification": {
+    "run": 37347469257,
+    "url": "https://github.com/mingley/agent-video-workbench/actions/runs/37347469257",
+    "sourceCommit": "88f9901a288609b823c4d54c20b7695f46837f9c",
+    "status": "completed",
+    "conclusion": "success",
+    "publishedRelease": false,
+    "architectures": [
+      {
+        "arch": "x86_64",
+        "passed": true,
+        "rustTests": 36,
+        "functionalSummaries": 16,
+        "summaryNames": [
+          "agent",
+          "analysis",
+          "application",
+          "audio",
+          "browser",
+          "color-memory",
+          "combined",
+          "highres",
+          "jobs",
+          "matrix",
+          "preserve-agent",
+          "preserve-browser",
+          "source-preserve",
+          "studio",
+          "timeline",
+          "transfer"
+        ],
+        "archiveSha256": "4185f0439994b63e0cabf903390fd4027cf057f20052fcb807fe3036ea94d62e",
+        "binarySha256": "8d0990304fd0c49dbbbe9ddae100c2e310361c04d28f798a2b8427d7d3208ddb",
+        "rust": "rustc 1.99.0 (b940084d7 2026-09-28)",
+        "sourceCommit": "88f9901a288609b823c4d54c20b7695f46837f9c",
+        "browserSuitesTested": true,
+        "taggedP3SdrRefused": true
+      },
+      {
+        "arch": "aarch64",
+        "passed": true,
+        "rustTests": 36,
+        "functionalSummaries": 14,
+        "summaryNames": [
+          "agent",
+          "analysis",
+          "application",
+          "audio",
+          "color-memory",
+          "combined",
+          "highres",
+          "jobs",
+          "matrix",
+          "preserve-agent",
+          "source-preserve",
+          "studio",
+          "timeline",
+          "transfer"
+        ],
+        "archiveSha256": "cd69e52b0ca1d9dc24f6e9102738b7c828696fca3fb6bb85d7901fd1ad1c7a40",
+        "binarySha256": "a87fa3c41fa14a2044166d93d990ed519501a65a7b6ff8f25e9b7f7993fc33ca",
+        "rust": "rustc 1.99.0 (b940084d7 2026-09-28)",
+        "sourceCommit": "88f9901a288609b823c4d54c20b7695f46837f9c",
+        "browserSuitesTested": false,
+        "taggedP3SdrRefused": true
+      }
+    ]
+  },
+  "preparedCloudTrial": {
+    "installedSourceCommit": "88f9901a288609b823c4d54c20b7695f46837f9c",
+    "baselineRenderedSourceCommit": "717b5977fda03b501be89ae75598d4e0cba4a6bc",
+    "passed": true,
+    "documentedCliCalls": 12,
+    "currentOfficialMcpSdkCalls": 6,
+    "baselineFrames": 600,
+    "baselineSeconds": 10,
+    "masterTransfer": "smpte2084",
+    "separateSdrPreviewVerified": true,
+    "browserPlaybackAndSeeking": true,
+    "generatedFixtureOnly": true
   }
 }

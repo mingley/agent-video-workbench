@@ -34,8 +34,19 @@ on x86_64 and 14 on ARM64, including color/memory, preservation and its SDK
 trial. Both browser suites ran on x86_64; neither ran on ARM64. Downloaded
 archives were checked against their checksums, binary hashes, source manifests
 and root/third-party MIT notices. This is qualified CI evidence, not publication.
-The subsequent SDR color-boundary guard adds the 36th Rust test and passed the
-local combined-media regression; its native run is recorded separately.
+The subsequent SDR color-boundary guard adds the 36th Rust test. Its
+[final native run](https://github.com/mingley/agent-video-workbench/actions/runs/37347469257)
+passed at `88f9901a288609b823c4d54c20b7695f46837f9c`, again with 16 x86_64 and
+14 ARM64 summaries. Both downloaded archives passed identity checks, and both
+combined-media summaries explicitly record tagged Display P3 SDR refusal.
+
+The documented baseline workflow also passed from a fresh project using the
+installed 0.4.0 local bundle: 12 CLI calls, a ten-second 600-frame PQ master,
+a separately verified SDR preview and delivery. The updated prepared MCP
+configuration passed six official SDK calls; Chromium played and sought the
+bundle at desktop and phone viewport sizes. These tests use generated footage
+and retain the older demo separately. The current binary is locally built,
+not an updated 0.3.1 public release.
 
 Preservation is plain cuts only; HDR compositing, grades, captions and transitions
 are not implemented. Supported sources are tagged limited-range Rec.709 or
