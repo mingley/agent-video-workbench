@@ -126,11 +126,16 @@ pub fn adapt(
                 // tone mapping the already mixed SDR captions and overlays.
                 *graph = graph.replace(&label, &format!("{label}{filter},"));
             }
-            decisions.push(json!({"assetId":asset.id,"sourceSha256":asset.fingerprint.sha256,"color":capability(asset),"sourceFilters":filter,"orientationAppliedOnce":true}));
+            decisions.push(json!({"assetId":asset.extensions.get("avw.render.sourceAssetId").and_then(Value::as_str).unwrap_or(&asset.id),"inputAssetId":asset.id,"sourceSha256":asset.fingerprint.sha256,"color":capability(asset),"sourceFilters":filter,"orientationAppliedOnce":true}));
         }
         let audio = format!("[{}:a]", index + 1);
         *graph = graph.replace(&audio, &format!("{audio}aresample=async=1:first_pts=0,"));
     }
+    // Overlay defaults to yuv420, even with RGBA inputs. Its implicit RGB/YUV
+    // conversions can use the generated background's matrix rather than the
+    // source's Rec.709 matrix, shifting colors again at every layer. Composite
+    // in RGB and perform the one explicit Rec.709 conversion at delivery.
+    *graph = graph.replace("overlay=x=", "overlay=format=gbrp:x=");
     *graph = graph.replace(
         "setsar=1,format=yuv420p[vout]",
         "setsar=1,format=gbrp,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[vout]",

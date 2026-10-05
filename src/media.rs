@@ -299,7 +299,8 @@ pub(crate) fn render_attempt(
     let staged = directory.join("unverified.mp4");
     crate::animation::validate(project, sequence)?;
     let preset = agentcut_render::preset::require("h264-mp4")?;
-    let (prepared, seeks) = seek_project(project, sequence)?;
+    let instanced = instance_cut_sources(project, sequence)?;
+    let (prepared, seeks) = seek_project(&instanced, sequence)?;
     let prepared = crate::color::geometry(&prepared);
     let mut normalized = agentcut_core::normalize::normalize_sequence(&prepared, sequence)?;
     layout_caption_lines(&mut normalized)?;
@@ -325,7 +326,7 @@ pub(crate) fn render_attempt(
         ));
     }
     let mut plan = agentcut_render::compile::compile(&ir, backend.ffmpeg_path(), &toolchain)?;
-    let color_decisions = crate::color::adapt(&mut plan, project)?;
+    let color_decisions = crate::color::adapt(&mut plan, &instanced)?;
     crate::audio::adapt_fades(&mut plan, &ir)?;
     crate::audio::adapt(&mut plan, &ir, project.require_sequence(sequence)?)?;
     crate::animation::adapt(&mut plan, &ir, &prepared)?;
@@ -350,21 +351,26 @@ pub(crate) fn render_attempt(
         "-filter_complex_threads".into(),
         "2".into(),
     ];
+    let mut media_inputs = plan.inputs.iter().peekable();
     for (index, arg) in plan.args.iter().enumerate() {
         if arg == "-i" {
             let path = plan
                 .args
                 .get(index + 1)
                 .ok_or_else(|| Error::Invalid("input path missing".into()))?;
-            if let Some(input) = plan
-                .inputs
-                .iter()
-                .find(|input| input.path.to_string_lossy() == *path)
-                && let Some(seconds) = seeks.get(&input.asset_id)
+            if media_inputs
+                .peek()
+                .is_some_and(|input| input.path.to_string_lossy() == *path)
             {
-                args.extend(["-ss".into(), seconds.to_string()]);
+                let input = media_inputs.next().expect("peeked input");
+                if let Some(seconds) = seeks.get(&input.asset_id) {
+                    args.extend(["-ss".into(), seconds.to_string()]);
+                }
             }
-            args.push("-noautorotate".into());
+            // Codec options are scoped to the next input. The output-side
+            // thread limit below does not bound decoder frame pools; automatic
+            // decoder threads can exhaust the worker's 4 GiB address space.
+            args.extend(["-threads".into(), "1".into(), "-noautorotate".into()]);
         }
         args.push(arg.clone());
     }
@@ -394,7 +400,7 @@ pub(crate) fn render_attempt(
     plan.plan_hash = format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(
-            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":6,"colorDecisions":color_decisions,"inputSeeksSeconds":seeks})
+            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":9,"colorDecisions":color_decisions,"inputSeeksSeconds":seeks})
         )?)
     );
     std::fs::write(
@@ -445,7 +451,7 @@ pub(crate) fn render_attempt(
         control,
     )?;
     let sheet = contact_sheet(&staged, &directory, backend, plan.frame_count, control)?;
-    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":project,"inputSeeksSeconds":seeks,"colorDecisions":color_decisions,"audioQc":audio_qc,"delivery":delivery,"resourcePolicy":{"childAddressSpaceBytes":4294967296_u64,"childFileBytes":34359738368_u64,"threads":2,"encodeDeadlineSeconds":28800}});
+    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":project,"inputSeeksSeconds":seeks,"colorDecisions":color_decisions,"audioQc":audio_qc,"delivery":delivery,"resourcePolicy":{"childAddressSpaceBytes":4294967296_u64,"childFileBytes":34359738368_u64,"threads":2,"decoderThreadsPerInput":1,"encodeDeadlineSeconds":28800}});
     let mut manifest_file = File::create(directory.join("manifest.json"))?;
     manifest_file.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
     manifest_file.sync_all()?;
@@ -699,6 +705,67 @@ pub fn layout_caption_lines(
     Ok(())
 }
 
+/// Give repeated normal-speed cuts independent decoder clocks. Sharing one
+/// decoder across distant source ranges makes FFmpeg queue full-resolution
+/// frames for earlier branches while a later branch consumes up to its trim.
+/// These aliases exist only in the render preparation; project history and
+/// source identities remain unchanged. Complex transition/nested paths retain
+/// their existing compiler behavior rather than changing handle semantics.
+fn instance_cut_sources(project: &Project, sequence: &str) -> Result<Project> {
+    use agentcut_core::{AssetKind, ItemPayload};
+    let seq = project.require_sequence(sequence)?;
+    if !seq.transitions.is_empty()
+        || seq
+            .tracks
+            .iter()
+            .flat_map(|t| &t.items)
+            .any(|i| matches!(i.payload, ItemPayload::Sequence(_)))
+    {
+        return Ok(project.clone());
+    }
+    let mut counts = std::collections::BTreeMap::new();
+    for item in seq.tracks.iter().flat_map(|t| &t.items) {
+        if let ItemPayload::Clip(clip) = &item.payload {
+            *counts.entry(clip.asset_id.clone()).or_insert(0_usize) += 1;
+        }
+    }
+    let mut prepared = project.clone();
+    let mut assets = Vec::new();
+    let mut next_id = 0;
+    for item in prepared
+        .require_sequence_mut(sequence)?
+        .tracks
+        .iter_mut()
+        .flat_map(|t| &mut t.items)
+    {
+        if let ItemPayload::Clip(clip) = &mut item.payload {
+            let source = project.require_asset(&clip.asset_id)?;
+            if counts.get(&clip.asset_id).copied().unwrap_or(0) < 2
+                || !clip.video.speed.is_normal()
+                || !matches!(source.kind, AssetKind::Video | AssetKind::Audio)
+            {
+                continue;
+            }
+            let id = loop {
+                let id = format!("avw_render_input_{next_id}");
+                next_id += 1;
+                if project.asset(&id).is_none() {
+                    break id;
+                }
+            };
+            let mut asset = source.clone();
+            asset.id = id.clone();
+            asset
+                .extensions
+                .insert("avw.render.sourceAssetId".into(), json!(source.id));
+            clip.asset_id = id;
+            assets.push(asset);
+        }
+    }
+    prepared.assets.extend(assets);
+    Ok(prepared)
+}
+
 fn seek_project(
     project: &Project,
     sequence: &str,
@@ -763,4 +830,90 @@ fn seek_project(
         }
     }
     Ok((prepared, seeks))
+}
+
+#[cfg(test)]
+mod render_input_tests {
+    use super::*;
+    use agentcut_core::{
+        Asset, AssetKind, ClipData, Fingerprint, ItemPayload, MediaMetadata, RationalRate,
+        TimeRange, TimelineItem,
+    };
+
+    #[test]
+    fn repeated_cut_inputs_preserve_source_clocks_and_original_project() {
+        let mut project = Project::new("cuts", 1080, 1920, RationalRate::frames(30).unwrap());
+        let source = Asset {
+            id: "source".into(),
+            kind: AssetKind::Video,
+            uri: "originals/retained".into(),
+            proxy_uri: None,
+            label: "source".into(),
+            fingerprint: Fingerprint::unprobed(),
+            metadata: MediaMetadata::unprobed(),
+            tags: Vec::new(),
+            extensions: Default::default(),
+        };
+        project.assets.push(source.clone());
+        let mut collision = source.clone();
+        collision.id = "avw_render_input_0".into();
+        project.assets.push(collision);
+        for (i, start) in [16900, 6100].into_iter().enumerate() {
+            project.sequences[0].tracks[0].items.push(TimelineItem {
+                id: format!("cut{i}"),
+                name: "cut".into(),
+                enabled: true,
+                start: crate::workflow::time(i as i64 * 3000),
+                duration: crate::workflow::time(3000),
+                linked_group_id: None,
+                payload: ItemPayload::Clip(ClipData::new(
+                    "source",
+                    TimeRange {
+                        start: crate::workflow::time(start),
+                        duration: crate::workflow::time(3000),
+                    },
+                )),
+                effects: Vec::new(),
+                keyframes: Vec::new(),
+                extensions: Default::default(),
+            });
+        }
+        let original = project.clone();
+        let instanced = instance_cut_sources(&project, "seq_main").unwrap();
+        let (prepared, seeks) = seek_project(&instanced, "seq_main").unwrap();
+        assert_eq!(project, original);
+        assert_eq!(prepared.assets.len(), 4);
+        for (before, after) in original.sequences[0].tracks[0]
+            .items
+            .iter()
+            .zip(&prepared.sequences[0].tracks[0].items)
+        {
+            assert_eq!(
+                (before.start, before.duration),
+                (after.start, after.duration)
+            );
+            let (ItemPayload::Clip(old), ItemPayload::Clip(new)) =
+                (&before.payload, &after.payload)
+            else {
+                panic!("expected clips")
+            };
+            assert_ne!(old.asset_id, new.asset_id);
+            let asset = prepared.require_asset(&new.asset_id).unwrap();
+            assert_eq!(asset.uri, source.uri);
+            assert_eq!(asset.fingerprint, source.fingerprint);
+            assert_eq!(asset.extensions["avw.render.sourceAssetId"], "source");
+            let restored = new
+                .source_range
+                .start
+                .checked_add(crate::workflow::time(seeks[&new.asset_id] * 1000))
+                .unwrap();
+            assert!(
+                restored
+                    .checked_cmp(old.source_range.start)
+                    .unwrap()
+                    .is_eq()
+            );
+        }
+        assert_eq!(seeks.values().copied().collect::<Vec<_>>(), vec![16, 6]);
+    }
 }
