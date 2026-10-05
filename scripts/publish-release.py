@@ -40,6 +40,10 @@ def main():
             required.add('combined')
             if arch == 'x86_64':
                 required.add('browser')
+        if tuple(map(int, tag[1:].split('.'))) >= (0, 4, 0):
+            required.update({'color-memory', 'source-preserve', 'preserve-agent'})
+            if arch == 'x86_64':
+                required.add('preserve-browser')
         summaries = {p.parent.name: p for p in native.glob('*/summary.json')}
         if set(summaries) != required or any(
                 json.loads(p.read_text()).get('passed') is not True for p in summaries.values()):

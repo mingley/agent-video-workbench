@@ -1,6 +1,7 @@
 # CLI and MCP interface reference
 
-The published 0.3.1 CLI and MCP stdio server call the same Rust service.
+The 0.4.0 source build's CLI and MCP stdio server call the same Rust service.
+Published 0.3.1 lacks `assemble`, `edit-preflight` and preview retrieval.
 [The first-edit walkthrough](first-edit.md) contains an executable workflow;
 [service-request.schema.json](../specs/schemas/service-request.schema.json)
 is the generated request contract. `avw schema` returns it in `result`.
@@ -16,7 +17,8 @@ envelope to `avw request FILE`, `avw request -`, or the MCP `avw` tool:
 
 CLI aliases have their own arguments: `avw resume project` issues that same
 request. `--help` lists available aliases. Operations such as `import-url` and
-`analyze-start` use the JSON route. A `compose --request FILE` alias expects
+`analyze-start` use the JSON route. `compose --request FILE` and
+`assemble --request FILE` aliases expect
 only the edit object, whereas `request FILE` expects the complete envelope.
 Use [current examples](../examples/requests/README.md) for the latter.
 
@@ -52,13 +54,19 @@ read `resume`/`diff`, reconsider the edit, then submit against the current head.
 
 `dryRun: true` validates without committing history or a success outcome.
 `request-outcome` checks an uncertain committed reply. Imports, transcripts,
-compose, studio edits and raw apply batches advance the editing head. Inspection,
+assemble, compose, studio edits and raw apply batches advance the editing head. Inspection,
 analysis and rendering do not. Render and batch creation still check the supplied
 revision and persist idempotent queue outcomes.
 
 Use stable IDs containing 1–80 ASCII letters, digits, `_` or `-`; keep asset,
 sequence and item IDs distinct. `compose` uses source `startMs`/`endMs` with
-half-open intervals and creates a 30 fps sequence. Raw operations use the
+half-open intervals and creates a 30 fps sequence. `assemble` matches upright
+source dimensions/rate, preserves qualified color by default, adds no captions,
+and retains exact requested source starts with frame-rounded durations. See
+[natural edits](natural-edit.md) for flags, color choices and explicit VFR
+conformance. `edit-preflight` is read-only and reports actual decisions; it
+does not approve the content or guarantee every composition is renderable.
+Raw operations use the
 exact rational time forms described by `describe OPERATION`. A property in
 that registry is not a guarantee that every renderer combination is supported.
 
@@ -102,7 +110,11 @@ larger first. Later edits never change a queued job's frozen revision.
 `artifact` rechecks bytes and returns `path`, `mimeType`, `bytes`, `sha256`,
 `revision` and `verified`. Render results also include the manifest path;
 analysis results have task-specific data/attachments. `sheet: true` verifies
-the render contact sheet.
+the render contact sheet. `preview: true` returns the hash-verified SDR review
+video when a separate one exists; otherwise it returns the SDR master. A
+`role` identifies `master`, `sdr-review-preview` or `contact-sheet`. Combining
+`sheet: true` with `preview: true` refuses. Analysis artifacts do not support
+video-preview retrieval.
 The synchronous `render` alias returns `artifactId`, `path`, `manifest` and
 `revision`; retrieve `artifact` with that ID for the verification/hash response.
 `delivery` packages a succeeded render or batch into a new scoped directory.

@@ -35,6 +35,8 @@ jobs:
           python3 evaluation/job_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --project "$RUNNER_TEMP/application/backup" --output "$RUNNER_TEMP/jobs"
           python3 evaluation/media_matrix.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/matrix"
           python3 evaluation/combined_media_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/combined"
+          python3 evaluation/color_memory_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/color-memory"
+          python3 evaluation/source_preserve_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --large-source "$RUNNER_TEMP/color-memory/hlg.mp4" --output "$RUNNER_TEMP/source-preserve"
           python3 evaluation/studio_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/studio"
           python3 evaluation/audio_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/audio"
           python3 evaluation/transfer_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/transfer"
@@ -49,12 +51,14 @@ jobs:
           "$RUNNER_TEMP/release/avw/install.sh" "$RUNNER_TEMP/bin"
           media="$RUNNER_TEMP/tools/ffmpeg8/linux"
           node evaluation/agent_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf "$RUNNER_TEMP/agent" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+          node evaluation/preserve_agent_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" "$RUNNER_TEMP/source-preserve/pq.mp4" "$RUNNER_TEMP/preserve-agent" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
       - name: Browser playback, seeking and phone layout
         if: matrix.arch == 'x86_64'
         shell: bash
         run: |
           set -euo pipefail
           node evaluation/browser_smoke.mjs "$(command -v google-chrome)" "$RUNNER_TEMP/agent/review-set" "$RUNNER_TEMP/browser" "$PWD/evaluation/node_modules/playwright"
+          node evaluation/browser_smoke.mjs "$(command -v google-chrome)" "$RUNNER_TEMP/preserve-agent/review" "$RUNNER_TEMP/preserve-browser" "$PWD/evaluation/node_modules/playwright"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1, Node 24
         if: always()
         with:
@@ -66,6 +70,10 @@ jobs:
             ${{ runner.temp }}/jobs/summary.json
             ${{ runner.temp }}/matrix/summary.json
             ${{ runner.temp }}/combined/summary.json
+            ${{ runner.temp }}/color-memory/summary.json
+            ${{ runner.temp }}/source-preserve/summary.json
+            ${{ runner.temp }}/preserve-agent/summary.json
+            ${{ runner.temp }}/preserve-browser/summary.json
             ${{ runner.temp }}/browser/summary.json
             ${{ runner.temp }}/agent/summary.json
             ${{ runner.temp }}/studio/summary.json

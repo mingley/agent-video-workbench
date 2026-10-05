@@ -1,6 +1,10 @@
 # Install and connect an agent
 
-Version 0.3.1 is a local single-user Linux CLI and MCP stdio server. It persists
+The published 0.3.1 binary and 0.4.0 source build are local single-user Linux CLI
+and MCP stdio servers. Only 0.4.0 includes source-preserving HDR cuts and verified
+SDR preview retrieval; build main with latest stable Rust using `cargo build
+--release --locked` to try [natural edits](natural-edit.md). The published
+installer below still downloads 0.3.1. The service persists
 projects, originals, revisions, analysis, jobs and verified exports. The agent
 provides editorial decisions and uses its host's file tools for delivery.
 
@@ -34,6 +38,9 @@ not bundled with the application.
 /path/to/avw capabilities
 ```
 
+On 0.4.0, `doctor` also reports `sourcePreservingHdr.ready` after a real 10-bit
+HEVC/PQ encode, tag check, decode and SDR preview transform. Check that result
+for HDR preservation; ordinary SDR readiness does not establish HEVC support.
 `doctor` checks required HDR/audio/caption filters and performs a real H.264/AAC
 captioned encode/full decode. Require JSON ok:true and ready:true. Source builds
 and packaging checks are in [DEVELOPMENT.md](../DEVELOPMENT.md).
@@ -163,7 +170,8 @@ back with a separate retained/restored project and compatible old executable.
 
 ## Supported limits
 
-Rec.709 SDR H.264/AAC MP4; output up to one hour and 4096 pixels per canvas axis;
+Composed Rec.709 SDR H.264/AAC MP4; 0.4.0 plain cuts additionally preserve
+tagged Rec.709 or 10-bit PQ/HLG HEVC. Output up to one hour and 4096 pixels per canvas axis;
 one worker per project/two encode threads; per-child 4GiB virtual address space
 and 32GiB output file, bounded logs/deadlines. Free-space checks estimate demand;
 the operator controls host disk and simultaneous projects. ASR sources are at
@@ -173,8 +181,12 @@ accept at most five-minute intervals.
 PQ/HLG sources retain original HDR bytes and receive an explicit recorded tone
 map before SDR composition. Nonzero starts, audio gaps and SAR/orientation have
 synthetic qualification. Dolby Vision compatible profile 8 base layers are
-recognized; profile 5 has no delivery path. HDR output and unqualified wide/Log
-transforms have no supported delivery path.
+recognized; profile 5 has no delivery path. On 0.4.0, `assemble` can retain the
+qualified HDR base in a 10-bit master; its labelled review video is SDR. HDR
+compositing/grading/captions/transitions and unqualified wide/Log transforms have
+no supported delivery path. Lossless quality describes video encoding; audio
+remains 48kHz stereo AAC. Neither preview playback nor technical QC certifies
+physical HDR appearance.
 Other camera modes/scripts/OSs need implementation or dedicated qualification;
 real phone appearance needs creator review. Read
 [status](implementation-status.md) for the exact evidence.

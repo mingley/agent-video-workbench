@@ -1,6 +1,6 @@
 # Application qualification
 
-The 0.3.1 application checks and exact commands are in
+The 0.4.0 source-preservation and existing application checks and exact commands are in
 [DEVELOPMENT.md](../DEVELOPMENT.md). The current scope and evidence are in
 [implementation status](../docs/implementation-status.md) and
 [0.3.0 baseline qualification](service-results/qualification.json).

@@ -1,4 +1,44 @@
-# Version 0.3.1 implementation and qualification
+# Implementation and qualification
+
+## Source-preserving 0.4.0 on main
+
+October 5, 2026. Main supports source-matched plain edits with `assemble`,
+read-only `edit-preflight`, 10-bit PQ/HLG HEVC masters and independently verified
+SDR review previews. The published 0.3.1 archives below remain unchanged and do
+not contain these features. Follow [natural edits](natural-edit.md) with a 0.4.0
+source build. [Editor research](editor-research.md) records the official editor
+documentation behind the workflow changes.
+
+Local Linux x86_64 validation used Rust 1.99 stable and pinned FFmpeg 8.0.1.
+All 35 Rust tests, formatting, strict Clippy and generated schema checks passed.
+The [machine-readable evidence](../evaluation/service-results/source-preservation.json)
+records generated media separately from published/native CI evidence.
+
+| Check | Observed behavior |
+| --- | --- |
+| `source_preserve_smoke.py` | Exact decoded PQ/HLG 10-bit YUV equality with lossless video, 640 distinct luma levels, retained HDR10 static metadata, 90 frames at 60fps and light/audio bursts at 0.5s/1.25s |
+| High-quality encoding | Generated PQ ramp mean error 0.1381 in 10-bit code values at CRF 16; a controlled fixture, not arbitrary footage quality |
+| Full-HD repeated cuts | 393 decoded 1080×1920 HLG frames from originals under the 4GiB child limit, without a lossy working conversion |
+| SDR/preview integrity | Exact lossless SDR video, explicit PQ→SDR delivery, separate verified previews, corrupted preview rejection while the master remains available |
+| Edit guardrails | Tight cuts, unrequested source reordering and mixed preservation contracts refuse atomically; intent overrides are durable; exact NTSC source starts |
+| `combined_media_smoke.py` | Rotated PQ/VFR, nonzero container start and delayed audio stay aligned after explicit 30fps conformance; existing captioned mixed-color SDR checks pass |
+| `preserve_agent_smoke.mjs` | Official SDK 1.32.0, CLI/MCP replay, dry-run, frozen HDR revision, verified master/preview retrieval, delivery and backup policy reopening |
+| `browser_smoke.mjs` | SDR review playback, seeking and master/sidecar links at desktop/390px/320px Chromium viewports |
+| Existing regressions | Application/history/backup/corruption, media geometry/color matrix and compositing patch comparison pass with the new wrapper |
+
+The 0.4.0 CI configuration also runs color/memory, preservation and its SDK
+trial on x86_64/ARM64. Both browser suites run on x86_64. Configuration is not
+evidence of a completed run; native results are recorded separately.
+
+Preservation is plain cuts only; HDR compositing, grades, captions and transitions
+are not implemented. Supported sources are tagged limited-range Rec.709 or
+10-bit BT.2020 PQ/HLG 4:2:0. Mixed dimensions/color/static metadata require
+separate masters or qualified explicit SDR conversion. Lossless means video
+encoding, not audio, file bytes or cadence/raster changes; audio is 48kHz stereo
+AAC at 256kbps. Physical HDR display matching, real phone samples and Dolby Vision
+dynamic metadata remain unqualified. No user footage was supplied to this run.
+
+## Published 0.3.1 scope and retained evidence
 
 October 3, 2026. This release provides a durable agent-operated Linux CLI/MCP
 workbench. It closes the prior implementation gaps for HDR-to-SDR conversion,
@@ -108,7 +148,7 @@ is a separate product action.
 
 ## Explicit support boundaries
 
-Delivery is **Rec.709 SDR H.264/AAC**, up to one hour per output and 4096 pixels
+Published 0.3.1 delivery is **Rec.709 SDR H.264/AAC**, up to one hour per output and 4096 pixels
 per canvas axis. Linux x86_64 and ARM64 with persistent local filesystem locking
 are qualified. Mac/Windows binaries, arbitrary consumer-agent accounts and
 phone playback/appearance are not certified by these Linux tests.
@@ -117,7 +157,8 @@ Dolby Vision profile 8 with HDR10/HLG compatible base layer is recognized;
 actual Dolby Vision footage is not in the generated qualification matrix.
 Profile 5, unqualified BT.2020 non-PQ/HLG or Log transforms, ProRes/Log/Cinematic
 metadata, HDR-output masters and GPU encoders need additional implementation
-and sample qualification. This release does not advertise those paths.
+and sample qualification in that older release. The 0.4.0 plain-cut preservation
+scope is documented above; HDR composition and advanced color work remain separate.
 
 Basic grade covers brightness/exposure/contrast/saturation; other color parameters
 and unsupported keyframes refuse delivery. Geometry pans require linear/step,

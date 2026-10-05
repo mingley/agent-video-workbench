@@ -1,5 +1,11 @@
 # Current service requests
 
+On a 0.4.0 source build, [assemble.json](assemble.json) is a separate
+[source-preserving baseline](../../docs/natural-edit.md) example for a fresh
+project with only asset `source` at revision 1. It needs a video at least ten
+seconds long and adds no font, transcript, crop or captions. Read preflight
+before rendering. The captioned SDR examples below retain their own revisions.
+
 These are executable **0.3.1** service envelopes for
 [the first-edit walkthrough](../../docs/first-edit.md). They target a fresh
 `project` containing assets `source` and `font`, at revision 2. Use a recording

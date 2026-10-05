@@ -1,6 +1,7 @@
 # Agent workflow
 
-For a runnable trial, follow [the first edit](docs/first-edit.md); response
+Start with [the source-preserving edit](docs/natural-edit.md). For a captioned SDR
+trial, follow [the first edit](docs/first-edit.md); response
 fields are in [the interface reference](docs/agent-api.md).
 Read `agent-guide`, `capabilities` and `schema` first. CLI JSON and the MCP `avw`
 tool share the generated typed schema. `avw request FILE|-` accepts every
@@ -8,12 +9,13 @@ operation, including those without a named CLI alias. MCP paths resolve inside
 its existing workspace root. Keep sources, projects and delivery destinations
 there. Inspect JSON `ok` and job states; a PID is not completion.
 
-1. Create a project and import original media and a licensed TTF font with stable
+1. Create a project and import original media with stable
    IDs distinct across assets, sequences and items. Mutations use current
    `expectedRevision` and a unique key of 8–200 bytes.
    `import-url` accepts direct HTTPS objects only on configured download hosts;
    unchanged strong ETags allow interrupted transfers to resume. Signed URLs
    are transient and do not enter project history. Import does not change originals.
+   Import a licensed TTF font when captions are requested; plain cuts need no font.
 2. Inspect metadata, source frames, scenes and silence. `analyze-start` queues a
    `frame-index`, `proxy`, `track` or configured `provider` task. Requests identify
    `assetId`; frame/proxy/tracking ranges are at most five minutes. Frame indexes
@@ -26,7 +28,24 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    outputs. New analysis is archived without replacing corrections. Choose a
    version explicitly with `transcript-select`; unchanged cue IDs/timing preserve
    corrections. Changed alignment requires explicit review and recomposition.
-4. `compose` takes outputId/name/fontAssetId and ordered cuts with IDs, assetId,
+4. Begin with `assemble`: outputId/name and explicit cuts with IDs, assetId,
+   startMs/endMs. Keep a continuous baseline and original reaction pauses before
+   proposing tighter cuts. Defaults match source dimensions/rate, preserve its
+   qualified color contract, and add no captions, crop, hook or grade. High quality
+   is one CRF-16 master video encode from originals; `quality:lossless` means video
+   encoding only, with 48kHz stereo AAC audio. PQ/HLG masters stay 10-bit HEVC.
+   VFR/mixed rates require explicit frameRate; mixed dimensions/color contracts
+   need separate masters or explicit qualified SDR conversion. Cuts below 500ms,
+   removal of adjacent source gaps below 250ms and source reordering require
+   deliberate allowTightCuts/allowReorder flags. Read `edit-preflight` before
+   rendering: actual source ranges, color/rate/canvas and speech-boundary findings
+   need editorial review. Silence/transcript detection must never automatically
+   justify cutting breaths, reactions or pauses. Compare independent candidates
+   against the retained baseline; change one editorial dimension at a time.
+
+   For requested captions, grading, layers, music or reframing, create a separate
+   `compose` SDR output from the same source cuts. Do not remove the assembly
+   policy to bypass its restrictions. `compose` takes outputId/name/fontAssetId and ordered cuts with IDs, assetId,
    startMs/endMs as half-open intervals relative to the container origin.
    Defaults: 1080×1920, 30fps, font size 48. Source cues intersect
    retained ranges to create captions. Cut-boundary text needs review. Captions
@@ -67,6 +86,10 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
     verifies its hash too. Each render has matching SRT/VTT, cover, indexed sheet
     and manifest. `delivery` packages a succeeded render or batch into a new
     directory with verified copied files, manifest and local HTML review page.
+    HDR/10-bit and lossless masters have a separately verified SDR review video.
+    Use `artifact` with preview:true to retrieve it; otherwise retrieve the master.
+    A normal SDR master is also its preview. The HTML plays the SDR preview and
+    links to the master. Preview color is not an HDR appearance reference.
     The delivery manifest records failed batch outputs and unresolved feedback;
     the HTML presents succeeded videos. Use host file tools
     to return the bundle or MP4. Technical QC cannot approve content or appearance.
@@ -105,9 +128,11 @@ On hosts that reap detached processes, enqueue with noLaunch:true and supervise
 the foreground worker. Keep the complete project on persistent local storage
 with working locks; no live process is assumed to survive cloud snapshots.
 
-The qualified delivery route is Linux x86_64/ARM64, Rec.709 SDR H.264/AAC.
+Linux delivery supports composed Rec.709 SDR H.264/AAC and source-preserving
+plain Rec.709/PQ/HLG cuts. Read the current acceptance matrix for version and
+platform evidence. Review HDR masters on a compatible display against originals.
 Compatible Dolby Vision profile 8 base layers are recognized but real camera
 qualification is separate. Profile 5, unqualified wide-color transforms, HDR
-output, complex script shaping and other platforms are outside this release's
+compositing/grading/captions/transitions, complex script shaping and other platforms are outside this release's
 support matrix. Source coverage is a temporal guarantee; inspect crops,
 occlusion, speech, captions and actual appearance before approving a result.

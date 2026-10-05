@@ -1,0 +1,18 @@
+{
+  "command": "assemble",
+  "project": "project",
+  "expectedRevision": 1,
+  "key": "natural-baseline-assemble",
+  "edit": {
+    "outputId": "natural",
+    "name": "Original timing baseline",
+    "cuts": [
+      {
+        "id": "take",
+        "assetId": "source",
+        "startMs": 0,
+        "endMs": 10000
+      }
+    ]
+  }
+}

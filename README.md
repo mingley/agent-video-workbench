@@ -5,7 +5,16 @@ stdio. It owns immutable originals, editable projects, revision history,
 analysis, persistent jobs and verified delivery. The agent chooses content and
 uses its host's file tools to deliver results.
 
-**Version 0.3.1: Linux x86_64 and ARM64, October 3, 2026.** Import local or
+**Main builds 0.4.0: source-matched cuts and HDR preservation.** Start with
+[`assemble` and edit preflight](docs/natural-edit.md) to retain original framing,
+color and timing without automatic captions or crop. Plain 10-bit PQ/HLG cuts
+export a verified HEVC master and a separate SDR review video. High-quality
+masters use CRF 16; lossless video encoding is optional. See the
+[editor research](docs/editor-research.md) and [tested scope](docs/implementation-status.md).
+Build with latest stable Rust: `cargo build --release --locked`.
+
+**Published 0.3.1: Linux x86_64 and ARM64, October 3, 2026.** This older binary
+does not include the new preserving mode. Import local or
 resumable HTTPS originals, convert PQ/HLG HDR to Rec.709 SDR, inspect source
 frames/PTS/scenes/silence, transcribe locally, and compose captioned shorts.
 Revise with selective source restoration, saved profiles/templates, B-roll,
@@ -15,7 +24,8 @@ contact sheets and a local HTML review bundle. Catalog, retention, verified
 backup/restore, relinking and supported-cut OpenTimelineIO interchange are included.
 
 Start with [installation and MCP connection](docs/deployment.md), then run
-[the first-edit walkthrough](docs/first-edit.md). The
+[the preserving workflow](docs/natural-edit.md) on 0.4.0 or
+[the captioned SDR walkthrough](docs/first-edit.md). The
 [agent workflow](AGENT_GUIDE.md) covers subsequent edits and recovery. Download checksum-verified binaries from
 [releases](https://github.com/mingley/agent-video-workbench/releases).
 From a repository checkout, the native binary installer needs no Rust compiler,
@@ -31,7 +41,8 @@ scripts/setup-media.sh /path/to/tools
 ```
 
 Building uses latest stable Rust, rustfmt and strict Clippy. Runtime uses FFmpeg
-8 with the required caption/HDR/audio filters and an imported licensed TTF font.
+8 with the required caption/HDR/audio filters and libx265 for 10-bit preservation.
+Captioned compositions require an imported licensed TTF font.
 Optional `scripts/setup-asr.sh PROVIDER_DIRECTORY` prepares pinned whisper.cpp
 and checksum-verified English weights. Other analysis providers use an explicit
 versioned process contract. No proprietary model account is required.
@@ -43,13 +54,16 @@ QC. Originals and historical references survive cache collection.
 
 The [acceptance matrix](docs/implementation-status.md) records actual generated
 media, official MCP SDK, native CI, local ASR, short 4K/60fps and one-hour-source
-tests. Delivery is SDR H.264/AAC. Real phone appearance and additional scripts,
+tests. Compositions deliver SDR H.264/AAC; plain source-preserving edits also
+support qualified 10-bit PQ/HLG HEVC. Real phone appearance and additional scripts,
 camera profiles, operating systems and hosted agent products need their own
 qualification; the tool reports unsupported rendering paths explicitly.
 
 | Document | Purpose |
 | --- | --- |
 | [First edit](docs/first-edit.md) | Tested import-to-delivery CLI/MCP walkthrough |
+| [Natural edit](docs/natural-edit.md) | Source-matched HDR/SDR baseline, preflight and review |
+| [Editor research](docs/editor-research.md) | Official editor documentation and applied design choices |
 | [Interface reference](docs/agent-api.md) | Current envelopes, revisions, jobs and verified artifacts |
 | [Agent guide](AGENT_GUIDE.md) | Source-based edits, profiles, analysis, revisions and delivery |
 | [Deployment](docs/deployment.md) | Published installation, MCP, providers, storage and maintenance |

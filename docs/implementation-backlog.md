@@ -1,5 +1,11 @@
 # Implementation completion and remaining qualification
 
+October 5 addition: main's 0.4.0 source build implements plain-cut PQ/HLG
+preservation, source-matched defaults, editorial preflight and separate verified
+SDR previews. [Natural edits](natural-edit.md) and [current evidence](implementation-status.md)
+describe that scope. HDR compositing/grading/captions, real camera/display
+qualification and proprietary dynamic metadata remain extensions.
+
 The former N01–N08 implementation gaps are addressed in the 0.3.1 Linux CLI/MCP
 route. [Implementation status](implementation-status.md) links actual evidence;
 [product plan](product-plan.md) retains the broader M1–M5 acceptance ambitions.
@@ -26,7 +32,7 @@ An implemented feature and camera/host/appearance certification are different ga
 | E17 Long input | Measured one-hour low-resolution late seek and short 4K/60→full-HD render | Cold/warm one-hour 4K real phone and disk/cost measurements |
 | E18 Compatibility | Schema 1–3 migrations/backups, unchanged schema 4, recovery/replay tests and versioned binaries | Repeated creator trials and broader 1.0 compatibility promise |
 | E19 Tracking | Editable selected-region CPU proposals with confidence/occlusion hold; actual animated crop rendering | Face/semantic/multiple-subject ML providers and creator comparison |
-| E20 Color | Versioned HDR→SDR transform, exact color tags/matrix, reversible basic SDR grade | HDR-output masters, white balance/advanced grades and human display approval |
+| E20 Color | Versioned HDR→SDR transform, exact color tags/matrix, reversible basic SDR grade; 0.4.0 plain-cut PQ/HLG masters | HDR compositing, white balance/advanced grades and human display approval |
 | E21 Interchange | OTIO normal-speed cuts/tracks/gaps and SHA binding with explicit loss report/roundtrip | Effects/captions/transitions and qualification with external editor implementations |
 | E22 Providers | Versioned immutable analysis process contract, program/source hashes, cache, malformed-output rejection/cancel | Named real provider integrations and cost/data-transfer policies |
 

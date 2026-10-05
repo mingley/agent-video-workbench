@@ -1,4 +1,4 @@
-# Develop Agent Video Workbench 0.3.1
+# Develop Agent Video Workbench 0.4.0
 
 The Rust application provides durable local projects, a typed CLI/JSON API,
 MCP stdio, source inspection, optional local transcription, captioned named
@@ -12,7 +12,8 @@ MCP configuration and restart behavior. The qualified scope is in
 Use latest stable Rust (`rustup update stable`); the manifest currently requires
 Rust 1.99+. The stable toolchain file includes rustfmt and Clippy. A C compiler
 builds bundled SQLite. Runtime needs FFmpeg/ffprobe 8 with libx264, AAC and
-caption filters, plus an imported, licensed TTF font. Linux x86_64/ARM64 on persistent
+caption filters; source-preserving 10-bit/HDR output also needs libx265. Captions
+need an imported, licensed TTF font. Linux x86_64/ARM64 on persistent
 local block storage is the qualified route. No GUI, GPU, Node or model service
 is needed to run the binary.
 
@@ -58,12 +59,27 @@ python3 evaluation/combined_media_smoke.py \
   --avw "$PWD/target/release/avw" \
   --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe \
   --font /path/to/font.ttf --output /path/to/new-combined-run
+python3 evaluation/color_memory_smoke.py \
+  --avw "$PWD/target/release/avw" \
+  --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe \
+  --font /path/to/font.ttf --output /path/to/new-color-memory-run
+python3 evaluation/source_preserve_smoke.py \
+  --avw "$PWD/target/release/avw" \
+  --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe \
+  --large-source /path/to/new-color-memory-run/hlg.mp4 \
+  --output /path/to/new-preservation-run
 npm ci --ignore-scripts --prefix evaluation
 node evaluation/agent_smoke.mjs "$PWD/target/release/avw" \
   /path/to/ffmpeg /path/to/ffprobe /path/to/font.ttf \
   /path/to/new-agent-run "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
 node evaluation/browser_smoke.mjs /path/to/chromium \
   /path/to/new-agent-run/review-set /path/to/new-browser-run \
+  "$PWD/evaluation/node_modules/playwright"
+node evaluation/preserve_agent_smoke.mjs "$PWD/target/release/avw" \
+  /path/to/ffmpeg /path/to/ffprobe /path/to/new-preservation-run/pq.mp4 \
+  /path/to/new-preserving-agent-run "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+node evaluation/browser_smoke.mjs /path/to/chromium \
+  /path/to/new-preserving-agent-run/review /path/to/new-preserving-browser-run \
   "$PWD/evaluation/node_modules/playwright"
 ```
 
@@ -85,6 +101,13 @@ serves only the chosen review directory on loopback, supports byte ranges and
 tests actual Chromium playback/seeking, caption/manifest links and 1280/390/320px
 layouts. It requires an installed Chromium or Chrome; no browser is needed at
 application runtime. Viewport emulation does not certify iOS Safari or a phone.
+The preservation regression checks exact decoded 10-bit YUV equality for PQ/HLG
+lossless video, 640 distinct luma values, HDR10 static metadata, paired light/audio
+bursts, explicit SDR conversion, lossless SDR video, preview tamper rejection and
+atomic edit refusals. With the optional generated full-HD source, it also verifies
+393 HLG frames under the 4GiB child limit. The preserving SDK trial freezes a
+revision, checks CLI replay and verified master/preview retrieval, delivers the
+bundle and reopens its policy from backup.
 
 Optional local ASR needs CMake and C/C++ to build pinned whisper.cpp v1.9.4.
 `scripts/setup-asr.sh /path/to/providers` verifies source revision and tiny.en
@@ -116,8 +139,8 @@ command ledger. Inspect outputs as well as test exit status.
 
 When an integration token rejects draft creation, use the already authorized
 repository connection to prepare the verified tag and draft, then rerun the
-publisher. Keep verification intact or request another credential before
-testing existing access. The 0.3.1 publication exercised this route: the cloud
+publisher. Keep verification intact. Test existing authorized access before
+requesting another credential. The 0.3.1 publication exercised this route: the cloud
 connection created metadata, and the Actions token verified/uploaded/published
 the seven assets. Existing tags, targets and asset bytes are never overwritten.
 
@@ -155,7 +178,9 @@ version, full source commit, successful native qualification run and notes under
 `docs/releases`. The publication workflow verifies both native jobs, required
 functional summaries and archive/binary/source identities. For 0.3.1 this is
 12 summaries on x86_64 and 11 on ARM64; the browser check is explicitly skipped
-on ARM64. Local ASR and one-hour measurements remain separate. It uploads the exact
+on ARM64. The 0.4.0 pipeline requires 16 summaries on x86_64 and 14 on ARM64,
+including color/memory, preservation and its SDK workflow; both browser suites
+run only on x86_64. Local ASR and one-hour measurements remain separate. It uploads the exact
 qualified assets through Actions, verifies existing asset bytes on retry, and
 refuses to replace different assets or a different target. A published release
 is immutable in this workflow. Run the public installer and official MCP trial

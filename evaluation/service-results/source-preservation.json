@@ -1,0 +1,134 @@
+{
+  "date": "2026-10-05",
+  "version": "avw 0.4.0",
+  "sourceCommit": "b49797a1f91515e711424053acab1b39d853807c",
+  "binarySha256": "6d8a01644e3959f19569d7ebb609fdbd0b202f5ad0a036636452daea264ada00",
+  "provenance": "Local release build of application sources committed as b49797a; not a published archive; prior embedded guide before documentation refinement",
+  "platform": "Linux x86_64",
+  "rust": "1.99.0 stable",
+  "ffmpeg": "8.0.1 pinned CPU backend",
+  "passed": true,
+  "rustChecks": {
+    "tests": 35,
+    "strictClippyAllTargetsAllFeatures": true,
+    "rustfmt": true,
+    "generatedSchema": true
+  },
+  "sourcePreservation": {
+    "passed": true,
+    "scope": "generated native 10-bit cut-only PQ/HLG; no display qualification",
+    "checks": [
+      {
+        "transfer": "smpte2084",
+        "nativePixelEquality": true,
+        "uniqueLumaValues": 640,
+        "frames": 90,
+        "lightBurstStarts": [
+          0.5,
+          1.25
+        ],
+        "audioBurstStarts": [
+          0.5,
+          1.25
+        ],
+        "staticMetadataPreserved": true,
+        "verifiedSdrPreview": true,
+        "sourceUnchanged": true,
+        "revision": 2,
+        "highQualityMeanError10Bit": 0.13805690586419753
+      },
+      {
+        "transfer": "arib-std-b67",
+        "nativePixelEquality": true,
+        "uniqueLumaValues": 640,
+        "frames": 90,
+        "lightBurstStarts": [
+          0.5,
+          1.25
+        ],
+        "audioBurstStarts": [
+          0.5,
+          1.25
+        ],
+        "staticMetadataPreserved": true,
+        "verifiedSdrPreview": true,
+        "sourceUnchanged": true,
+        "revision": 6
+      }
+    ],
+    "fullHdRepeatedCuts": {
+      "frames": 393,
+      "size": [
+        1080,
+        1920
+      ],
+      "transfer": "arib-std-b67",
+      "sourceUnchanged": true,
+      "lossyIntermediate": false,
+      "workerAddressSpaceBytes": 4294967296
+    },
+    "losslessSdrPixelEquality": true,
+    "previewTamperRejected": true,
+    "atomicRefusals": [
+      "mixed transfers",
+      "tight cuts",
+      "unrequested reorder"
+    ]
+  },
+  "combinedSourceClocks": {
+    "decodedFrames": 90,
+    "explicitFrameRate": true,
+    "flashOnsetsSeconds": [
+      0.5,
+      2.0
+    ],
+    "toneOnsetsSeconds": [
+      0.49,
+      1.99
+    ],
+    "maxSyncErrorSeconds": 0.010000000000000009
+  },
+  "colorRegression": {
+    "passed": true,
+    "maxPatchChannelError": 2.57421875,
+    "colorTolerance8Bit": 3,
+    "hdrPreservationQualified": false
+  },
+  "officialMcpSdk": {
+    "version": "1.32.0",
+    "cliMcpReplayEquivalent": true,
+    "frozenHdrRevision": 2,
+    "currentRevision": 3,
+    "sourceUnchanged": true,
+    "backupRetainsPolicy": true,
+    "verifiedPreviewRetrieval": true
+  },
+  "browser": {
+    "version": "151.0.7922.173",
+    "passed": true,
+    "viewports": [
+      {
+        "width": 1280,
+        "height": 900
+      },
+      {
+        "width": 390,
+        "height": 844
+      },
+      {
+        "width": 320,
+        "height": 640
+      }
+    ]
+  },
+  "existingRegressions": {
+    "application": true,
+    "mediaMatrix": true
+  },
+  "limitations": [
+    "Generated fixtures only; original user footage not available",
+    "No physical HDR display, real phone or iOS Safari appearance qualification",
+    "No HDR compositing or proprietary dynamic HDR qualification",
+    "Native CI and published archives are separate evidence"
+  ]
+}
