@@ -112,6 +112,19 @@ pub enum Request {
         expected_revision: u64,
         key: String,
     },
+    Assemble {
+        project: PathBuf,
+        edit: crate::assembly::Assemble,
+        expected_revision: u64,
+        key: String,
+        #[serde(default)]
+        dry_run: bool,
+    },
+    EditPreflight {
+        project: PathBuf,
+        #[serde(default = "sequence")]
+        sequence: String,
+    },
     Compose {
         project: PathBuf,
         edit: workflow::Compose,
@@ -198,6 +211,8 @@ pub enum Request {
         id: String,
         #[serde(default)]
         sheet: bool,
+        #[serde(default)]
+        preview: bool,
     },
     Backup {
         project: PathBuf,
@@ -589,7 +604,7 @@ impl Service {
             ),
             Request::Schema {} => Ok(serde_json::to_value(schemars::schema_for!(Request))?),
             Request::Capabilities {} => Ok(
-                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"SDR H.264/AAC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"PQ/HLG tone mapped per source to Rec.709; Dolby Vision compatible profile 8 base layer only","asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"analysisProviderConfigured":self.provider.is_some(),"renderAnimation":"opacity; linear/step position and constant-viewport crop; other channels refused", "downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
+                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["assemble","edit-preflight","maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"Composed SDR H.264/AAC; source-preserving Rec.709 or 10-bit PQ/HLG HEVC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"assemble color:preserve retains PQ/HLG in 10-bit HEVC; composed outputs tone map to Rec.709; Dolby Vision compatible base layer only","recommendedWorkflow":["inspect","assemble","edit-preflight","render-start","artifact","delivery"],"asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"analysisProviderConfigured":self.provider.is_some(),"renderAnimation":"opacity; linear/step position and constant-viewport crop; other channels refused", "downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
             ),
             Request::AgentGuide {} => Ok(json!({"guide":include_str!("../AGENT_GUIDE.md")})),
             Request::Doctor {} => doctor(&self.backend),
@@ -710,6 +725,30 @@ impl Service {
                     &key,
                 )?,
             )?),
+            Request::Assemble {
+                project,
+                edit,
+                expected_revision,
+                key,
+                dry_run,
+            } => Ok(serde_json::to_value(
+                Store::open(&self.path(&project)?)?.assemble(
+                    &edit,
+                    expected_revision,
+                    &key,
+                    dry_run,
+                )?,
+            )?),
+            Request::EditPreflight { project, sequence } => {
+                let root = self.path(&project)?;
+                let project = crate::preserve::resolve_metadata(
+                    &Store::open(&root)?.project()?,
+                    &root,
+                    &self.backend,
+                    &mut crate::process::Uncontrolled,
+                )?;
+                crate::assembly::preflight(&project, &sequence)
+            }
             Request::Compose {
                 project,
                 edit,
@@ -864,7 +903,15 @@ impl Service {
                     json!({"artifacts":jobs.as_array().ok_or_else(||Error::Invalid("invalid job list".into()))?.iter().filter(|j|j["state"]=="succeeded").map(|j|&j["result"]).collect::<Vec<_>>(),"limit":100}),
                 )
             }
-            Request::Artifact { project, id, sheet } => {
+            Request::Artifact {
+                project,
+                id,
+                sheet,
+                preview,
+            } => {
+                if sheet && preview {
+                    return Err(Error::Invalid("choose either sheet or preview".into()));
+                }
                 let root = self.path(&project)?;
                 let store = Store::open(&root)?;
                 let job = store.job(&id)?;
@@ -875,6 +922,11 @@ impl Service {
                     .result
                     .ok_or_else(|| Error::Invalid("artifact result is missing".into()))?;
                 if result["mimeType"] == "application/json" {
+                    if preview {
+                        return Err(Error::Invalid(
+                            "preview retrieval requires a rendered video".into(),
+                        ));
+                    }
                     let path =
                         self.path(Path::new(result["path"].as_str().ok_or_else(|| {
                             Error::Invalid("transcript artifact path missing".into())
@@ -912,8 +964,12 @@ impl Service {
                     .as_str()
                     .ok_or_else(|| Error::Invalid("artifact manifest is missing".into()))?;
                 let manifest: Value = crate::json::read(&self.path(Path::new(manifest_path))?)?;
+                let separate_preview =
+                    preview && manifest["delivery"]["reviewVideo"] == "review-sdr.mp4";
                 let path = if sheet {
                     Path::new(manifest_path).with_file_name("sheet.png")
+                } else if separate_preview {
+                    Path::new(manifest_path).with_file_name("review-sdr.mp4")
                 } else {
                     PathBuf::from(
                         result["path"]
@@ -925,6 +981,11 @@ impl Service {
                 let hash = media::hash_file(&path)?;
                 if (if sheet {
                     &manifest["contactSheet"]["sha256"]
+                } else if separate_preview {
+                    &manifest["delivery"]["files"]
+                        .as_array()
+                        .and_then(|files| files.iter().find(|f| f["path"] == "review-sdr.mp4"))
+                        .ok_or_else(|| Error::Invalid("preview verification is missing".into()))?["sha256"]
                 } else {
                     &manifest["verification"]["sha256"]
                 }) != &hash
@@ -934,7 +995,7 @@ impl Service {
                     ));
                 }
                 Ok(
-                    json!({"jobId":id,"path":path,"revision":job.revision,"sha256":hash,"bytes":std::fs::metadata(path)?.len(),"mimeType":if sheet{"image/png"}else{"video/mp4"},"verified":true,"manifest":manifest_path}),
+                    json!({"jobId":id,"path":path,"revision":job.revision,"sha256":hash,"bytes":std::fs::metadata(path)?.len(),"mimeType":if sheet{"image/png"}else{"video/mp4"},"verified":true,"manifest":manifest_path,"role":if sheet{"contact-sheet"}else if separate_preview{"sdr-review-preview"}else{"master"}}),
                 )
             }
             Request::Backup {
@@ -1164,8 +1225,12 @@ fn doctor(backend: &FfmpegBackend) -> Result<Value> {
             Duration::from_secs(30),
             &mut crate::process::Uncontrolled,
         )?;
+        let hdr = match crate::preserve::doctor(backend, &directory) {
+            Ok(value) => value,
+            Err(error) => json!({"ready":false,"reason":error.to_string()}),
+        };
         Ok(
-            json!({"ready":true,"ffmpeg":String::from_utf8_lossy(&version.stdout).lines().next(),"checks":["ffprobe","H.264/AAC encode","drawtext captions","required HDR/audio filters","full output decode"],"optionalGpuRequired":false}),
+            json!({"ready":true,"ffmpeg":String::from_utf8_lossy(&version.stdout).lines().next(),"checks":["ffprobe","H.264/AAC encode","drawtext captions","required HDR/audio filters","full output decode"],"sourcePreservingHdr":hdr,"optionalGpuRequired":false}),
         )
     })();
     let _ = std::fs::remove_dir_all(directory);

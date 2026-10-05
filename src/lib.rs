@@ -1,6 +1,7 @@
 pub mod analysis;
 pub mod animation;
 pub mod asr;
+pub mod assembly;
 pub mod audio;
 pub mod color;
 pub mod delivery;
@@ -12,6 +13,7 @@ pub mod library;
 pub mod mcp;
 pub mod media;
 pub mod policy;
+pub mod preserve;
 pub mod process;
 pub mod service;
 pub mod storage;

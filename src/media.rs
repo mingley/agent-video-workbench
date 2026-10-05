@@ -140,6 +140,19 @@ pub fn import(
                 agentcut_render::probe::normalize_probe_json(&raw)?
             }
         };
+        if metadata.video.as_ref().is_some_and(|v| {
+            matches!(
+                v.color_transfer.as_deref(),
+                Some("smpte2084" | "arib-std-b67")
+            )
+        }) {
+            crate::preserve::capture_metadata(
+                backend,
+                &staged,
+                &mut raw_probe,
+                &mut crate::process::Uncontrolled,
+            )?;
+        }
         if let Some(streams) = raw_probe["streams"].as_array() {
             let origin = raw_probe["format"]["start_time"]
                 .as_str()
@@ -294,21 +307,16 @@ pub(crate) fn render_attempt(
     for asset in &project.assets {
         verify_asset_controlled(root, asset, control)?;
     }
+    let snapshot = project;
+    let resolved = crate::preserve::resolve_metadata(project, root, backend, control)?;
+    let project = &resolved;
     let directory = root.join("renders").join(id);
     std::fs::create_dir(&directory)?;
     let staged = directory.join("unverified.mp4");
     crate::animation::validate(project, sequence)?;
-    let preset = agentcut_render::preset::require("h264-mp4")?;
-    let instanced = instance_cut_sources(project, sequence)?;
-    let (prepared, seeks) = seek_project(&instanced, sequence)?;
-    let prepared = crate::color::geometry(&prepared);
-    let mut normalized = agentcut_core::normalize::normalize_sequence(&prepared, sequence)?;
-    layout_caption_lines(&mut normalized)?;
-    let mut ir =
-        agentcut_render::ir::build(&prepared, &normalized, root, preset, &staged, None, false)?;
-    for bus in &mut ir.buses {
-        bus.effects.retain(|e| e.enabled);
-    }
+    let assembled = crate::assembly::policy(project.require_sequence(sequence)?)?.is_some();
+    let contract = crate::preserve::output(project, sequence)?;
+    let preflight = crate::assembly::preflight(project, sequence)?;
     let info = crate::process::run(
         Command::new(backend.ffmpeg_path()).arg("-version"),
         std::time::Duration::from_secs(10),
@@ -319,17 +327,37 @@ pub(crate) fn render_attempt(
         .next()
         .unwrap_or("unknown")
         .to_owned();
-    if ir.warnings.iter().any(|w| w.code == "W_FONT_GLYPH_MISSING") {
-        return Err(Error::Invalid(
-            "caption font lacks required glyphs; bind a font covering every authored character"
-                .into(),
-        ));
-    }
-    let mut plan = agentcut_render::compile::compile(&ir, backend.ffmpeg_path(), &toolchain)?;
-    let color_decisions = crate::color::adapt(&mut plan, &instanced)?;
-    crate::audio::adapt_fades(&mut plan, &ir)?;
-    crate::audio::adapt(&mut plan, &ir, project.require_sequence(sequence)?)?;
-    crate::animation::adapt(&mut plan, &ir, &prepared)?;
+    let (mut plan, seeks, color_decisions) = if assembled {
+        (
+            crate::preserve::plan(project, root, sequence, &staged, backend, toolchain)?,
+            std::collections::BTreeMap::new(),
+            preflight["sources"].clone(),
+        )
+    } else {
+        let preset = agentcut_render::preset::require("h264-mp4")?;
+        let instanced = instance_cut_sources(project, sequence)?;
+        let (prepared, seeks) = seek_project(&instanced, sequence)?;
+        let prepared = crate::color::geometry(&prepared);
+        let mut normalized = agentcut_core::normalize::normalize_sequence(&prepared, sequence)?;
+        layout_caption_lines(&mut normalized)?;
+        let mut ir =
+            agentcut_render::ir::build(&prepared, &normalized, root, preset, &staged, None, false)?;
+        for bus in &mut ir.buses {
+            bus.effects.retain(|e| e.enabled);
+        }
+        if ir.warnings.iter().any(|w| w.code == "W_FONT_GLYPH_MISSING") {
+            return Err(Error::Invalid(
+                "caption font lacks required glyphs; bind a font covering every authored character"
+                    .into(),
+            ));
+        }
+        let mut plan = agentcut_render::compile::compile(&ir, backend.ffmpeg_path(), &toolchain)?;
+        let decisions = crate::color::adapt(&mut plan, &instanced)?;
+        crate::audio::adapt_fades(&mut plan, &ir)?;
+        crate::audio::adapt(&mut plan, &ir, project.require_sequence(sequence)?)?;
+        crate::animation::adapt(&mut plan, &ir, &prepared)?;
+        (plan, seeks, decisions)
+    };
     if plan.duration_seconds > 3600.0 {
         return Err(Error::Invalid(
             "output exceeds the one-hour worker limit".into(),
@@ -378,29 +406,33 @@ pub(crate) fn render_attempt(
         .len()
         .checked_sub(1)
         .ok_or_else(|| Error::Invalid("empty backend plan".into()))?;
-    args.splice(
-        output_index..output_index,
-        [
-            "-threads",
-            "2",
-            "-x264-params",
-            "colorprim=bt709:transfer=bt709:colormatrix=bt709",
-            "-color_primaries",
-            "bt709",
-            "-color_trc",
-            "bt709",
-            "-colorspace",
-            "bt709",
-            "-metadata:s:v:0",
-            "rotate=0",
-        ]
-        .map(String::from),
-    );
+    let mut output_options = vec![
+        "-threads".to_owned(),
+        "2".to_owned(),
+        "-metadata:s:v:0".to_owned(),
+        "rotate=0".to_owned(),
+    ];
+    if !assembled {
+        output_options.extend(
+            [
+                "-x264-params",
+                "colorprim=bt709:transfer=bt709:colormatrix=bt709",
+                "-color_primaries",
+                "bt709",
+                "-color_trc",
+                "bt709",
+                "-colorspace",
+                "bt709",
+            ]
+            .map(String::from),
+        );
+    }
+    args.splice(output_index..output_index, output_options);
     plan.args = args;
     plan.plan_hash = format!(
         "{:x}",
         Sha256::digest(serde_json::to_vec(
-            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":9,"colorDecisions":color_decisions,"inputSeeksSeconds":seeks})
+            &json!({"upstream":plan.plan_hash,"args":plan.args,"adapterVersion":10,"colorDecisions":color_decisions,"inputSeeksSeconds":seeks})
         )?)
     );
     std::fs::write(
@@ -443,15 +475,34 @@ pub(crate) fn render_attempt(
         control,
     )?;
     let final_path = directory.join("video.mp4");
-    let delivery = crate::delivery::extras(
-        &staged,
+    let review = if contract.codec == "hevc"
+        || crate::assembly::policy(project.require_sequence(sequence)?)?
+            .is_some_and(|p| p.quality == crate::assembly::Quality::Lossless)
+    {
+        Some(crate::preserve::review_preview(
+            &staged, &directory, project, sequence, backend, control,
+        )?)
+    } else {
+        None
+    };
+    let review_path = if review.is_some() {
+        directory.join("review-sdr.mp4")
+    } else {
+        staged.clone()
+    };
+    let mut delivery = crate::delivery::extras(
+        &review_path,
         &directory,
         project.require_sequence(sequence)?,
         backend,
         control,
     )?;
-    let sheet = contact_sheet(&staged, &directory, backend, plan.frame_count, control)?;
-    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":project,"inputSeeksSeconds":seeks,"colorDecisions":color_decisions,"audioQc":audio_qc,"delivery":delivery,"resourcePolicy":{"childAddressSpaceBytes":4294967296_u64,"childFileBytes":34359738368_u64,"threads":2,"decoderThreadsPerInput":1,"encodeDeadlineSeconds":28800}});
+    if let Some(verification) = review {
+        delivery["reviewVideo"] = json!("review-sdr.mp4");
+        delivery["files"].as_array_mut().ok_or_else(|| Error::Invalid("delivery files missing".into()))?.push(json!({"path":"review-sdr.mp4","sha256":verification["sha256"],"mimeType":"video/mp4","verification":verification,"role":"SDR review preview; master remains source-preserving"}));
+    }
+    let sheet = contact_sheet(&review_path, &directory, backend, plan.frame_count, control)?;
+    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":snapshot,"inputSeeksSeconds":seeks,"colorDecisions":color_decisions,"audioQc":audio_qc,"delivery":delivery,"outputColor":contract,"editPreflight":preflight,"resourcePolicy":{"childAddressSpaceBytes":4294967296_u64,"childFileBytes":34359738368_u64,"threads":2,"decoderThreadsPerInput":1,"encodeDeadlineSeconds":28800}});
     let mut manifest_file = File::create(directory.join("manifest.json"))?;
     manifest_file.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
     manifest_file.sync_all()?;
@@ -464,7 +515,7 @@ pub(crate) fn render_attempt(
     )
 }
 
-fn verify(
+pub(crate) fn verify(
     path: &Path,
     backend: &FfmpegBackend,
     frames: i64,
@@ -474,7 +525,7 @@ fn verify(
 ) -> Result<Value> {
     crate::process::run(
         Command::new(backend.ffmpeg_path())
-            .args(["-v", "error", "-xerror", "-i"])
+            .args(["-v", "error", "-xerror", "-threads", "1", "-i"])
             .arg(path)
             .args(["-f", "null", "-"]),
         std::time::Duration::from_secs(4 * 3600),
@@ -486,6 +537,8 @@ fn verify(
                 "-v",
                 "error",
                 "-count_frames",
+                "-threads",
+                "1",
                 "-show_streams",
                 "-show_format",
                 "-of",
@@ -495,7 +548,11 @@ fn verify(
         std::time::Duration::from_secs(4 * 3600),
         control,
     )?;
-    let metadata: Value = serde_json::from_slice(&probe.stdout)?;
+    let mut metadata: Value = serde_json::from_slice(&probe.stdout)?;
+    let contract = crate::preserve::output(project, sequence)?;
+    if contract.hdr {
+        crate::preserve::capture_metadata(backend, path, &mut metadata, control)?;
+    }
     let streams = metadata["streams"]
         .as_array()
         .ok_or_else(|| Error::Invalid("no output streams".into()))?;
@@ -519,17 +576,30 @@ fn verify(
         "{}/{}",
         seq.frame_rate.numerator, seq.frame_rate.denominator
     );
-    if video["codec_name"] != "h264"
-        || video["pix_fmt"] != "yuv420p"
+    if video["codec_name"] != contract.codec
+        || video["pix_fmt"] != contract.pixel_format
         || video["avg_frame_rate"] != expected_rate
         || video["sample_aspect_ratio"] != "1:1"
-        || video["color_transfer"] != "bt709"
-        || video["color_primaries"] != "bt709"
-        || video["color_space"] != "bt709"
+        || video["color_transfer"] != contract.transfer
+        || video["color_primaries"] != contract.primaries
+        || video["color_space"] != contract.matrix
+        || video["color_range"] != "tv"
     {
         return Err(Error::Invalid(
-            "output differs from SDR H.264 delivery policy".into(),
+            "output differs from the declared color/codec/bit-depth delivery policy".into(),
         ));
+    }
+    if contract.hdr {
+        let first = crate::assembly::clips(seq)?[0];
+        let agentcut_core::ItemPayload::Clip(clip) = &first.payload else {
+            unreachable!()
+        };
+        let expected = crate::preserve::hdr_metadata(project.require_asset(&clip.asset_id)?)?;
+        if crate::preserve::probe_hdr_metadata(&metadata)? != expected {
+            return Err(Error::Invalid(
+                "HDR mastering metadata differs from the source contract".into(),
+            ));
+        }
     }
     let duration = frames as f64 / seq.frame_rate.as_f64();
     let solo = seq.tracks.iter().any(|t| t.solo && t.enabled);
@@ -581,7 +651,7 @@ fn contact_sheet(
     );
     crate::process::run(
         Command::new(backend.ffmpeg_path())
-            .args(["-v", "error", "-i"])
+            .args(["-v", "error", "-threads", "1", "-i"])
             .arg(path)
             .args(["-vf", &filter, "-frames:v", "1"])
             .arg(directory.join("sheet.png")),

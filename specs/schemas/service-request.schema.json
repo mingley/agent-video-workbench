@@ -1,5 +1,56 @@
 {
   "$defs": {
+    "Assemble": {
+      "additionalProperties": false,
+      "properties": {
+        "allowReorder": {
+          "default": false,
+          "type": "boolean"
+        },
+        "allowTightCuts": {
+          "default": false,
+          "type": "boolean"
+        },
+        "color": {
+          "$ref": "#/$defs/DeliveryColor",
+          "default": "preserve"
+        },
+        "cuts": {
+          "items": {
+            "$ref": "#/$defs/Cut"
+          },
+          "type": "array"
+        },
+        "frameRate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrameRate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit conformance for VFR or mismatched source rates."
+        },
+        "name": {
+          "type": "string"
+        },
+        "outputId": {
+          "type": "string"
+        },
+        "quality": {
+          "$ref": "#/$defs/Quality",
+          "default": "high"
+        }
+      },
+      "required": [
+        "outputId",
+        "name",
+        "cuts"
+      ],
+      "type": "object"
+    },
     "Compose": {
       "additionalProperties": false,
       "properties": {
@@ -96,6 +147,13 @@
         "endMs"
       ],
       "type": "object"
+    },
+    "DeliveryColor": {
+      "enum": [
+        "preserve",
+        "sdr"
+      ],
+      "type": "string"
     },
     "Ducking": {
       "additionalProperties": false,
@@ -649,6 +707,26 @@
         }
       ]
     },
+    "FrameRate": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "numerator": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
     "Kind": {
       "enum": [
         "metadata",
@@ -789,6 +867,13 @@
         "fallback"
       ],
       "type": "object"
+    },
+    "Quality": {
+      "enum": [
+        "high",
+        "lossless"
+      ],
+      "type": "string"
     },
     "Region": {
       "additionalProperties": false,
@@ -1418,6 +1503,62 @@
       "additionalProperties": false,
       "properties": {
         "command": {
+          "const": "assemble",
+          "type": "string"
+        },
+        "dryRun": {
+          "default": false,
+          "type": "boolean"
+        },
+        "edit": {
+          "$ref": "#/$defs/Assemble"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "edit",
+        "expectedRevision",
+        "key"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "edit-preflight",
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "sequence": {
+          "default": "seq_main",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
           "const": "compose",
           "type": "string"
         },
@@ -1781,6 +1922,10 @@
         },
         "id": {
           "type": "string"
+        },
+        "preview": {
+          "default": false,
+          "type": "boolean"
         },
         "project": {
           "type": "string"

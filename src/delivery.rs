@@ -106,7 +106,7 @@ pub fn extras(
     let cover = directory.join("cover.png");
     process::run(
         Command::new(backend.ffmpeg_path())
-            .args(["-nostdin", "-v", "error", "-i"])
+            .args(["-nostdin", "-v", "error", "-threads", "1", "-i"])
             .arg(path)
             .args([
                 "-vf",
@@ -213,7 +213,17 @@ pub fn package(root: &Path, id: &str, destination: &Path) -> Result<Value> {
         std::fs::copy(manifest_path, folder.join("manifest.json"))?;
         File::open(folder.join("manifest.json"))?.sync_all()?;
         // IDs are UUIDs from the queue, not user supplied markup.
-        html.push_str(&format!("<section><video controls width=360 src='{id}/video.mp4'></video><p><a href='{id}/captions.vtt'>Captions</a> · <a href='{id}/manifest.json'>Manifest</a></p></section>"));
+        let preview = if manifest["delivery"]["reviewVideo"] == "review-sdr.mp4" {
+            "review-sdr.mp4"
+        } else {
+            "video.mp4"
+        };
+        let label = if preview == "review-sdr.mp4" {
+            "<p>SDR review preview. Download the source-preserving master for color evaluation on a compatible display.</p>"
+        } else {
+            ""
+        };
+        html.push_str(&format!("<section><video controls width=360 src='{id}/{preview}'></video>{label}<p><a href='{id}/video.mp4'>Master</a> · <a href='{id}/captions.vtt'>Captions</a> · <a href='{id}/manifest.json'>Manifest</a></p></section>"));
         items.push(json!({"jobId":id,"state":"succeeded","revision":item.revision,"sequenceId":manifest["sequenceId"],"files":files,"review":"pending"}));
     }
     html.push_str("</main></body></html>");

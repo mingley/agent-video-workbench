@@ -168,6 +168,48 @@ def main():
          destination=str(root / 'review'))
     verified = call('artifact', project=str(project), id=artifact['artifactId'])
     assert verified['verified'] is True
+    native_edit = {'outputId': 'native_pq', 'name': 'Source-matched PQ with explicit CFR',
+                   'frameRate': {'numerator': 30, 'denominator': 1}, 'quality': 'lossless',
+                   'cuts': [{'id': 'phone', 'assetId': 'pq', 'startMs': 500, 'endMs': 3500}]}
+    # Automatic frame-rate choice must refuse VFR instead of silently changing
+    # timing. Explicit conformance retains source audio and records the finding.
+    auto = dict(native_edit)
+    del auto['frameRate']
+    refused = call('assemble', expected=False, project=str(project),
+                   expectedRevision=state()['revision'], key='native-vfr-needs-intent', edit=auto)
+    assert 'explicit frameRate' in refused['error']['message'], refused
+    call('assemble', project=str(project), expectedRevision=state()['revision'],
+         key='native-vfr-explicit-rate', edit=native_edit)
+    preflight = call('edit-preflight', project=str(project), sequence='native_pq')
+    assert preflight['frameRate']['numerator'] == 30
+    assert any('CFR' in f['finding'] for f in preflight['findings'])
+    native = call('render', project=str(project), sequence='native_pq')
+    native_manifest = json.loads(Path(native['manifest']).read_text())
+    assert native_manifest['verification']['expectedFrames'] == 90
+    assert native_manifest['outputColor']['transfer'] == 'smpte2084'
+    nv = next(s for s in native_manifest['verification']['probe']['streams'] if s['codec_type'] == 'video')
+    assert (nv['width'], nv['height']) == (360, 640) and nv['pix_fmt'] == 'yuv420p10le'
+    tone_map = ('zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,'
+                'tonemap=tonemap=mobius:param=0.3:desat=2:peak=10,'
+                'zscale=t=bt709:m=bt709:r=limited:dither=error_diffusion,format=yuv420p')
+    native_rgb = run([args.ffmpeg, '-v', 'error', '-threads', '1', '-i', native['path'],
+                      '-an', '-vf', tone_map + ',scale=36:64', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'])
+    native_brightness = [sum(native_rgb[i + (32 * 36 + 18) * 3:i + (32 * 36 + 18) * 3 + 3]) / 3
+                         for i in range(0, len(native_rgb), frame_bytes)]
+    native_flashes = [i / 30 for i, v in enumerate(native_brightness)
+                      if v > 150 and (i == 0 or native_brightness[i - 1] <= 150)]
+    native_audio = array('f', run([args.ffmpeg, '-v', 'error', '-threads', '1', '-i', native['path'],
+                                 '-vn', '-ac', '1', '-ar', '48000', '-f', 'f32le', '-']))
+    native_rms = [(sum(v * v for v in native_audio[i:i + 480]) / 480) ** 0.5
+                  for i in range(0, 3 * 48000, 480)]
+    native_tones = [i / 100 for i, v in enumerate(native_rms)
+                    if v > 0.025 and (i == 0 or native_rms[i - 1] <= 0.025)]
+    assert len(native_flashes) == len(native_tones) == 2, (native_flashes, native_tones)
+    native_sync = [abs(light - sound) for light, sound in zip(native_flashes, native_tones)]
+    assert max(native_sync) <= 1 / 30 + 0.01
+    assert all(abs(actual - expected) <= 1 / 30 + 0.01 for actual, expected
+               in zip(native_flashes, [0.5, 2.0]))
+    assert max(native_rms[:35]) < 0.001
     # Unsupported requests must refuse rather than silently produce an SDR
     # approximation or ignore authored effects. Earlier verified delivery stays.
     published = set(project.glob('renders/**/video.mp4'))
@@ -212,8 +254,11 @@ def main():
                'unsupportedPathsRejected': ['HDR-output request', 'unqualified BT.2020 transform',
                                             'basic white-balance parameter'],
                'priorVerifiedDeliveryRetained': True,
+               'sourcePreservingPqVfr': {'decodedFrames': 90, 'explicitFrameRate': True,
+                                         'flashOnsetsSeconds': native_flashes, 'toneOnsetsSeconds': native_tones,
+                                         'maxSyncErrorSeconds': max(native_sync)},
                'limitations': ['Generated phone-like media; no real phone sensor, playback or appearance approval',
-                               'Rec.709 SDR output only; no HDR-output or Dolby Vision qualification']}
+                               'HDR preservation is plain cuts only; proprietary Dolby Vision is not qualified']}
     (root / 'summary.json').write_text(json.dumps(summary, indent=2))
     print('Combined media passed:', root / 'summary.json')
 
