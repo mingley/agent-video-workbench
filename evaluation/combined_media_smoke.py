@@ -231,6 +231,18 @@ def main():
          'cuts': [{'id': 'wide', 'assetId': 'wide', 'startMs': 0, 'endMs': 1000}]})
     wide_error = call('render', expected=False, project=str(project), sequence='unsupported_wide')
     assert 'BT.2020 without PQ/HLG' in wide_error['error']['message'], wide_error
+    p3 = root / 'unqualified-p3.mp4'
+    run([args.ffmpeg, '-v', 'error', '-i', sources['sdr'], '-c', 'copy', '-bsf:v',
+         'h264_metadata=colour_primaries=12:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0', p3])
+    call('import', project=str(project), source=str(p3), id='p3',
+         expectedRevision=state()['revision'], key='unqualified-p3-import')
+    assert next(a for a in state()['assets'] if a['id'] == 'p3')['metadata']['video']['colorPrimaries'] == 'smpte432'
+    call('compose', project=str(project), expectedRevision=state()['revision'],
+         key='unqualified-p3-compose', edit={'outputId': 'unsupported_p3', 'name': 'Unsupported P3 SDR',
+         'fontAssetId': 'font', 'fontSize': 24, 'width': 360, 'height': 640,
+         'cuts': [{'id': 'p3', 'assetId': 'p3', 'startMs': 0, 'endMs': 1000}]})
+    p3_error = call('render', expected=False, project=str(project), sequence='unsupported_p3')
+    assert 'relabeling' in p3_error['error']['message'], p3_error
     current = state()
     call('apply', project=str(project), batch={'schemaVersion': '1.0.0',
          'projectId': current['projectId'], 'baseRevision': current['revision'],
@@ -252,6 +264,7 @@ def main():
                'maxSyncErrorSeconds': max(sync_errors), 'captionWhitePeaksRgb': caption_peaks,
                'mixedPqHlgSdr': True, 'originalsUnchanged': True,
                'unsupportedPathsRejected': ['HDR-output request', 'unqualified BT.2020 transform',
+                                            'unqualified Display P3 SDR relabeling',
                                             'basic white-balance parameter'],
                'priorVerifiedDeliveryRetained': True,
                'sourcePreservingPqVfr': {'decodedFrames': 90, 'explicitFrameRate': True,

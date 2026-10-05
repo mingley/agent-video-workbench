@@ -10,7 +10,9 @@ source build. [Editor research](editor-research.md) records the official editor
 documentation behind the workflow changes.
 
 Local Linux x86_64 validation used Rust 1.99 stable and pinned FFmpeg 8.0.1.
-All 35 Rust tests, formatting, strict Clippy and generated schema checks passed.
+All 36 Rust tests, formatting, strict Clippy and generated schema checks passed.
+The final color-boundary regression also rejects generated tagged Display P3
+SDR instead of relabeling it Rec.709; untagged SDR exposes its assumption.
 The [machine-readable evidence](../evaluation/service-results/source-preservation.json)
 records generated media separately from published/native CI evidence.
 
@@ -26,9 +28,14 @@ records generated media separately from published/native CI evidence.
 | `browser_smoke.mjs` | SDR review playback, seeking and master/sidecar links at desktop/390px/320px Chromium viewports |
 | Existing regressions | Application/history/backup/corruption, media geometry/color matrix and compositing patch comparison pass with the new wrapper |
 
-The 0.4.0 CI configuration also runs color/memory, preservation and its SDK
-trial on x86_64/ARM64. Both browser suites run on x86_64. Configuration is not
-evidence of a completed run; native results are recorded separately.
+[Native qualification](https://github.com/mingley/agent-video-workbench/actions/runs/37345429853)
+passed at `717b5977fda03b501be89ae75598d4e0cba4a6bc`: 16 functional summaries
+on x86_64 and 14 on ARM64, including color/memory, preservation and its SDK
+trial. Both browser suites ran on x86_64; neither ran on ARM64. Downloaded
+archives were checked against their checksums, binary hashes, source manifests
+and root/third-party MIT notices. This is qualified CI evidence, not publication.
+The subsequent SDR color-boundary guard adds the 36th Rust test and passed the
+local combined-media regression; its native run is recorded separately.
 
 Preservation is plain cuts only; HDR compositing, grades, captions and transitions
 are not implemented. Supported sources are tagged limited-range Rec.709 or

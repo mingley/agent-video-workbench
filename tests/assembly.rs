@@ -152,3 +152,34 @@ fn preserve_policy_cannot_silently_ignore_a_later_crop() {
     store.apply(&batch, false).unwrap();
     assert!(preflight(&store.project().unwrap(), "native").is_err());
 }
+
+#[test]
+fn tagged_unqualified_sdr_cannot_be_relabelled_by_an_explicit_sdr_request() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::create(&temp.path().join("project"), "Color intent").unwrap();
+    seed(&mut store, json!({"numerator":30,"denominator":1}));
+    let mut project = store.project().unwrap();
+    let asset = &mut project.assets[0];
+    let video = asset.metadata.video.as_mut().unwrap();
+    video.color_transfer = Some("bt709".into());
+    video.color_matrix = Some("bt709".into());
+    video.color_primaries = Some("smpte432".into());
+    assert_eq!(
+        agent_video_workbench::color::capability(asset)["deliverySupported"],
+        false
+    );
+    assert!(agent_video_workbench::color::filter(asset).is_err());
+    let policy = agent_video_workbench::assembly::Policy {
+        color: agent_video_workbench::assembly::DeliveryColor::Sdr,
+        quality: agent_video_workbench::assembly::Quality::High,
+        explicit_frame_rate: false,
+        allow_tight_cuts: false,
+        allow_reorder: false,
+    };
+    assert!(agent_video_workbench::assembly::output_color(asset, &policy).is_err());
+    asset.metadata.video.as_mut().unwrap().color_primaries = None;
+    assert_eq!(
+        agent_video_workbench::color::capability(asset)["assumesRec709Sdr"],
+        true
+    );
+}

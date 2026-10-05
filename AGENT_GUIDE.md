@@ -16,7 +16,10 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    unchanged strong ETags allow interrupted transfers to resume. Signed URLs
    are transient and do not enter project history. Import does not change originals.
    Import a licensed TTF font when captions are requested; plain cuts need no font.
-2. Inspect metadata, source frames, scenes and silence. `analyze-start` queues a
+2. Inspect metadata, source frames, scenes and silence. Known unqualified SDR
+   color tags refuse delivery; untagged SDR reports assumesRec709Sdr. A color
+   label is not a conversion, so never relabel unsupported footage to bypass QC.
+   `analyze-start` queues a
    `frame-index`, `proxy`, `track` or configured `provider` task. Requests identify
    `assetId`; frame/proxy/tracking ranges are at most five minutes. Frame indexes
    retain original PTS; proxies are previews with explicit source maps. Analysis

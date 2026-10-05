@@ -111,7 +111,10 @@ masters or a qualified explicit SDR conversion. VFR or mixed rates require
 an explicit rational `frameRate`, such as `{"numerator":30,"denominator":1}`;
 preflight records that CFR conversion can repeat/drop frames.
 
-Unknown color tags are not a basis for claiming preservation. Inspect them and
+Known SDR primaries/transfers outside the qualified Rec.709 path, including
+Display P3 SDR, refuse delivery; assigning a Rec.709 tag is not a gamut/transfer
+conversion. Untagged SDR may use the older assumed-Rec.709 route, and its
+`assumesRec709Sdr` finding is explicit. Unknown color tags are not a basis for claiming preservation. Inspect them and
 choose an explicit qualified SDR route if appropriate. Dolby Vision profile 8
 can use its HDR10/HLG compatible base layer; proprietary dynamic metadata is
 not preserved or qualified. Profile 5, Log and other unqualified wide-color

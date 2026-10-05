@@ -82,11 +82,21 @@ pub fn capability(asset: &Asset) -> Value {
     let wide = video
         .and_then(|v| v.color_primaries.as_deref())
         .is_some_and(|v| v.starts_with("bt2020"));
-    let supported = dovi_supported && (!wide || hdr);
+    let unqualified_sdr = !hdr
+        && video.is_some_and(|v| {
+            v.color_primaries
+                .as_deref()
+                .is_some_and(|p| !matches!(p, "bt709" | "unknown" | "unspecified"))
+                || v.color_transfer
+                    .as_deref()
+                    .is_some_and(|t| !matches!(t, "bt709" | "unknown" | "unspecified"))
+        });
+    let supported = dovi_supported && (!wide || hdr) && !unqualified_sdr;
     json!({"readable":true,"deliverySupported":supported,"output":"Rec.709 SDR",
         "policyVersion":1,"hdr":hdr,"dolbyVision":dovi,"usesCompatibleBaseLayer":dovi.is_some() && dovi_supported,
         "conversion":if hdr {Some(HDR_FILTER)} else {None},"referenceWhiteNits":100,"inputPeakNits":if hdr {Some(1000)} else {None},
-        "unsupportedReason":if !dovi_supported {Some("Dolby Vision requires profile 8 with HDR10/HLG compatible base layer (compatibility 1 or 4)")} else if wide && !hdr {Some("BT.2020 without PQ/HLG requires an explicit qualified color transform")} else {None},
+        "unsupportedReason":if !dovi_supported {Some("Dolby Vision requires profile 8 with HDR10/HLG compatible base layer (compatibility 1 or 4)")} else if wide && !hdr {Some("BT.2020 without PQ/HLG requires an explicit qualified color transform")} else if unqualified_sdr {Some("tagged SDR primaries/transfer require a qualified color transform; relabeling them Rec.709 is not a conversion")} else {None},
+        "assumesRec709Sdr":!hdr && video.is_some_and(|v| v.color_primaries.as_deref().is_none_or(|p| matches!(p,"unknown"|"unspecified")) || v.color_transfer.as_deref().is_none_or(|t| matches!(t,"unknown"|"unspecified"))),
         "originalPreserved":true,"sourceClock":"seconds relative to container start; initial audio gaps are padded with silence"})
 }
 

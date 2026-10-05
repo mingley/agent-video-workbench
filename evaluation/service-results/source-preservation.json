@@ -130,5 +130,81 @@
     "No physical HDR display, real phone or iOS Safari appearance qualification",
     "No HDR compositing or proprietary dynamic HDR qualification",
     "Native CI and published archives are separate evidence"
-  ]
+  ],
+  "nativeQualification": {
+    "run": 37345429853,
+    "url": "https://github.com/mingley/agent-video-workbench/actions/runs/37345429853",
+    "sourceCommit": "717b5977fda03b501be89ae75598d4e0cba4a6bc",
+    "status": "completed",
+    "conclusion": "success",
+    "publishedRelease": false,
+    "architectures": [
+      {
+        "arch": "x86_64",
+        "passed": true,
+        "functionalSummaries": 16,
+        "summaryNames": [
+          "agent",
+          "analysis",
+          "application",
+          "audio",
+          "browser",
+          "color-memory",
+          "combined",
+          "highres",
+          "jobs",
+          "matrix",
+          "preserve-agent",
+          "preserve-browser",
+          "source-preserve",
+          "studio",
+          "timeline",
+          "transfer"
+        ],
+        "archiveSha256": "aba78e8651a5f5e4c57a0c439ee97dfaa47d601e3b64584f4ee181cea0f4e682",
+        "binarySha256": "df2f39555a521cbc3ea36818b525096614499545a8a8fce701f958fce88a5fba",
+        "rust": "rustc 1.99.0 (b940084d7 2026-09-28)",
+        "sourceCommit": "717b5977fda03b501be89ae75598d4e0cba4a6bc",
+        "browserSuitesTested": true
+      },
+      {
+        "arch": "aarch64",
+        "passed": true,
+        "functionalSummaries": 14,
+        "summaryNames": [
+          "agent",
+          "analysis",
+          "application",
+          "audio",
+          "color-memory",
+          "combined",
+          "highres",
+          "jobs",
+          "matrix",
+          "preserve-agent",
+          "source-preserve",
+          "studio",
+          "timeline",
+          "transfer"
+        ],
+        "archiveSha256": "be55e755569115dbe1ddbe5bfb13954ab782f42796ff77df847aa8897e9c7218",
+        "binarySha256": "42bb5807ac1214ba7992ec0d253625cac987879c0292b0b36474d41ef2c182c5",
+        "rust": "rustc 1.99.0 (b940084d7 2026-09-28)",
+        "sourceCommit": "717b5977fda03b501be89ae75598d4e0cba4a6bc",
+        "browserSuitesTested": false
+      }
+    ]
+  },
+  "subsequentColorBoundary": {
+    "passed": true,
+    "rustTests": 36,
+    "strictClippy": true,
+    "taggedDisplayP3SdrRenderRefused": true,
+    "untaggedSdrAssumptionReported": true,
+    "sourceFileSha256": {
+      "src/color.rs": "5d6583197bfb0c247ac1e3e30f6ffbcdd7f7169570e8cbdac0ff9476760a3bdb",
+      "tests/assembly.rs": "5e36fd1fc1984c300acfec33edc580edcd5d84df2550f2d0897d4d65c9e4dca7",
+      "evaluation/combined_media_smoke.py": "262d4e964beefd8197b24bc7e838c8cadd1fc2cac2b453ec7fe2243122b4fcd0"
+    }
+  }
 }
