@@ -29,3 +29,26 @@ Further capability work needs representative camera samples and display review,
 especially dynamic HDR metadata, unusual color profiles and HDR overlays. A
 managed wide-gamut compositor is a separate project; preserving plain cuts now
 avoids forcing recordings through an 8-bit SDR pipeline while that work remains.
+
+## Source context and paper edits, October 6, 2026
+
+The following current official pages were fetched and read. Premiere's Paper
+Edit page was updated September 9, 2026, and Trim mode August 18, 2026. These
+are documentation observations, not benchmark results from installed editors.
+
+| Source | Observed workflow | Applied capability |
+| --- | --- | --- |
+| [Premiere Paper Edit](https://helpx.adobe.com/premiere/desktop/edit-projects/edit-video-using-text-based-editing/create-a-sequence-with-paper-edit.html) | Select source transcript passages, inspect selected duration, preview before creating a new sequence | Read-only `plan-edit`, retained/excluded cue excerpts, duration comparison and separate candidate creation |
+| [Premiere Trim mode](https://helpx.adobe.com/premiere/desktop/edit-projects/trim-clips/about-trim-mode.html) | Inspect outgoing/incoming frames and play or step around the edit | Exact boundary coordinates and bounded playable source-context requests for both sides, using verified existing proxy jobs |
+| [Premiere pause deletion](https://helpx.adobe.com/premiere/desktop/edit-projects/edit-video-using-text-based-editing/detect-and-delete-pauses-in-transcripts.html) | Explicit filtering and individual or bulk deletion of transcript pauses/fillers | Keep detection separate from selection; list excluded silent material and require reasons rather than automatically deleting all detected pauses |
+| [Resolve editing](https://www.blackmagicdesign.com/products/davinciresolve/edit) | Source/timeline viewers, trim tools and source browsing keep shot selection close to refinement | Preserve source coordinates and return context beside the proposed cut, rather than forcing the agent to judge a transcript fragment alone |
+| [Final Cut Pro](https://www.apple.com/final-cut-pro/) | Magnetic Timeline supports experimenting with edits while retaining synchronization; Transcript Search helps find spoken material | Independent candidates, existing atomic edit/history and frozen A/V rendering, with durable per-cut reasons and transcript-sensitive review invalidation |
+| [Kdenlive editing](https://docs.kdenlive.org/en/cutting_and_assembling/editing.html) | Source/target zones and three-point editing separate selected source from timeline placement | Keep requested source ranges and actual frame-rounded output ranges visible together |
+
+The resulting [planning workflow](edit-planning.md) records the objective and
+individual cut decisions, defaults to 250ms speech handles, and refuses applying
+an unreviewed speech-boundary/handle or deliberate pacing exception. Proposed
+expansions are evidence for playback, never automatic editorial decisions.
+Plan digests bind the exact base snapshot; later timing/source/transcript changes
+mark prior review stale. This emulates useful workflow mechanics, not the full
+GUI, AI features, optical flow, HDR compositor or artistic judgment of these tools.

@@ -46,6 +46,21 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    justify cutting breaths, reactions or pauses. Compare independent candidates
    against the retained baseline; change one editorial dimension at a time.
 
+   Use `plan-edit` for each candidate before committing. Supply `plan.edit`
+   (the assembly), `plan.brief` (objective, natural/montage intent, default 250ms
+   speech handles/1000ms context), and one `plan.decisions` reason per cut.
+   Read retained/omitted ranges, actual rounded boundaries, nearby reviewed cues
+   and both contextWindows. Execute each complete previewRequest using the
+   existing proxy analysis job, and listen to its verified attachment.
+   No cues means unavailable speech evidence. Prefer restoring breathing room;
+   proposed boundary expansions require playback and re-planning. Specific
+   per-cut risk review notes are necessary for intentional speech/tight-cut/
+   short-pause/reordering exceptions. Apply only a ready report with
+   `apply-edit-plan` and its exact planSha256. Brief, reasons and risk notes commit
+   atomically. Changed timing/policy/source/transcript makes `editPlan.status`
+   stale in preflight and manifests. See [edit planning](docs/edit-planning.md).
+   These are recorded decisions, not an artistic score or proof of user approval.
+
    For requested captions, grading, layers, music or reframing, create a separate
    `compose` SDR output from the same source cuts. Do not remove the assembly
    policy to bypass its restrictions. `compose` takes outputId/name/fontAssetId and ordered cuts with IDs, assetId,

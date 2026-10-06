@@ -161,6 +161,26 @@ enum Action {
         #[arg(long, default_value = "seq_main")]
         sequence: String,
     },
+    PlanEdit {
+        project: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+    },
+    ApplyEditPlan {
+        project: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        plan_sha256: String,
+        #[arg(long)]
+        dry_run: bool,
+    },
     Compose {
         project: PathBuf,
         #[arg(long)]
@@ -432,6 +452,30 @@ fn execute(cli: Cli) -> Result<Value> {
             edit: agent_video_workbench::json::read(&request)?,
             expected_revision,
             key,
+            dry_run,
+        },
+        Action::PlanEdit {
+            project,
+            request,
+            expected_revision,
+        } => Request::PlanEdit {
+            project,
+            plan: agent_video_workbench::json::read(&request)?,
+            expected_revision,
+        },
+        Action::ApplyEditPlan {
+            project,
+            request,
+            expected_revision,
+            key,
+            plan_sha256,
+            dry_run,
+        } => Request::ApplyEditPlan {
+            project,
+            plan: agent_video_workbench::json::read(&request)?,
+            expected_revision,
+            key,
+            plan_sha256,
             dry_run,
         },
         Action::TranscriptImport {

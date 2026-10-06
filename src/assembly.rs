@@ -116,92 +116,114 @@ impl Store {
             expected,
             json!({"kind":"assemble","edit":edit,"expectedRevision":expected}),
             dry_run,
-            |project| {
-                let asset = project.require_asset(&edit.cuts[0].asset_id)?;
-                let video = asset
-                    .metadata
-                    .video
-                    .as_ref()
-                    .ok_or_else(|| invalid("assemble requires a video source"))?;
-                let size = color::upright_size(video);
-                let rate = edit.frame_rate.map(|r| RationalRate::new(r.numerator,r.denominator)).transpose()?.unwrap_or(video.frame_rate.normalized()?);
-                if !(1.0..=120.0).contains(&rate.as_f64())
-                    || size.width == 0
-                    || size.height == 0
-                    || size.width > 4096
-                    || size.height > 4096
-                    || !size.width.is_multiple_of(2)
-                    || !size.height.is_multiple_of(2)
-                {
-                    return Err(invalid("source-matched canvas must be even and <=4096 per axis; frame rate must be 1..120"));
-                }
-                let track = format!("{}_video", edit.output_id);
-                // Share an exact tick clock between milliseconds and output
-                // frames. Quantize duration, but never move the requested source
-                // start (and its audio) onto a rounded NTSC frame boundary.
-                let (mut divisor, mut remainder) = (rate.numerator, 1000_u32);
-                while remainder != 0 {
-                    (divisor, remainder) = (remainder, divisor % remainder);
-                }
-                let ticks = (rate.numerator / divisor).checked_mul(1000)
-                    .ok_or_else(|| invalid("frame rate requires an unsupported source tick clock"))?;
-                let source_rate = RationalRate::frames(ticks)?;
-                let mut ops = vec![
-                    json!({"op":"sequence.add","params":{"id":edit.output_id,"name":edit.name,"width":size.width,"height":size.height,"frameRate":rate}}),
-                    json!({"op":"track.add","params":{"id":track,"sequence":edit.output_id,"type":"video"}}),
-                ];
-                let mut at = RationalTime::zero(rate);
-                let mut ids = BTreeSet::new();
-                for cut in &edit.cuts {
-                    workflow::id(&cut.id)?;
-                    if !ids.insert(&cut.id)
-                        || cut.start_ms < 0
-                        || cut.end_ms <= cut.start_ms
-                        || cut.end_ms > 86_400_000
-                    {
-                        return Err(invalid("cuts need unique IDs and 0 <= startMs < endMs <=86400000"));
-                    }
-                    let source = project.require_asset(&cut.asset_id)?;
-                    if source.kind != AssetKind::Video {
-                        return Err(invalid("assemble cuts require video assets"));
-                    }
-                    let duration = workflow::time(cut.end_ms - cut.start_ms)
-                        .rescale_to(rate, RoundingMode::Nearest)?;
-                    if duration.is_zero() {
-                        return Err(invalid("source cut is shorter than an output frame"));
-                    }
-                    ops.push(json!({"op":"clip.add","params":{"id":format!("{}_{}",edit.output_id,cut.id),"asset":cut.asset_id,"track":track,"at":at,"sourceIn":workflow::time(cut.start_ms).rescale_exact(source_rate)?,"duration":duration,"fit":"contain"}}));
-                    at = at.checked_add(duration)?;
-                }
-                if at.as_seconds_f64() > 3600.0 {
-                    return Err(invalid("assembled output exceeds one hour"));
-                }
-                for (index, op) in ops.iter_mut().enumerate() {
-                    op["id"] = json!(format!("assemble-{index}"));
-                }
-                let batch: OperationBatch = serde_json::from_value(json!({
-                    "schemaVersion":"1.0.0","projectId":project.project_id,
-                    "baseRevision":expected,"idempotencyKey":key,
-                    "description":format!("Source-preserving assembly: {}", edit.name),
-                    "operations":ops
-                }))?;
-                let mut next = agentcut_core::apply_batch(project, &batch)?.project;
-                next.require_sequence_mut(&edit.output_id)?.extensions.insert(
-                    POLICY.into(),
-                    serde_json::to_value(Policy {
-                        color: edit.color,
-                        quality: edit.quality,
-                        explicit_frame_rate: edit.frame_rate.is_some(),
-                        allow_tight_cuts: edit.allow_tight_cuts,
-                        allow_reorder: edit.allow_reorder,
-                    })?,
-                );
-                // Refuse unsupported edits inside the revision transaction.
-                preflight(&next, &edit.output_id)?;
-                Ok(next)
-            },
+            |project| build(project, edit, expected, key),
         )
     }
+}
+
+pub(crate) fn build(
+    project: &Project,
+    edit: &Assemble,
+    expected: u64,
+    key: &str,
+) -> Result<Project> {
+    workflow::id(&edit.output_id)?;
+    if edit.cuts.is_empty() || edit.cuts.len() > 100 {
+        return Err(invalid("assemble requires 1..100 explicit source cuts"));
+    }
+    let asset = project.require_asset(&edit.cuts[0].asset_id)?;
+    let video = asset
+        .metadata
+        .video
+        .as_ref()
+        .ok_or_else(|| invalid("assemble requires a video source"))?;
+    let size = color::upright_size(video);
+    let rate = edit
+        .frame_rate
+        .map(|r| RationalRate::new(r.numerator, r.denominator))
+        .transpose()?
+        .unwrap_or(video.frame_rate.normalized()?);
+    if !(1.0..=120.0).contains(&rate.as_f64())
+        || size.width == 0
+        || size.height == 0
+        || size.width > 4096
+        || size.height > 4096
+        || !size.width.is_multiple_of(2)
+        || !size.height.is_multiple_of(2)
+    {
+        return Err(invalid(
+            "source-matched canvas must be even and <=4096 per axis; frame rate must be 1..120",
+        ));
+    }
+    let track = format!("{}_video", edit.output_id);
+    // Share an exact tick clock between milliseconds and output
+    // frames. Quantize duration, but never move the requested source
+    // start (and its audio) onto a rounded NTSC frame boundary.
+    let (mut divisor, mut remainder) = (rate.numerator, 1000_u32);
+    while remainder != 0 {
+        (divisor, remainder) = (remainder, divisor % remainder);
+    }
+    let ticks = (rate.numerator / divisor)
+        .checked_mul(1000)
+        .ok_or_else(|| invalid("frame rate requires an unsupported source tick clock"))?;
+    let source_rate = RationalRate::frames(ticks)?;
+    let mut ops = vec![
+        json!({"op":"sequence.add","params":{"id":edit.output_id,"name":edit.name,"width":size.width,"height":size.height,"frameRate":rate}}),
+        json!({"op":"track.add","params":{"id":track,"sequence":edit.output_id,"type":"video"}}),
+    ];
+    let mut at = RationalTime::zero(rate);
+    let mut ids = BTreeSet::new();
+    for cut in &edit.cuts {
+        workflow::id(&cut.id)?;
+        if !ids.insert(&cut.id)
+            || cut.start_ms < 0
+            || cut.end_ms <= cut.start_ms
+            || cut.end_ms > 86_400_000
+        {
+            return Err(invalid(
+                "cuts need unique IDs and 0 <= startMs < endMs <=86400000",
+            ));
+        }
+        let source = project.require_asset(&cut.asset_id)?;
+        if source.kind != AssetKind::Video {
+            return Err(invalid("assemble cuts require video assets"));
+        }
+        let duration =
+            workflow::time(cut.end_ms - cut.start_ms).rescale_to(rate, RoundingMode::Nearest)?;
+        if duration.is_zero() {
+            return Err(invalid("source cut is shorter than an output frame"));
+        }
+        ops.push(json!({"op":"clip.add","params":{"id":format!("{}_{}",edit.output_id,cut.id),"asset":cut.asset_id,"track":track,"at":at,"sourceIn":workflow::time(cut.start_ms).rescale_exact(source_rate)?,"duration":duration,"fit":"contain"}}));
+        at = at.checked_add(duration)?;
+    }
+    if at.as_seconds_f64() > 3600.0 {
+        return Err(invalid("assembled output exceeds one hour"));
+    }
+    for (index, op) in ops.iter_mut().enumerate() {
+        op["id"] = json!(format!("assemble-{index}"));
+    }
+    let batch: OperationBatch = serde_json::from_value(json!({
+        "schemaVersion":"1.0.0","projectId":project.project_id,
+        "baseRevision":expected,"idempotencyKey":key,
+        "description":format!("Source-preserving assembly: {}", edit.name),
+        "operations":ops
+    }))?;
+    let mut next = agentcut_core::apply_batch(project, &batch)?.project;
+    next.require_sequence_mut(&edit.output_id)?
+        .extensions
+        .insert(
+            POLICY.into(),
+            serde_json::to_value(Policy {
+                color: edit.color,
+                quality: edit.quality,
+                explicit_frame_rate: edit.frame_rate.is_some(),
+                allow_tight_cuts: edit.allow_tight_cuts,
+                allow_reorder: edit.allow_reorder,
+            })?,
+        );
+    // Refuse unsupported edits inside the revision transaction.
+    preflight(&next, &edit.output_id)?;
+    Ok(next)
 }
 
 pub fn output_color(asset: &Asset, policy: &Policy) -> Result<OutputColor> {
@@ -321,6 +343,7 @@ pub(crate) fn clips(sequence: &Sequence) -> Result<Vec<&TimelineItem>> {
 }
 
 pub fn preflight(project: &Project, sequence_id: &str) -> Result<Value> {
+    let editorial = crate::editorial::state(project, sequence_id)?;
     let sequence = project.require_sequence(sequence_id)?;
     let Some(policy) = policy(sequence)? else {
         let mut sources = Vec::new();
@@ -342,7 +365,7 @@ pub fn preflight(project: &Project, sequence_id: &str) -> Result<Value> {
             }
         }
         return Ok(
-            json!({"revision":project.revision,"sequenceId":sequence_id,"mode":"composed-sdr","outputColor":OutputColor::sdr(),"canvas":sequence.canvas,"frameRate":sequence.frame_rate,"captionOrTextItems":captions,"sources":sources,"editorialReview":"pending","guidance":["HDR sources are tone mapped for this output; an HDR master needs assemble color:preserve","Review crop, captions and cut timing against the original; silence is not permission to remove reaction pauses","Use assemble for a source-matched baseline without automatic captions or crop"],"renderSupport":"renderer validation is still required"}),
+            json!({"revision":project.revision,"sequenceId":sequence_id,"mode":"composed-sdr","outputColor":OutputColor::sdr(),"canvas":sequence.canvas,"frameRate":sequence.frame_rate,"captionOrTextItems":captions,"sources":sources,"editorialReview":"pending","editPlan":editorial,"guidance":["HDR sources are tone mapped for this output; an HDR master needs assemble color:preserve","Review crop, captions and cut timing against the original; silence is not permission to remove reaction pauses","Use assemble for a source-matched baseline without automatic captions or crop"],"renderSupport":"renderer validation is still required"}),
         );
     };
     let items = clips(sequence)?;
@@ -441,6 +464,6 @@ pub fn preflight(project: &Project, sequence_id: &str) -> Result<Value> {
         sources.push(json!({"itemId":item.id,"assetId":asset.id,"sourceSha256":asset.fingerprint.sha256,"sourceStartSeconds":start,"sourceEndSeconds":end,"outputStartSeconds":item.start.as_seconds_f64(),"outputDurationSeconds":duration,"sourceVideo":video}));
     }
     Ok(
-        json!({"revision":project.revision,"sequenceId":sequence_id,"mode":"source-preserving","policy":policy,"outputColor":output,"canvas":sequence.canvas,"frameRate":sequence.frame_rate,"sources":sources,"findings":findings,"findingsTruncated":findings.len()>=100,"editorialReview":"pending","masterVideoEncodingGenerations":1,"lossyIntermediate":false,"automaticCaptions":false,"automaticCrop":false,"guidance":"Compare with the original and listen across every cut; technical verification cannot judge a natural performance"}),
+        json!({"revision":project.revision,"sequenceId":sequence_id,"mode":"source-preserving","policy":policy,"outputColor":output,"canvas":sequence.canvas,"frameRate":sequence.frame_rate,"sources":sources,"findings":findings,"findingsTruncated":findings.len()>=100,"editorialReview":"pending","editPlan":editorial,"masterVideoEncodingGenerations":1,"lossyIntermediate":false,"automaticCaptions":false,"automaticCrop":false,"guidance":"Compare with the original and listen across every cut; technical verification cannot judge a natural performance"}),
     )
 }

@@ -60,6 +60,9 @@ not an aesthetic scoring system. Set `allowReorder: true` or
 `allowTightCuts: true` when that edit is deliberate and reviewed. Flags do not
 waive source bounds or rendering restrictions. Multiple outputs are independent
 sequences with distinct IDs; create a new candidate while retaining the baseline.
+Use [edit planning](edit-planning.md) for subsequent candidates: inspect source
+contexts and omitted material, preserve speech handles, and save each cut's
+reason with the resulting revision.
 
 ## Inspect, freeze and retrieve
 

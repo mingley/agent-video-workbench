@@ -120,6 +120,20 @@ pub enum Request {
         #[serde(default)]
         dry_run: bool,
     },
+    PlanEdit {
+        project: PathBuf,
+        plan: crate::editorial::EditPlan,
+        expected_revision: u64,
+    },
+    ApplyEditPlan {
+        project: PathBuf,
+        plan: crate::editorial::EditPlan,
+        expected_revision: u64,
+        key: String,
+        plan_sha256: String,
+        #[serde(default)]
+        dry_run: bool,
+    },
     EditPreflight {
         project: PathBuf,
         #[serde(default = "sequence")]
@@ -604,7 +618,7 @@ impl Service {
             ),
             Request::Schema {} => Ok(serde_json::to_value(schemars::schema_for!(Request))?),
             Request::Capabilities {} => Ok(
-                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["assemble","edit-preflight","maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"Composed SDR H.264/AAC; source-preserving Rec.709 or 10-bit PQ/HLG HEVC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"assemble color:preserve retains PQ/HLG in 10-bit HEVC; composed outputs tone map to Rec.709; Dolby Vision compatible base layer only","recommendedWorkflow":["inspect","assemble","edit-preflight","render-start","artifact","delivery"],"asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"analysisProviderConfigured":self.provider.is_some(),"renderAnimation":"opacity; linear/step position and constant-viewport crop; other channels refused", "downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
+                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["plan-edit","apply-edit-plan","assemble","edit-preflight","maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"Composed SDR H.264/AAC; source-preserving Rec.709 or 10-bit PQ/HLG HEVC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"assemble color:preserve retains PQ/HLG in 10-bit HEVC; composed outputs tone map to Rec.709; Dolby Vision compatible base layer only","recommendedWorkflow":["inspect","assemble","plan-edit","apply-edit-plan","edit-preflight","render-start","artifact","delivery"],"asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"analysisProviderConfigured":self.provider.is_some(),"renderAnimation":"opacity; linear/step position and constant-viewport crop; other channels refused", "downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
             ),
             Request::AgentGuide {} => Ok(json!({"guide":include_str!("../AGENT_GUIDE.md")})),
             Request::Doctor {} => doctor(&self.backend),
@@ -749,6 +763,51 @@ impl Service {
                 )?;
                 crate::assembly::preflight(&project, &sequence)
             }
+            Request::PlanEdit {
+                project,
+                plan,
+                expected_revision,
+            } => {
+                let snapshot = Store::open(&self.path(&project)?)?.project()?;
+                let mut report = crate::editorial::plan(&snapshot, &plan, expected_revision)?;
+                let digest = report["planSha256"]
+                    .as_str()
+                    .expect("plan digest")
+                    .to_owned();
+                for cut in report["cuts"].as_array_mut().expect("plan cuts") {
+                    let id = cut["cutId"].as_str().expect("cut ID").to_owned();
+                    for window in cut["contextWindows"]
+                        .as_array_mut()
+                        .expect("source windows")
+                    {
+                        let edge = window["edge"].as_str().expect("boundary edge").to_owned();
+                        window["previewRequest"]["project"] = json!(project);
+                        window["previewRequest"]["expectedRevision"] = json!(expected_revision);
+                        window["previewRequest"]["key"] =
+                            json!(format!("context-{}-{id}-{edge}", &digest[..16]));
+                    }
+                }
+                report["guidance"] = json!(
+                    "Execute each complete previewRequest, run its worker and retrieve the verified artifact. Keep a continuous baseline; planning changes no media or history"
+                );
+                Ok(report)
+            }
+            Request::ApplyEditPlan {
+                project,
+                plan,
+                expected_revision,
+                key,
+                plan_sha256,
+                dry_run,
+            } => Ok(serde_json::to_value(
+                Store::open(&self.path(&project)?)?.apply_edit_plan(
+                    &plan,
+                    expected_revision,
+                    &key,
+                    &plan_sha256,
+                    dry_run,
+                )?,
+            )?),
             Request::Compose {
                 project,
                 edit,

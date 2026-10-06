@@ -11,6 +11,9 @@ color and timing without automatic captions or crop. Plain 10-bit PQ/HLG cuts
 export a verified HEVC master and a separate SDR review video. High-quality
 masters use CRF 16; lossless video encoding is optional. See the
 [editor research](docs/editor-research.md) and [tested scope](docs/implementation-status.md).
+For subsequent candidates, [plan edits with source context](docs/edit-planning.md):
+briefs, cut reasons, reviewed speech handles, excluded material and playable
+source windows help the agent review a paper edit before committing it.
 Build with latest stable Rust: `cargo build --release --locked`.
 
 **Published 0.3.1: Linux x86_64 and ARM64, October 3, 2026.** This older binary
@@ -63,6 +66,7 @@ qualification; the tool reports unsupported rendering paths explicitly.
 | --- | --- |
 | [First edit](docs/first-edit.md) | Tested import-to-delivery CLI/MCP walkthrough |
 | [Natural edit](docs/natural-edit.md) | Source-matched HDR/SDR baseline, preflight and review |
+| [Edit planning](docs/edit-planning.md) | Briefs, source context, speech handles and durable cut decisions |
 | [Editor research](docs/editor-research.md) | Official editor documentation and applied design choices |
 | [Interface reference](docs/agent-api.md) | Current envelopes, revisions, jobs and verified artifacts |
 | [Agent guide](AGENT_GUIDE.md) | Source-based edits, profiles, analysis, revisions and delivery |

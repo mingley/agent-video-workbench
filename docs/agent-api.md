@@ -1,7 +1,8 @@
 # CLI and MCP interface reference
 
 The 0.4.0 source build's CLI and MCP stdio server call the same Rust service.
-Published 0.3.1 lacks `assemble`, `edit-preflight` and preview retrieval.
+Published 0.3.1 lacks `assemble`, `plan-edit`, `apply-edit-plan`, `edit-preflight`
+and preview retrieval.
 [The first-edit walkthrough](first-edit.md) contains an executable workflow;
 [service-request.schema.json](../specs/schemas/service-request.schema.json)
 is the generated request contract. `avw schema` returns it in `result`.
@@ -69,6 +70,14 @@ does not approve the content or guarantee every composition is renderable.
 Raw operations use the
 exact rational time forms described by `describe OPERATION`. A property in
 that registry is not a guarantee that every renderer combination is supported.
+
+`plan-edit` accepts `plan: {edit, brief, decisions}` and `expectedRevision`,
+performs no mutation and returns a revision-bound `planSha256`, `readyToApply`,
+source contexts, omitted ranges and per-cut risk findings. `apply-edit-plan`
+adds that SHA, `key` and optional `dryRun`; it refuses mismatched plans or
+unreviewed risks and commits intent with the sequence atomically. Preflight's
+`editPlan` reports current/stale/unplanned review state. See
+[edit planning](edit-planning.md) for fields and executable CLI/MCP steps.
 
 ## Find state without resending the project
 

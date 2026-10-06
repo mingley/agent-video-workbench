@@ -1,5 +1,31 @@
 # Implementation and qualification
 
+## Editorial planning on main, October 6, 2026
+
+Current 0.4.0 source builds add read-only `plan-edit` and atomic
+`apply-edit-plan`. A brief and individual cut reasons accompany source-preserving
+candidates. Reports include exact frame-rounded source/output ranges, reviewed
+cue excerpts, excluded source intervals including silent ones, complete scoped
+proxy requests around both boundaries, and optional boundary expansion proposals.
+Detected speech-boundary/handle and deliberate pacing exceptions require
+specific per-cut notes before applying. The default speech handle is 250ms;
+transcript cue timing is evidence, not guaranteed word-level alignment.
+
+The plan SHA binds the complete plan and base snapshot. Applying commits its
+brief, reasons, risk notes and content fingerprint with the sequence/history.
+Preflight and frozen render manifests report current/stale/unplanned review;
+source timing/policy/transcript changes invalidate review without deleting notes.
+Unrelated project renaming retains current review. See [edit planning](edit-planning.md)
+and the [additional editor research](editor-research.md#source-context-and-paper-edits-october-6-2026).
+
+Local Rust 1.99 stable checks passed: **43 tests**, formatting, strict Clippy
+and generated schema. The expanded official MCP SDK preservation trial passed
+CLI/MCP planning and replay, atomic clipped-cue refusal, four verified source
+context videos with audio, dry-run, frozen planned HDR rendering, transcript
+review invalidation and backup retention. Media is generated PQ footage with
+supplied burst-timing cues, not private human footage or artistic acceptance.
+Native CI and further regression evidence are recorded separately below.
+
 ## Source-preserving 0.4.0 on main
 
 October 5, 2026. Main supports source-matched plain edits with `assemble`,

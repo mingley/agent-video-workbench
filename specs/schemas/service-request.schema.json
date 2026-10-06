@@ -51,6 +51,43 @@
       ],
       "type": "object"
     },
+    "Brief": {
+      "additionalProperties": false,
+      "properties": {
+        "contextMs": {
+          "default": 1000,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "pacing": {
+          "$ref": "#/$defs/Pacing",
+          "default": "natural"
+        },
+        "speechHandlesMs": {
+          "default": 250,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "targetDurationMs": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "objective"
+      ],
+      "type": "object"
+    },
     "Compose": {
       "additionalProperties": false,
       "properties": {
@@ -145,6 +182,29 @@
         "assetId",
         "startMs",
         "endMs"
+      ],
+      "type": "object"
+    },
+    "Decision": {
+      "additionalProperties": false,
+      "properties": {
+        "cutId": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "reviews": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Review"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "cutId",
+        "reason"
       ],
       "type": "object"
     },
@@ -707,6 +767,29 @@
         }
       ]
     },
+    "EditPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "brief": {
+          "$ref": "#/$defs/Brief"
+        },
+        "decisions": {
+          "items": {
+            "$ref": "#/$defs/Decision"
+          },
+          "type": "array"
+        },
+        "edit": {
+          "$ref": "#/$defs/Assemble"
+        }
+      },
+      "required": [
+        "edit",
+        "brief",
+        "decisions"
+      ],
+      "type": "object"
+    },
     "FrameRate": {
       "additionalProperties": false,
       "properties": {
@@ -733,6 +816,13 @@
         "frame",
         "silence",
         "scenes"
+      ],
+      "type": "string"
+    },
+    "Pacing": {
+      "enum": [
+        "natural",
+        "montage"
       ],
       "type": "string"
     },
@@ -903,11 +993,37 @@
       ],
       "type": "object"
     },
+    "Review": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "type": "string"
+        },
+        "risk": {
+          "$ref": "#/$defs/Risk"
+        }
+      },
+      "required": [
+        "risk",
+        "note"
+      ],
+      "type": "object"
+    },
     "ReviewState": {
       "enum": [
         "open",
         "addressed",
         "dismissed"
+      ],
+      "type": "string"
+    },
+    "Risk": {
+      "enum": [
+        "speech-boundary",
+        "speech-handle",
+        "tight-cut",
+        "short-pause",
+        "reordered-source"
       ],
       "type": "string"
     },
@@ -1531,6 +1647,72 @@
         "edit",
         "expectedRevision",
         "key"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "plan-edit",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "plan": {
+          "$ref": "#/$defs/EditPlan"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "plan",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "apply-edit-plan",
+          "type": "string"
+        },
+        "dryRun": {
+          "default": false,
+          "type": "boolean"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key": {
+          "type": "string"
+        },
+        "plan": {
+          "$ref": "#/$defs/EditPlan"
+        },
+        "planSha256": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "plan",
+        "expectedRevision",
+        "key",
+        "planSha256"
       ],
       "type": "object"
     },

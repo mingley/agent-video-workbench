@@ -5,6 +5,7 @@ pub mod assembly;
 pub mod audio;
 pub mod color;
 pub mod delivery;
+pub mod editorial;
 pub mod inspect;
 pub mod interchange;
 pub mod jobs;
