@@ -79,7 +79,7 @@ node evaluation/preserve_agent_smoke.mjs "$PWD/target/release/avw" \
   /path/to/ffmpeg /path/to/ffprobe /path/to/new-preservation-run/pq.mp4 \
   /path/to/new-preserving-agent-run "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
 node evaluation/browser_smoke.mjs /path/to/chromium \
-  /path/to/new-preserving-agent-run/review /path/to/new-preserving-browser-run \
+  /path/to/new-preserving-agent-run/planned-review /path/to/new-preserving-browser-run \
   "$PWD/evaluation/node_modules/playwright"
 ```
 
@@ -108,6 +108,11 @@ atomic edit refusals. With the optional generated full-HD source, it also verifi
 393 HLG frames under the 4GiB child limit. The preserving SDK trial freezes a
 revision, checks CLI replay and verified master/preview retrieval, delivers the
 bundle and reopens its policy from backup.
+It also runs paper-edit planning through CLI/MCP, refuses an unreviewed clipped
+cue atomically, plays four verified source-context proxies with measured audio
+offsets, checks plan dry-run/replay, invalidates review after cue correction and
+retains cut decisions in backup. The planned-review browser check verifies frozen
+output names/objectives/reasons as literal text, alongside playback and layout.
 
 Optional local ASR needs CMake and C/C++ to build pinned whisper.cpp v1.9.4.
 `scripts/setup-asr.sh /path/to/providers` verifies source revision and tiny.en

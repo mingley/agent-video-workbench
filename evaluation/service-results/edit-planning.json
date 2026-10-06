@@ -359,10 +359,89 @@
     "planning-browser/summary.json": "Final generated planned-review bundle; three Chromium viewports"
   },
   "nativeQualification": {
-    "status": "pending",
-    "coreCommitRun": 37547486770
+    "status": "success",
+    "commit": "196286fd911992d50deb08cf0e13e8324e01f28b",
+    "run": 37547998545,
+    "url": "https://github.com/mingley/agent-video-workbench/actions/runs/37547998545",
+    "rustTests": 43,
+    "browserRunsOnArm64": false,
+    "publishedRelease": false,
+    "verifiedArchives": {
+      "x86_64": {
+        "passed": true,
+        "architecture": "x86_64",
+        "sourceCommit": "196286fd911992d50deb08cf0e13e8324e01f28b",
+        "functionalSummaries": 16,
+        "archiveSha256": "3bcdc06878d4e1471046e1245ae0cc0284a03c1391b713879671eb4e3aebbe98",
+        "binarySha256": "fec4d436c494f6b5bfdeea3600883d59e1982c92a303ae19b3d27ee85383e774",
+        "editorialPlanning": {
+          "clippedCueRefused": true,
+          "cliMcpPlanAndReplayEquivalent": true,
+          "sourceContextPreviews": 4,
+          "contextAudioBurstSeconds": 1.0000416666666667,
+          "frozenPlannedRevision": 5,
+          "transcriptChangeInvalidatesReview": true,
+          "backupRetainsDecisions": true,
+          "deliveryShowsEscapedFrozenIntent": true
+        },
+        "plannedBrowserViewports": 3,
+        "licenseFilesMatchSource": true
+      },
+      "aarch64": {
+        "passed": true,
+        "architecture": "aarch64",
+        "sourceCommit": "196286fd911992d50deb08cf0e13e8324e01f28b",
+        "functionalSummaries": 14,
+        "archiveSha256": "874d7afdd9760c76e9d35e111f8f9cbfed2f83319c45cc3c3ba10fde096049cb",
+        "binarySha256": "678c1d9761195f2a12422c9e297a6ef786112a0a24cff915f8b7b3863255cc0a",
+        "editorialPlanning": {
+          "clippedCueRefused": true,
+          "cliMcpPlanAndReplayEquivalent": true,
+          "sourceContextPreviews": 4,
+          "contextAudioBurstSeconds": 1.0000416666666667,
+          "frozenPlannedRevision": 5,
+          "transcriptChangeInvalidatesReview": true,
+          "backupRetainsDecisions": true,
+          "deliveryShowsEscapedFrozenIntent": true
+        },
+        "plannedBrowserViewports": 0,
+        "licenseFilesMatchSource": true
+      }
+    }
   },
   "preparedAgentTrial": {
-    "status": "pending"
-  }
+    "status": "passed",
+    "sourceCommit": "196286fd911992d50deb08cf0e13e8324e01f28b",
+    "binarySha256": "b5f50b549dc8d472d1368a9be3d6d2ee6e077f37405f0e2d257e323fcff62886",
+    "cliCalls": 10,
+    "officialMcpCalls": 10,
+    "head": 3,
+    "namedAliasesMatchJson": true,
+    "baselineFrames": 600,
+    "candidateFrames": 540,
+    "originalUnchanged": true,
+    "planSha256": "3343aa7ec76975757e9c2b1232d446cca4041dd9d34ee8e217af3619892e5ff1",
+    "browserSummarySha256": "3ef21b5162fd19e894748cd255a89bfff882ba9c955ea0cada544ad17b58ed67",
+    "chromiumViewports": [
+      1280,
+      390,
+      320
+    ]
+  },
+  "coreNativeQualification": {
+    "status": "success",
+    "commit": "df2b9baa1f401254dfe5548783958dbd671e58ab",
+    "run": 37547486770,
+    "url": "https://github.com/mingley/agent-video-workbench/actions/runs/37547486770",
+    "architectures": [
+      "x86_64",
+      "aarch64"
+    ],
+    "rustTests": 43,
+    "functionalSummaries": {
+      "x86_64": 16,
+      "aarch64": 14
+    }
+  },
+  "qualifiedApplicationCommit": "196286fd911992d50deb08cf0e13e8324e01f28b"
 }

@@ -1,5 +1,12 @@
 # Implementation completion and remaining qualification
 
+October 6 addition: [source-context paper edits](edit-planning.md) now provide
+briefs, per-cut reasons, explicit speech handles and risk review, source-window
+proxy requests, omitted material, revision-bound plan application and stale review
+detection. Frozen review pages show the intent beside each named version.
+Real performance judgment and word-level alignment remain qualification work;
+the planning tools keep the external agent responsible for playback and choices.
+
 October 5 addition: main's 0.4.0 source build implements plain-cut PQ/HLG
 preservation, source-matched defaults, editorial preflight and separate verified
 SDR previews. [Natural edits](natural-edit.md) and [current evidence](implementation-status.md)

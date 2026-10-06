@@ -3,7 +3,8 @@
 The published 0.3.1 binary and 0.4.0 source build are local single-user Linux CLI
 and MCP stdio servers. Only 0.4.0 includes source-preserving HDR cuts and verified
 SDR preview retrieval; build main with latest stable Rust using `cargo build
---release --locked` to try [natural edits](natural-edit.md). The published
+--release --locked` to try [natural edits](natural-edit.md) and
+[source-context planning](edit-planning.md). The published
 installer below still downloads 0.3.1. The service persists
 projects, originals, revisions, analysis, jobs and verified exports. The agent
 provides editorial decisions and uses its host's file tools for delivery.

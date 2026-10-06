@@ -32,6 +32,21 @@ The preservation regression still measured exact PQ/HLG lossless pixels,
 without a lossy intermediate. The [machine-readable record](../evaluation/service-results/edit-planning.json)
 separates core-build regressions from final local sources and native CI evidence.
 
+The installed `196286f` source bundle also passed the documented planning workflow
+against the prepared cloud demo: ten CLI calls (including named aliases) and ten
+official MCP SDK calls. The retained baseline and new candidate render 600 and
+540 verified PQ frames at 60fps respectively. Their combined review page passed
+Chromium playback/seeking and note display at all three viewports. The original
+generated source is unchanged, and project history is retained at revision 3.
+
+[Final native qualification](https://github.com/mingley/agent-video-workbench/actions/runs/37547998545)
+passed at `196286fd911992d50deb08cf0e13e8324e01f28b`: 43 Rust tests and
+16 functional summaries on x86_64 / 14 on ARM64. Both native SDK summaries
+record the new planning and context-audio checks; the planned-note browser
+checks run on x86_64 only. Both downloaded archives passed source, binary and
+archive checksum verification, with root and third-party licenses matching the
+source exactly. This qualifies the source build; it does not publish a release.
+
 ## Source-preserving 0.4.0 on main
 
 October 5, 2026. Main supports source-matched plain edits with `assemble`,
