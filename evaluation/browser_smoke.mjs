@@ -10,6 +10,13 @@ const { chromium } = await import(pathToFileURL(path.join(playwrightRoot, 'index
 const root = fs.realpathSync(review);
 fs.mkdirSync(output, { recursive: false });
 const requests = [];
+const delivered = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'))).items.filter(i => i.state === 'succeeded');
+const expectedNotes = delivered.map(item => {
+  const frozen = JSON.parse(fs.readFileSync(path.join(root, item.jobId, 'manifest.json')));
+  return { title: frozen.snapshot.sequences.find(s => s.id === frozen.sequenceId).name,
+    objective: frozen.editPreflight?.editPlan?.brief?.objective ?? null,
+    reasons: frozen.editPreflight?.editPlan?.decisions?.slice(0, 20).map(d => d.reason) ?? [] };
+});
 const server = http.createServer((request, response) => {
   try {
     const relative = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
@@ -58,6 +65,16 @@ try {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(base + '/');
+    const shownNotes = await page.locator('section').evaluateAll(sections => sections.map(section => ({
+      title: section.querySelector('h2')?.textContent ?? null,
+      objective: section.querySelector('[data-edit-objective]')?.textContent ?? null,
+      reasons: [...section.querySelectorAll('[data-cut-reason]')].map(li => li.textContent),
+    })));
+    if ((expectedNotes.some(note => note.objective !== null) || shownNotes.some(note => note.title !== null))
+      && JSON.stringify(shownNotes) !== JSON.stringify(expectedNotes)) {
+      throw new Error('Frozen edit notes were changed or interpreted as markup');
+    }
+    if (await page.evaluate(() => window.unexpectedMarkup === true)) throw new Error('Author text executed as script');
     await page.waitForFunction(() => [...document.querySelectorAll('video')]
       .every(video => video.readyState >= 2));
     const media = await page.evaluate(async () => {
@@ -97,7 +114,7 @@ try {
       }
       return { videos, viewport: window.innerWidth, pageWidth: document.documentElement.scrollWidth };
     });
-    results.push({ label, requestedViewport: viewport, ...media, pageErrors: errors });
+    results.push({ label, requestedViewport: viewport, ...media, editingNotes: shownNotes, pageErrors: errors });
     await page.screenshot({ path: path.join(output, label + '.png'), fullPage: true });
     if (errors.length || !media.videos.length || media.videos.some(video => !video.played
       || video.error || Math.abs(video.seekSeconds - video.seekTargetSeconds) > 0.05)) {

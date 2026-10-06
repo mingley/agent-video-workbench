@@ -93,7 +93,7 @@ try {
         { id: 'first-burst', startMs: 800, endMs: 1200, text: 'First synchronized light and audio burst' },
         { id: 'second-burst', startMs: 2050, endMs: 2300, text: 'Second synchronized light and audio burst' },
       ] } });
-  const plan = { brief: { objective: 'Retain both complete bursts and their natural source timing' },
+  const plan = { brief: { objective: 'Retain both bursts <script>window.unexpectedMarkup=true</script>' },
     edit: { ...request.edit, outputId: 'planned', name: 'Reviewed HDR paper edit <test>' },
     decisions: [
       { cutId: 'first', reason: 'Keep the complete first burst and surrounding context' },
@@ -180,16 +180,21 @@ try {
     || frozenPlan.editPreflight.editPlan.planSha256 !== planned.planSha256
     || frozenPlan.verification.expectedFrames !== 90) throw new Error('Frozen planned edit lost review or media contract');
   await call({ command: 'delivery', project: 'project', id: plannedJob.id, destination: 'planned-review' });
+  const reviewHtml = fs.readFileSync(path.join(root, 'planned-review/index.html'), 'utf8');
+  if (!reviewHtml.includes('Why these cuts') || reviewHtml.includes('<script>') || !reviewHtml.includes('&lt;test&gt;')) {
+    throw new Error('Delivery lost frozen cut notes or treated author text as HTML');
+  }
   await call({ command: 'backup', project: 'project', destination: 'planned-backup' });
   const restoredPlan = await call({ command: 'edit-preflight', project: 'planned-backup', sequence: 'planned' });
   if (restoredPlan.editPlan.status !== 'stale' || restoredPlan.editPlan.decisions[1].reviews.length !== 1) {
     throw new Error('Backup lost decisions or stale review state');
   }
+  if (originalSha !== sha(path.join(root, 'original.mp4'))) throw new Error('Planned edit rewrote the original');
   fs.writeFileSync(path.join(root, 'summary.json'), JSON.stringify({ passed: true, officialMcpSdk: true,
     cliMcpReplayEquivalent: true, frozenHdrRevision: 2, currentRevision: 6, sourceUnchanged: true,
     editorialPlanning: { clippedCueRefused: true, cliMcpPlanAndReplayEquivalent: true,
       sourceContextPreviews: windows.length, contextAudioBurstSeconds, frozenPlannedRevision: 5,
-      transcriptChangeInvalidatesReview: true, backupRetainsDecisions: true },
+      transcriptChangeInvalidatesReview: true, backupRetainsDecisions: true, deliveryShowsEscapedFrozenIntent: true },
     verifiedHdrMaster: artifact.path, verifiedSdrPreview: preview, backupRetainsPolicy: true }, null, 2));
   console.log('Source-preserving MCP workflow passed:', path.join(root, 'summary.json'));
 } finally {

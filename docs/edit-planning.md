@@ -128,6 +128,8 @@ workflow. Other raw edits remain available and can invalidate a plan record.
 
 Render, retrieve and deliver `candidate` using the [natural-edit commands](natural-edit.md#inspect-freeze-and-retrieve)
 at the resulting revision. The frozen render manifest includes the plan's
-review state and decisions. Later feedback belongs to the exact artifact via
+review state and decisions. The review page names each output and shows its
+frozen objective and cut reasons; a batch can present baseline and candidate
+together. Later feedback belongs to the exact artifact via
 `review-add`. Risk notes are an agent's recorded intent; neither they nor
 technical QC certify human approval or artistic quality.

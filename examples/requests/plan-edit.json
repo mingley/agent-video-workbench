@@ -1,0 +1,41 @@
+{
+  "command": "plan-edit",
+  "project": "project",
+  "expectedRevision": 2,
+  "plan": {
+    "brief": {
+      "objective": "Keep the delivery natural; remove only the reviewed reset between takes",
+      "pacing": "natural",
+      "speechHandlesMs": 250,
+      "contextMs": 1000
+    },
+    "edit": {
+      "outputId": "candidate",
+      "name": "Reviewed reset removal",
+      "cuts": [
+        {
+          "id": "opening",
+          "assetId": "source",
+          "startMs": 0,
+          "endMs": 4500
+        },
+        {
+          "id": "ending",
+          "assetId": "source",
+          "startMs": 5500,
+          "endMs": 10000
+        }
+      ]
+    },
+    "decisions": [
+      {
+        "cutId": "opening",
+        "reason": "Keep the complete opening and reaction"
+      },
+      {
+        "cutId": "ending",
+        "reason": "Resume after the reviewed reset; keep the original ending"
+      }
+    ]
+  }
+}

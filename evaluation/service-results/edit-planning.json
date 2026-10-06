@@ -1,0 +1,368 @@
+{
+  "date": "2026-10-06",
+  "scope": "Local generated media and documentation research; no private footage or physical HDR display review",
+  "version": "avw 0.4.0",
+  "baseCommit": "df2b9baa1f401254dfe5548783958dbd671e58ab",
+  "applicationSourceSha256": {
+    "src/analysis.rs": "118c2813a241c11bd1bd9b3f4fed33d29ff6867bdead7704a3b64832bb97ef84",
+    "src/animation.rs": "c6439b7b62c173471926ffd7b15a0493507e79f24db2605a8b9c47d9ae5c3ae6",
+    "src/asr.rs": "3ce9149f94c106c9f1ac15be80c9f159d418cbf6f20345bda4d08dc4c3d29557",
+    "src/assembly.rs": "3d79081950f0dcadacdd6d4204898bd0b14094c08eaaf83447abd68805132ccd",
+    "src/audio.rs": "ba485e6bb8041b615f5f370e2570f3e2675071ce808b095cb8b71474b8e03c24",
+    "src/color.rs": "5d6583197bfb0c247ac1e3e30f6ffbcdd7f7169570e8cbdac0ff9476760a3bdb",
+    "src/delivery.rs": "686897983c36c7854b87ae87d52ebedb4319b0af4fb4b531f613375ab7c7fee1",
+    "src/editorial.rs": "86c9616e28c2dc62668e14b2e810e5b1c1fb33cdfb5b871aa57a2f124260c1c8",
+    "src/inspect.rs": "ac256c047551878f1c820c63924c84e3b78f056cd4e7387e57ba7ec576a0a8da",
+    "src/interchange.rs": "6002f0db051e77a371431bbe19336dc36024ee07be7c59037416a21b720d7065",
+    "src/jobs.rs": "934c6d0fdea55e892be2e67af1a9b54c2597c5ff94769e120461dd4042c4fbdc",
+    "src/json.rs": "e9da076884fcff69a4cb128e97c1b1a2719ec8fe2d87c25e014cb14bfe58f05e",
+    "src/lib.rs": "fa68a2603ce28b2c4c301525159da60a7cf4a0a1b387521c1d029703b42ae040",
+    "src/library.rs": "c6245399748d2ddbbef4f41382608b44cd46c9269cf310d02db8b55cd9b22396",
+    "src/main.rs": "b1269da93353d11e04c80b75a6c48d5a32531e03f9d168374f9c01e7a0ac1dfd",
+    "src/mcp.rs": "5cb2a6cd3ba5e76cd48096db158c23d1e27552b50dded0b19ec32b361194430a",
+    "src/media.rs": "b37ebe0382d099c39ab3967fd7cceff9528fffaf8cf67aceff599053788984a1",
+    "src/policy.rs": "173844393169d7c0cff4d1338411bdeb99bc7722d72cee8fcc267a44a73cfe1d",
+    "src/preserve.rs": "c174817677b7bf4bc3852f0fb35bd60da840b55cbc5d879b989c85470d83213a",
+    "src/process.rs": "756350cb805b2b2d40ab422a711ea948c55e932183c87ca2e1aad09b8488d113",
+    "src/service.rs": "a9d716ae45d7e53b218a75353428b865da4c9dea7ac40ab7d8da509a6bf68dc2",
+    "src/storage.rs": "e38c0eb5d994f36519872bedb8f6f64f8392e6f56d5b4f5cef728a290cd87bf0",
+    "src/store.rs": "524223233a66fc49de19dfcb072b9ffee9c0d0631082c9ca90158a9dc57aa802",
+    "src/studio.rs": "33105cfed0095d7193c57749f65ba96b69cd96c364e4243b769996a3b0cf90dc",
+    "src/tracking.rs": "02e1ec466ba9c3a2b86a413dc8a766aa5cdd9a75943dbcdad742204490a69d9c",
+    "src/transfer.rs": "d8e998643d2e8cb9d4678a196139aaafc798ac02ade82e15e969d4b4670d95e2",
+    "src/workflow.rs": "f4358ce39bea5a573efc4768989884408389fa1e28481da7c05515eaba151561"
+  },
+  "localBinarySha256": "b5f50b549dc8d472d1368a9be3d6d2ee6e077f37405f0e2d257e323fcff62886",
+  "toolchain": "Rust 1.99.0 stable; FFmpeg n8.0.1; official MCP SDK 1.32.0; Chromium 151",
+  "requiredChecks": {
+    "rustTests": 43,
+    "ignored": 0,
+    "format": true,
+    "strictClippy": true,
+    "generatedSchema": true
+  },
+  "runs": {
+    "preserve-agent-final/summary.json": {
+      "summarySha256": "838ddf1f883d7aae3154cea125d20937d89f3a20de791776cb1da7c69d5d2132",
+      "summary": {
+        "passed": true,
+        "officialMcpSdk": true,
+        "cliMcpReplayEquivalent": true,
+        "frozenHdrRevision": 2,
+        "currentRevision": 6,
+        "sourceUnchanged": true,
+        "editorialPlanning": {
+          "clippedCueRefused": true,
+          "cliMcpPlanAndReplayEquivalent": true,
+          "sourceContextPreviews": 4,
+          "contextAudioBurstSeconds": 1.0000416666666667,
+          "frozenPlannedRevision": 5,
+          "transcriptChangeInvalidatesReview": true,
+          "backupRetainsDecisions": true,
+          "deliveryShowsEscapedFrozenIntent": true
+        },
+        "verifiedHdrMaster": "/workspace/.onboarding/editor-research-20261006/preserve-agent-final/project/renders/00b6ea8e-6af5-483a-a9ee-9f81db0c3824-1/video.mp4",
+        "verifiedSdrPreview": "/workspace/.onboarding/editor-research-20261006/preserve-agent-final/review/00b6ea8e-6af5-483a-a9ee-9f81db0c3824/review-sdr.mp4",
+        "backupRetainsPolicy": true
+      }
+    },
+    "planning-browser/summary.json": {
+      "summarySha256": "2ac6dba803d88ee92b3bf9d4d1fd8e43bec93ea6bf11d66d6f5e4025b59c10fe",
+      "summary": {
+        "passed": true,
+        "browser": "151.0.7922.173",
+        "results": [
+          {
+            "label": "desktop",
+            "requestedViewport": {
+              "width": 1280,
+              "height": 900
+            },
+            "videos": [
+              {
+                "width": 640,
+                "height": 360,
+                "duration": 1.5,
+                "played": true,
+                "playbackWaitMs": 259.70000000298023,
+                "seekTargetSeconds": 0.75,
+                "seekSeconds": 0.75,
+                "error": null,
+                "displayedWidth": 360
+              }
+            ],
+            "viewport": 1280,
+            "pageWidth": 1280,
+            "editingNotes": [
+              {
+                "title": "Reviewed HDR paper edit <test>",
+                "objective": "Retain both bursts <script>window.unexpectedMarkup=true</script>",
+                "reasons": [
+                  "Keep the complete first burst and surrounding context",
+                  "Keep the complete second burst <no overlay>"
+                ]
+              }
+            ],
+            "pageErrors": []
+          },
+          {
+            "label": "phone",
+            "requestedViewport": {
+              "width": 390,
+              "height": 844
+            },
+            "videos": [
+              {
+                "width": 640,
+                "height": 360,
+                "duration": 1.5,
+                "played": true,
+                "playbackWaitMs": 254.70000000298023,
+                "seekTargetSeconds": 0.75,
+                "seekSeconds": 0.75,
+                "error": null,
+                "displayedWidth": 358
+              }
+            ],
+            "viewport": 390,
+            "pageWidth": 390,
+            "editingNotes": [
+              {
+                "title": "Reviewed HDR paper edit <test>",
+                "objective": "Retain both bursts <script>window.unexpectedMarkup=true</script>",
+                "reasons": [
+                  "Keep the complete first burst and surrounding context",
+                  "Keep the complete second burst <no overlay>"
+                ]
+              }
+            ],
+            "pageErrors": []
+          },
+          {
+            "label": "small-phone",
+            "requestedViewport": {
+              "width": 320,
+              "height": 640
+            },
+            "videos": [
+              {
+                "width": 640,
+                "height": 360,
+                "duration": 1.5,
+                "played": true,
+                "playbackWaitMs": 254.1000000089407,
+                "seekTargetSeconds": 0.75,
+                "seekSeconds": 0.75,
+                "error": null,
+                "displayedWidth": 288
+              }
+            ],
+            "viewport": 320,
+            "pageWidth": 320,
+            "editingNotes": [
+              {
+                "title": "Reviewed HDR paper edit <test>",
+                "objective": "Retain both bursts <script>window.unexpectedMarkup=true</script>",
+                "reasons": [
+                  "Keep the complete first burst and surrounding context",
+                  "Keep the complete second burst <no overlay>"
+                ]
+              }
+            ],
+            "pageErrors": []
+          }
+        ],
+        "requests": [
+          {
+            "path": "/",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/0faba676-d804-433a-ab9e-d48127a1adea/review-sdr.mp4",
+            "status": 206,
+            "range": "bytes=0-"
+          },
+          {
+            "path": "/0faba676-d804-433a-ab9e-d48127a1adea/video.mp4",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/0faba676-d804-433a-ab9e-d48127a1adea/captions.vtt",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/0faba676-d804-433a-ab9e-d48127a1adea/manifest.json",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/0faba676-d804-433a-ab9e-d48127a1adea/review-sdr.mp4",
+            "status": 206,
+            "range": "bytes=0-"
+          },
+          {
+            "path": "/0faba676-d804-433a-ab9e-d48127a1adea/video.mp4",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/0faba676-d804-433a-ab9e-d48127a1adea/captions.vtt",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/0faba676-d804-433a-ab9e-d48127a1adea/manifest.json",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/0faba676-d804-433a-ab9e-d48127a1adea/review-sdr.mp4",
+            "status": 206,
+            "range": "bytes=0-"
+          },
+          {
+            "path": "/0faba676-d804-433a-ab9e-d48127a1adea/video.mp4",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/0faba676-d804-433a-ab9e-d48127a1adea/captions.vtt",
+            "status": 200,
+            "range": null
+          },
+          {
+            "path": "/0faba676-d804-433a-ab9e-d48127a1adea/manifest.json",
+            "status": 200,
+            "range": null
+          }
+        ],
+        "limitations": [
+          "Chromium viewport emulation; no iOS Safari, physical phone, HDR display or real-camera appearance approval"
+        ]
+      }
+    },
+    "source-preserve/summary.json": {
+      "summarySha256": "856df7c5e48024a8a89ed434a45bf5ed29b7fa8ff5595f67e68dbdf6da191da6",
+      "summary": {
+        "passed": true,
+        "scope": "generated native 10-bit cut-only PQ/HLG; no display qualification",
+        "checks": [
+          {
+            "transfer": "smpte2084",
+            "nativePixelEquality": true,
+            "uniqueLumaValues": 640,
+            "frames": 90,
+            "lightBurstStarts": [
+              0.5,
+              1.25
+            ],
+            "audioBurstStarts": [
+              0.5,
+              1.25
+            ],
+            "staticMetadataPreserved": true,
+            "verifiedSdrPreview": true,
+            "sourceUnchanged": true,
+            "revision": 2,
+            "artifactId": "7311fd96-8678-4aa4-8846-f49f303def53",
+            "manifest": "/workspace/.onboarding/editor-research-20261006/source-preserve/project/renders/7311fd96-8678-4aa4-8846-f49f303def53/manifest.json",
+            "highQualityMeanError10Bit": 0.13805690586419753
+          },
+          {
+            "transfer": "arib-std-b67",
+            "nativePixelEquality": true,
+            "uniqueLumaValues": 640,
+            "frames": 90,
+            "lightBurstStarts": [
+              0.5,
+              1.25
+            ],
+            "audioBurstStarts": [
+              0.5,
+              1.25
+            ],
+            "staticMetadataPreserved": true,
+            "verifiedSdrPreview": true,
+            "sourceUnchanged": true,
+            "revision": 6,
+            "artifactId": "31b8577b-95b7-4b52-9e75-a95c0d11720f",
+            "manifest": "/workspace/.onboarding/editor-research-20261006/source-preserve/project/renders/31b8577b-95b7-4b52-9e75-a95c0d11720f/manifest.json"
+          }
+        ],
+        "fullHdRepeatedCuts": {
+          "frames": 393,
+          "size": [
+            1080,
+            1920
+          ],
+          "transfer": "arib-std-b67",
+          "sourceUnchanged": true,
+          "lossyIntermediate": false,
+          "workerAddressSpaceBytes": 4294967296
+        },
+        "losslessSdrPixelEquality": true,
+        "previewTamperRejected": true,
+        "atomicRefusals": [
+          "mixed transfers",
+          "tight cuts",
+          "unrequested reorder"
+        ]
+      }
+    },
+    "analysis/summary.json": {
+      "summarySha256": "93b3a85e2951ef21db2f1d1bfba5eb7212cc758d2693227360b4d4deb059b22c",
+      "summary": {
+        "passed": true,
+        "trackingCenterErrorsSourcePixels": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "renderedProductCenters": [
+          176.92818650421742,
+          180.96997735613337,
+          180.9656007184413
+        ],
+        "checks": [
+          "PTS-based frame index",
+          "mapped SDR proxy/cache reuse",
+          "selected-region tracking with occlusion hold",
+          "proxy attachment tamper rejection",
+          "grade with pan",
+          "accepted pan renders motion",
+          "provider version/hash contract/cache",
+          "malformed result and cancellation preserve history"
+        ]
+      }
+    }
+  },
+  "provenance": {
+    "source-preserve/summary.json": "Core planning build before delivery-note and exact preview-window refinements; same native encoder and assembly pipeline",
+    "analysis/summary.json": "Core planning build with one decoder thread for proxy inputs",
+    "preserve-agent-final/summary.json": "Final local Rust sources in applicationSourceSha256",
+    "planning-browser/summary.json": "Final generated planned-review bundle; three Chromium viewports"
+  },
+  "nativeQualification": {
+    "status": "pending",
+    "coreCommitRun": 37547486770
+  },
+  "preparedAgentTrial": {
+    "status": "pending"
+  }
+}

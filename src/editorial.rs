@@ -1,6 +1,6 @@
 //! Source-context paper edits. Editorial review is explicit, bounded and durable.
 use crate::{Error, Result, assembly, store::Store, workflow};
-use agentcut_core::{ItemPayload, Project, RationalRate, RationalTime};
+use agentcut_core::{ItemPayload, Project, RationalRate, RationalTime, RoundingMode};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -225,7 +225,9 @@ pub fn plan(project: &Project, plan: &EditPlan, expected: u64) -> Result<Value> 
             .metadata
             .duration
             .ok_or_else(|| invalid("paper edits require known source duration"))?;
-        let source_end = (duration.as_seconds_f64() * 1000.0).floor() as i64;
+        let source_end = duration
+            .rescale_to(workflow::time(0).rate, RoundingMode::Floor)?
+            .value;
         let start = clip.source_range.start;
         let end = clip.source_range.end_exclusive()?;
         let decision = decisions[cut.id.as_str()];
@@ -305,13 +307,14 @@ pub fn plan(project: &Project, plan: &EditPlan, expected: u64) -> Result<Value> 
             if review.is_none() { blockers+=1; }
             json!({"risk":risk,"status":if review.is_some(){"reviewed"}else{"needs-review"},"note":review.map(|r|&r.note)})
         }).collect();
-        let windows: Vec<_> = [("in",start),("out",end)].into_iter().map(|(edge,boundary)| {
+        let windows: Vec<_> = [("in",start),("out",end)].into_iter().map(|(edge,boundary)| -> Result<Value> {
             let ms=boundary.as_seconds_f64()*1000.0;
-            let a = ((ms-f64::from(plan.brief.context_ms)).floor() as i64).max(0);
-            let b = ((ms+f64::from(plan.brief.context_ms)).ceil() as i64).min(source_end);
-            json!({"edge":edge,"boundary":boundary,
-                "boundaryOffsetMs":ms-a as f64,"sourceStartMs":a,"sourceEndMs":b,"previewRequest":preview(&asset.id,a,b)})
-        }).collect();
+            let context=workflow::time(i64::from(plan.brief.context_ms));
+            let a = boundary.checked_sub(context)?.rescale_to(workflow::time(0).rate,RoundingMode::Floor)?.value.max(0);
+            let b = boundary.checked_add(context)?.rescale_to(workflow::time(0).rate,RoundingMode::Ceil)?.value.min(source_end);
+            Ok(json!({"edge":edge,"boundary":boundary,
+                "boundaryOffsetMs":ms-a as f64,"sourceStartMs":a,"sourceEndMs":b,"previewRequest":preview(&asset.id,a,b)}))
+        }).collect::<Result<_>>()?;
         coverage.entry(&asset.id).or_default().push((start, end));
         cuts.push(json!({"cutId":cut.id,"itemId":item.id,"assetId":asset.id,"sourceSha256":asset.fingerprint.sha256,
             "requestedRangeMs":[cut.start_ms,cut.end_ms],"sourceRange":clip.source_range,"outputStart":item.start,"outputDuration":item.duration,

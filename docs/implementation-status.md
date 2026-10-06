@@ -24,7 +24,13 @@ CLI/MCP planning and replay, atomic clipped-cue refusal, four verified source
 context videos with audio, dry-run, frozen planned HDR rendering, transcript
 review invalidation and backup retention. Media is generated PQ footage with
 supplied burst-timing cues, not private human footage or artistic acceptance.
-Native CI and further regression evidence are recorded separately below.
+The planned-review HTML shows frozen output names, objectives and cut reasons.
+Chromium playback/seeking, literal text escaping and layouts passed at desktop,
+390px and 320px. Existing proxy/index/tracking/provider checks also passed.
+The preservation regression still measured exact PQ/HLG lossless pixels,
+640 luma values, retained static HDR metadata and the full-HD 393-frame edit
+without a lossy intermediate. The [machine-readable record](../evaluation/service-results/edit-planning.json)
+separates core-build regressions from final local sources and native CI evidence.
 
 ## Source-preserving 0.4.0 on main
 

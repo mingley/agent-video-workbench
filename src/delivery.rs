@@ -23,6 +23,38 @@ fn timestamp(ms: i64, separator: char) -> String {
         ms % 1000
     )
 }
+
+fn html_text(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+fn editing_notes(manifest: &Value) -> String {
+    let record = &manifest["editPreflight"]["editPlan"];
+    let Some(objective) = record["brief"]["objective"].as_str() else {
+        return String::new();
+    };
+    let mut html = format!("<p data-edit-objective>{}</p>", html_text(objective));
+    if record["status"] == "stale" {
+        html.push_str("<p>Timing or source evidence has changed since these notes. Review this version again.</p>");
+    }
+    if let Some(decisions) = record["decisions"].as_array() {
+        html.push_str("<details><summary>Why these cuts</summary><ol>");
+        for decision in decisions.iter().take(20) {
+            if let Some(reason) = decision["reason"].as_str() {
+                html.push_str(&format!("<li data-cut-reason>{}</li>", html_text(reason)));
+            }
+        }
+        html.push_str("</ol></details>");
+        if decisions.len() > 20 {
+            html.push_str("<p>Further cut notes are included in the manifest.</p>");
+        }
+    }
+    html
+}
 pub fn sidecars(sequence: &Sequence) -> Result<(String, String, Value)> {
     let mut cues = Vec::new();
     let solo = sequence.tracks.iter().any(|t| t.enabled && t.solo);
@@ -152,7 +184,7 @@ pub fn package(root: &Path, id: &str, destination: &Path) -> Result<Value> {
          <title>Video review</title><style>\
          body{font-family:system-ui,sans-serif;margin:1rem auto;padding:0 1rem;max-width:60rem}\
          section{margin:0 0 2rem}video{display:block;width:360px;max-width:100%;height:auto}\
-         a{overflow-wrap:anywhere}\
+         a,h2,p,li{overflow-wrap:anywhere}\
          </style><body><main><h1>Video review</h1>",
     );
     for id in ids {
@@ -223,8 +255,16 @@ pub fn package(root: &Path, id: &str, destination: &Path) -> Result<Value> {
         } else {
             ""
         };
-        html.push_str(&format!("<section><video controls width=360 src='{id}/{preview}'></video>{label}<p><a href='{id}/video.mp4'>Master</a> · <a href='{id}/captions.vtt'>Captions</a> · <a href='{id}/manifest.json'>Manifest</a></p></section>"));
-        items.push(json!({"jobId":id,"state":"succeeded","revision":item.revision,"sequenceId":manifest["sequenceId"],"files":files,"review":"pending"}));
+        let title = manifest["snapshot"]["sequences"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|s| s["id"] == manifest["sequenceId"])
+            .and_then(|s| s["name"].as_str())
+            .unwrap_or("Video");
+        let notes = editing_notes(&manifest);
+        html.push_str(&format!("<section><h2>{}</h2><video controls width=360 src='{id}/{preview}'></video>{label}{notes}<p><a href='{id}/video.mp4'>Master</a> · <a href='{id}/captions.vtt'>Captions</a> · <a href='{id}/manifest.json'>Manifest</a></p></section>",html_text(title)));
+        items.push(json!({"jobId":id,"state":"succeeded","revision":item.revision,"sequenceId":manifest["sequenceId"],"files":files,"review":"pending","editPlan":manifest["editPreflight"]["editPlan"]}));
     }
     html.push_str("</main></body></html>");
     let report = json!({"schemaVersion":1,"batchId":job.id,"frozenRevision":job.revision,"items":items,"reviews":store.project()?.extensions.get("avw.reviews"),"editorialReview":"pending"});

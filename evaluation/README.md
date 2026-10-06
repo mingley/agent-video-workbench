@@ -142,3 +142,14 @@ connection was tested. The
 [backlog](../docs/roadmap.md) distinguish those remaining gates from the small
 cases actually verified here. Short synthetic elapsed times are not product
 performance or cost estimates.
+
+## Source-context paper edits
+
+The current `preserve_agent_smoke.mjs` additionally exercises `plan-edit` and
+`apply-edit-plan`: clipped-cue refusal, CLI/MCP equality, four complete scoped
+source-context proxy jobs with verified audio timing, dry-run/replay, frozen HDR
+plan rendering, correction-induced stale review and backup retention. Its
+`planned-review` bundle carries frozen objective/cut notes. `browser_smoke.mjs`
+checks those literal strings and playback/phone layouts, including authored
+markup displayed as text. The cues describe generated sync bursts; these are
+contract and media tests, not human-performance or real-phone approval.
