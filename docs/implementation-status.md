@@ -1,5 +1,22 @@
 # Implementation and qualification
 
+## Review freshness on current 0.4.0 source
+
+Edit-plan review now includes the output's protected source ranges in its
+freshness check and reports the reason when review is stale. Protections on
+other outputs do not invalidate it. Records made before this check are compared
+with the empty protection set they had when their new output was created; their
+notes and history remain intact. Render manifests retain the state frozen with
+their revision.
+
+On local Linux x86_64, Rust 1.99.1 passed 44 tests, formatting, strict Clippy,
+the release build and generated schema check. The official MCP SDK workflow
+passed with a generated 60fps PQ fixture and FFmpeg 8.0.1: CLI/MCP agreed on
+protection-related staleness, an unrelated output stayed current, removing the
+new protection restored the reviewed state, and the already-frozen render kept
+its original review state. These changes are newer than the native qualification
+below; no new ARM64 or real-camera qualification is claimed.
+
 ## Editorial planning on main, October 6, 2026
 
 Current 0.4.0 source builds add read-only `plan-edit` and atomic

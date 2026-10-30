@@ -110,8 +110,9 @@ revision, checks CLI replay and verified master/preview retrieval, delivers the
 bundle and reopens its policy from backup.
 It also runs paper-edit planning through CLI/MCP, refuses an unreviewed clipped
 cue atomically, plays four verified source-context proxies with measured audio
-offsets, checks plan dry-run/replay, invalidates review after cue correction and
-retains cut decisions in backup. The planned-review browser check verifies frozen
+offsets, checks plan dry-run/replay and invalidates review after cue or relevant
+protection changes. It compares CLI/MCP status, checks protections on other
+outputs and frozen review state, and retains cut decisions in backup. The planned-review browser check verifies frozen
 output names/objectives/reasons as literal text, alongside playback and layout.
 
 Optional local ASR needs CMake and C/C++ to build pinned whisper.cpp v1.9.4.

@@ -119,10 +119,17 @@ history. Applying saves the sequence, brief, reasons, risk notes and review
 fingerprint in the same revision transaction. All originals remain untouched.
 
 `edit-preflight.result.editPlan.status` is `current`, `stale` or `unplanned`.
-Changed timing, source identity, style/policy or reviewed transcript makes the
-record stale; an unrelated project rename does not. Stale means review the
-new edit again, not that the old notes disappeared. Use a new output ID for a
-new planned candidate. Planned edits currently create source-preserving plain
+Changed timing, source identity, style, assembly policy, reviewed transcript,
+or protected source ranges for that output make the record stale. A project
+rename or a protection on another output does not. `staleReasons` identifies
+`content-changed` and/or `protected-ranges-changed`. If the exact recorded
+content and protections are restored, the review becomes current again. Old
+plan records were created before protections could be attached to their new
+output, so they are compared against an empty set of protections.
+
+Stale means review the new edit again; the old notes remain. A frozen render
+keeps the review state from its own revision. Use a new output ID for a new
+planned candidate. Planned edits currently create source-preserving plain
 assemblies; styled SDR compositions still use `compose` and the existing studio
 workflow. Other raw edits remain available and can invalidate a plan record.
 

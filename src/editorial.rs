@@ -167,13 +167,37 @@ fn content_hash(project: &Project, sequence_id: &str) -> Result<String> {
     hash(&json!({"sequence":sequence,"sources":sources,"transcripts":transcripts}))
 }
 
+fn protections(project: &Project, sequence_id: &str) -> Result<Vec<crate::policy::ProtectedRange>> {
+    let mut ranges: Vec<_> = crate::policy::ranges(project)?
+        .into_iter()
+        .filter(|range| range.sequence_id == sequence_id)
+        .collect();
+    ranges.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(ranges)
+}
+
 pub fn state(project: &Project, sequence_id: &str) -> Result<Value> {
     let sequence = project.require_sequence(sequence_id)?;
     let Some(record) = sequence.extensions.get(RECORD) else {
         return Ok(json!({"status":"unplanned"}));
     };
+    let mut stale_reasons = Vec::new();
+    if record["contentSha256"] != content_hash(project, sequence_id)? {
+        stale_reasons.push("content-changed");
+    }
+    let current_protections = protections(project, sequence_id)?;
+    // Older records predate this fingerprint. A plan always created a new
+    // sequence, and protection requires an existing sequence, so its initial
+    // set of protected ranges was empty.
+    let protection_changed = match record.get("protectionSha256") {
+        Some(saved) => *saved != hash(&current_protections)?,
+        None => !current_protections.is_empty(),
+    };
+    if protection_changed {
+        stale_reasons.push("protected-ranges-changed");
+    }
     Ok(
-        json!({"status":if record["contentSha256"] == content_hash(project,sequence_id)? {"current"} else {"stale"},
+        json!({"status":if stale_reasons.is_empty() {"current"} else {"stale"},"staleReasons":stale_reasons,
         "baseRevision":record["baseRevision"],"planSha256":record["planSha256"],
         "brief":record["plan"]["brief"],"decisions":record["plan"]["decisions"],
         "guidance":"Recorded reasons and risk notes are editorial intent, not proof of human approval or artistic quality"}),
@@ -377,7 +401,8 @@ impl Store {
             if report["readyToApply"] != true { return Err(invalid("edit plan has unreviewed risks; adjust source ranges or supply a specific decision review note, then run plan-edit again")); }
             let mut next=assembly::build(project,&plan.edit,expected,key)?;
             let content=content_hash(&next,&plan.edit.output_id)?;
-            next.require_sequence_mut(&plan.edit.output_id)?.extensions.insert(RECORD.into(),json!({"baseRevision":expected,"planSha256":plan_sha256,"contentSha256":content,"plan":plan}));
+            let protection=hash(&protections(&next,&plan.edit.output_id)?)?;
+            next.require_sequence_mut(&plan.edit.output_id)?.extensions.insert(RECORD.into(),json!({"baseRevision":expected,"planSha256":plan_sha256,"contentSha256":content,"protectionSha256":protection,"plan":plan}));
             Ok(next)
         })
     }

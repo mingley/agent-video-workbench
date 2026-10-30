@@ -166,11 +166,25 @@ try {
   }
   const plannedJob = await call({ command: 'render-start', project: 'project', sequence: 'planned',
     expectedRevision: 5, key: 'render-reviewed-plan', noLaunch: true });
-  await call({ command: 'transcript-import', project: 'project', expectedRevision: 5,
-    key: 'later-cue-correction', transcript: { assetId: 'phone', language: 'en', provider: 'correction',
-      cues: [{ id: 'first-burst', startMs: 800, endMs: 1250, text: 'Corrected timing evidence' }] } });
-  const stale = await call({ command: 'edit-preflight', project: 'project', sequence: 'planned' });
-  if (stale.editPlan.status !== 'stale') throw new Error('Changed transcript retained false current review');
+  const interval = { start: { value: 600, rate: { numerator: 1000, denominator: 1 } },
+    end: { value: 700, rate: { numerator: 1000, denominator: 1 } } };
+  await call({ command: 'protect', project: 'project', expectedRevision: 5, key: 'protect-other-output',
+    range: { id: 'natural-protection', assetId: 'phone', sequenceId: 'natural', ...interval } });
+  const unaffected = await call({ command: 'edit-preflight', project: 'project', sequence: 'planned' });
+  if (unaffected.editPlan.status !== 'current') throw new Error('Other output protection invalidated review');
+  await call({ command: 'protect', project: 'project', expectedRevision: 6, key: 'protect-planned-output',
+    range: { id: 'planned-protection', assetId: 'phone', sequenceId: 'planned', ...interval } });
+  const policyStale = await call({ command: 'edit-preflight', project: 'project', sequence: 'planned' });
+  if (policyStale.editPlan.status !== 'stale'
+    || JSON.stringify(policyStale.editPlan.staleReasons) !== JSON.stringify(['protected-ranges-changed'])) {
+    throw new Error('Changed protection retained false current review');
+  }
+  fs.writeFileSync(planFile, JSON.stringify({ command: 'edit-preflight', project: 'project', sequence: 'planned' }));
+  const cliPreflight = spawnSync(avw, ['--ffmpeg', ffmpeg, '--ffprobe', ffprobe, '--workspace', root,
+    'request', planFile], { encoding: 'utf8' });
+  if (cliPreflight.status !== 0 || JSON.stringify(JSON.parse(cliPreflight.stdout).result) !== JSON.stringify(policyStale)) {
+    throw new Error('CLI/MCP protection review status differs');
+  }
   const plannedWorker = spawnSync(avw, ['worker', path.join(root, 'project')], { encoding: 'utf8', timeout: 300000 });
   if (plannedWorker.status !== 0) throw new Error(plannedWorker.stderr);
   const plannedStatus = await call({ command: 'job-status', project: 'project', id: plannedJob.id });
@@ -179,6 +193,18 @@ try {
   if (frozenPlan.revision !== 5 || frozenPlan.editPreflight.editPlan.status !== 'current'
     || frozenPlan.editPreflight.editPlan.planSha256 !== planned.planSha256
     || frozenPlan.verification.expectedFrames !== 90) throw new Error('Frozen planned edit lost review or media contract');
+  await call({ command: 'unprotect', project: 'project', expectedRevision: 7,
+    key: 'remove-planned-protection', id: 'planned-protection' });
+  if ((await call({ command: 'edit-preflight', project: 'project', sequence: 'planned' })).editPlan.status !== 'current') {
+    throw new Error('Restoring the reviewed protection set did not restore current status');
+  }
+  await call({ command: 'transcript-import', project: 'project', expectedRevision: 8,
+    key: 'later-cue-correction', transcript: { assetId: 'phone', language: 'en', provider: 'correction',
+      cues: [{ id: 'first-burst', startMs: 800, endMs: 1250, text: 'Corrected timing evidence' }] } });
+  const stale = await call({ command: 'edit-preflight', project: 'project', sequence: 'planned' });
+  if (stale.editPlan.status !== 'stale' || !stale.editPlan.staleReasons.includes('content-changed')) {
+    throw new Error('Changed transcript retained false current review');
+  }
   await call({ command: 'delivery', project: 'project', id: plannedJob.id, destination: 'planned-review' });
   const reviewHtml = fs.readFileSync(path.join(root, 'planned-review/index.html'), 'utf8');
   if (!reviewHtml.includes('Why these cuts') || reviewHtml.includes('<script>') || !reviewHtml.includes('&lt;test&gt;')) {
@@ -189,11 +215,17 @@ try {
   if (restoredPlan.editPlan.status !== 'stale' || restoredPlan.editPlan.decisions[1].reviews.length !== 1) {
     throw new Error('Backup lost decisions or stale review state');
   }
+  const backupStatus = await call({ command: 'resume', project: 'planned-backup' });
+  if (!backupStatus.protectedRanges.some(range => range.id === 'natural-protection')) {
+    throw new Error('Backup lost the other output protection');
+  }
   if (originalSha !== sha(path.join(root, 'original.mp4'))) throw new Error('Planned edit rewrote the original');
   fs.writeFileSync(path.join(root, 'summary.json'), JSON.stringify({ passed: true, officialMcpSdk: true,
-    cliMcpReplayEquivalent: true, frozenHdrRevision: 2, currentRevision: 6, sourceUnchanged: true,
+    cliMcpReplayEquivalent: true, frozenHdrRevision: 2, currentRevision: 9, sourceUnchanged: true,
     editorialPlanning: { clippedCueRefused: true, cliMcpPlanAndReplayEquivalent: true,
       sourceContextPreviews: windows.length, contextAudioBurstSeconds, frozenPlannedRevision: 5,
+      protectionChangeInvalidatesReview: true, otherProtectionLeavesReviewCurrent: true,
+      cliMcpProtectionStatusEquivalent: true, frozenReviewUnchanged: true, restoringProtectionRestoresReview: true,
       transcriptChangeInvalidatesReview: true, backupRetainsDecisions: true, deliveryShowsEscapedFrozenIntent: true },
     verifiedHdrMaster: artifact.path, verifiedSdrPreview: preview, backupRetainsPolicy: true }, null, 2));
   console.log('Source-preserving MCP workflow passed:', path.join(root, 'summary.json'));

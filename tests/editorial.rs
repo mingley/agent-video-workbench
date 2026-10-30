@@ -3,7 +3,7 @@ use agent_video_workbench::{
     store::Store,
     workflow::{Cue, Transcript},
 };
-use agentcut_core::OperationBatch;
+use agentcut_core::{OperationBatch, RationalRate, RationalTime};
 use serde_json::{Value, json};
 
 fn seed(store: &mut Store, numerator: u32, denominator: u32, cues: Vec<Cue>) {
@@ -223,6 +223,107 @@ fn changed_timing_or_transcript_invalidates_review_but_project_rename_does_not()
         agent_video_workbench::assembly::preflight(&store.project().unwrap(), "candidate").unwrap()
             ["editPlan"]["status"],
         "stale"
+    );
+}
+
+#[test]
+fn protected_ranges_invalidate_only_their_own_review_and_survive_restore() {
+    use agent_video_workbench::policy::ProtectedRange;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("p");
+    let mut store = Store::create(&root, "Protection review").unwrap();
+    seed(&mut store, 30, 1, vec![]);
+    let proposed = plan(json!([{"id":"take","assetId":"source","startMs":0,"endMs":3000}]));
+    let report = editorial::plan(&store.project().unwrap(), &proposed, 2).unwrap();
+    store
+        .apply_edit_plan(&proposed, 2, "apply-protected-review", sha(&report), false)
+        .unwrap();
+
+    let mut other = proposed.edit.clone();
+    other.output_id = "other".into();
+    store.assemble(&other, 3, "other-output", false).unwrap();
+    let rate = RationalRate::frames(1000).unwrap();
+    let range = |id: &str, sequence_id: &str| ProtectedRange {
+        id: id.into(),
+        asset_id: "source".into(),
+        sequence_id: sequence_id.into(),
+        start: RationalTime::new(1000, rate),
+        end: RationalTime::new(1500, rate),
+    };
+    store
+        .protect(range("other-protection", "other"), 4, "protect-other")
+        .unwrap();
+    let before = store.project().unwrap();
+    let current = editorial::state(&before, "candidate").unwrap();
+    assert_eq!(current["status"], "current");
+    assert_eq!(current["staleReasons"], json!([]));
+
+    // Legacy records had no protection fingerprint; a newly planned sequence
+    // necessarily had no protected ranges when its record was created.
+    let mut legacy = before.clone();
+    legacy
+        .require_sequence_mut("candidate")
+        .unwrap()
+        .extensions
+        .get_mut(editorial::RECORD)
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .remove("protectionSha256");
+    assert_eq!(
+        editorial::state(&legacy, "candidate").unwrap()["status"],
+        "current"
+    );
+
+    store
+        .protect(
+            range("candidate-protection", "candidate"),
+            5,
+            "protect-candidate",
+        )
+        .unwrap();
+    let changed = store.project().unwrap();
+    let stale =
+        agent_video_workbench::assembly::preflight(&changed, "candidate").unwrap()["editPlan"]
+            .clone();
+    assert_eq!(stale["status"], "stale");
+    assert_eq!(stale["staleReasons"], json!(["protected-ranges-changed"]));
+    assert_eq!(stale["decisions"], current["decisions"]);
+    assert_eq!(
+        editorial::state(&before, "candidate").unwrap()["status"],
+        "current"
+    );
+    let mut legacy_changed = changed.clone();
+    legacy_changed
+        .require_sequence_mut("candidate")
+        .unwrap()
+        .extensions
+        .get_mut(editorial::RECORD)
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .remove("protectionSha256");
+    assert_eq!(
+        editorial::state(&legacy_changed, "candidate").unwrap()["status"],
+        "stale"
+    );
+
+    // Restores preserve current protections, so an older edit snapshot cannot
+    // silently recover a current review against a different policy.
+    store.restore(5, 6, "restore-with-protection").unwrap();
+    drop(store);
+    let mut store = Store::open(&root).unwrap();
+    assert_eq!(
+        editorial::state(&store.project().unwrap(), "candidate").unwrap()["status"],
+        "stale"
+    );
+    store
+        .unprotect("candidate-protection", 7, "remove-candidate-protection")
+        .unwrap();
+    assert_eq!(
+        editorial::state(&store.project().unwrap(), "candidate").unwrap()["status"],
+        "current"
     );
 }
 
