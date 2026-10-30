@@ -88,6 +88,7 @@ unreviewed risks and commits intent with the sequence atomically. Preflight's
 | `history` | Revision-bounded page with `items` and `nextAfter` |
 | `studio-state` | Prefix-filtered decisions with `nextOffset`; large values are summarized |
 | `transcript-search` | Matching source cues, or opt-in literal matches across adjacent cues, with `nextOffset` |
+| `compare-outputs` | Exact source-range comparison of two verified queued plain-cut renders |
 | `catalog` | Read-only workspace discovery with `nextOffset` |
 | `diff` | Changes between explicit revisions |
 | `jobs`, `artifacts`, `imports` | Operational state; these are not interchangeable with editing history |
@@ -97,6 +98,13 @@ complete. Read schema defaults and limits for each operation. `resume` includes
 at most 100 assets and reports truncation; use narrower discovery as needed.
 For cross-cue matching, revision-pinned pagination and source-preview requests,
 see [transcript search](transcript-search.md).
+For comparison scope, artifact integrity and unsupported cases, see
+[compare edits](compare-edits.md).
+For scene and silence inspection, check `analysisStatus`, `unavailableReason`
+and coverage: empty evidence is not proof of absence. Long-GOP or sparse seeks,
+missing timestamps and discontinuous audio can make analysis unavailable. Stream
+edges are not fully measured; scene scores may cross video gaps, and silence
+ends may be decoded-stream EOF. See [inspection timing](inspection-timing.md).
 
 ## Jobs and verified delivery
 

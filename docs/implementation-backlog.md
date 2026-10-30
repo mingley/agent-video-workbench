@@ -1,5 +1,11 @@
 # Implementation completion and remaining qualification
 
+Current source also adds [frozen plain-cut comparison](compare-edits.md), a
+range marker in delivered review pages, and a refusal for caption cues that
+would vanish at the output frame rate. Bounded scene/silence inspection
+reports unavailable evidence when its timestamp or decoded coverage cannot be
+established. Other comparison types and broader media qualification remain open.
+
 October 30 source additions: bounded literal search across transcript cues,
 per-boundary cue context, source-range feedback remapping, and copyable review
 references extend the agent/creator loop. Analysis requests are validated before

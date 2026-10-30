@@ -295,22 +295,26 @@ pub(crate) fn compose_project(
         for transcript in transcripts.iter().filter(|t| t.asset_id == cut.asset_id) {
             for cue in &transcript.cues {
                 let start = cue.start_ms.max(cut.start_ms);
-                let end = cue.end_ms.min(cut.end_ms);
-                if start >= end {
+                let source_end = cue.end_ms.min(cut.end_ms);
+                if start >= source_end {
                     continue;
                 }
                 let local =
                     time(start - cut.start_ms).rescale_to(at.rate, RoundingMode::Nearest)?;
-                let end = time(end - cut.start_ms).rescale_to(at.rate, RoundingMode::Nearest)?;
+                let end =
+                    time(source_end - cut.start_ms).rescale_to(at.rate, RoundingMode::Nearest)?;
                 let cue_duration = end.checked_sub(local)?;
                 if cue_duration.is_zero() {
-                    continue;
+                    return Err(Error::Invalid(format!(
+                        "caption cue {} from asset {} in cut {} intersects source {start}..{source_end}ms but rounds to zero output frames at 30fps; adjust the cut or reviewed cue timing",
+                        cue.id, cut.asset_id, cut.id
+                    )));
                 }
                 if ops.len() > 4990 {
                     return Err(Error::Invalid("composed edit exceeds 5000 operations; use shorter cuts or fewer caption cues".into()));
                 }
                 let cue_id = format!("{}_{}_{}", compose.output_id, cut.id, cue.id);
-                cue_bindings.push((cue_id.clone(),json!({"assetId":cut.asset_id,"cueId":cue.id,"sourceStartMs":start,"sourceEndMs":cue.end_ms.min(cut.end_ms),"language":transcript.language})));
+                cue_bindings.push((cue_id.clone(),json!({"assetId":cut.asset_id,"cueId":cue.id,"sourceStartMs":start,"sourceEndMs":source_end,"language":transcript.language})));
                 let text = wrap_caption(&cue.text, compose.width as f64 * 0.8, |line| {
                     metrics.run_width(line, compose.font_size as f64, 0.0)
                 })?;

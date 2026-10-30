@@ -1,5 +1,34 @@
 # Implementation and qualification
 
+## Frozen comparison and source-review improvements on current source
+
+`compare-outputs` compares source intervals from two successful queued
+source-preserving plain-cut renders. It identifies retained, added, omitted,
+repeated and uniquely reordered footage, with exact source/output coordinates.
+Layered or styled compositions and older synchronous renders without a
+job-bound sequence are reported as unsupported. Source-range agreement is not
+an audio, color, cadence, appearance or artistic comparison; the render manifest
+itself is not independently authenticated. See [compare edits](compare-edits.md).
+
+Delivered review pages also allow a creator to mark and copy an output-time
+range. Captioned composition refuses a nonempty cue intersection that would
+round to zero frames instead of silently dropping its text; a previously saved
+outcome still replays unchanged. Source inspection bounds its detectors to the
+requested range and reports uncertain timestamp and stream-coverage information.
+Existing rendered artifacts do not change: review affected earlier captions and
+create a new output and render when a correction is needed.
+
+Local Linux x86_64 checks passed with Rust 1.99.1 and FFmpeg 8.0.1: 76 Rust
+tests, formatting, strict Clippy, the release build and generated schema. A
+generated-video official MCP/CLI comparison exercised frozen revisions,
+reordering, additions, omissions and tamper rejection. Generated inspection
+fixtures covered delayed and discontinuous audio, nonzero container origins,
+transport-stream seeking, coarse clocks, low sample rates and attached artwork.
+A caption regression checked both sidecars and burned one-frame text; the
+creator workflow and Chromium review controls passed with three generated
+outputs at desktop and phone-width viewports. These results do not qualify
+real cameras, physical devices or a new ARM64 build.
+
 ## Creator workflow and rendering reliability on current 0.4.0 source
 
 The source build adds opt-in [cross-cue transcript search](transcript-search.md),

@@ -40,7 +40,10 @@ fn shared_source_evidence_keeps_the_requested_asset_identity() {
         &ffmpeg,
         "#!/bin/sh\nif [ \"$1\" = -version ]; then echo ffmpeg-fixture; exit 0; fi\n\
          case \" $* \" in\n  *' -frames:v '*) for last do :; done; printf image > \"$last\" ;;\n\
-         *) echo 'silence_start: 0.4' >&2; echo 'pts_time: 0.5' >&2 ;;\nesac\n",
+         *) echo 'silence_start: 0.4' >&2; echo 'silence_end: 1.9' >&2; \
+            echo 'silence_start: -0.2' >&2; echo 'pts_time: 0.5' >&2; \
+            echo 'lavfi.scene_score=0.8' >&2; echo 'pts_time: 1.1' >&2; \
+            echo 'lavfi.scene_score=0.9' >&2 ;;\nesac\n",
     )
     .unwrap();
     fs::set_permissions(&ffmpeg, fs::Permissions::from_mode(0o755)).unwrap();
@@ -57,10 +60,10 @@ fn shared_source_evidence_keeps_the_requested_asset_identity() {
         assert_eq!(first["assetId"], "source_a");
         assert_eq!(first["cacheHit"], false);
         assert_eq!(alias["assetId"], "source_b");
-        assert_eq!(alias["cacheHit"], true);
+        assert_eq!(alias["cacheHit"], matches!(kind, inspect::Kind::Frame));
         assert_eq!(alias["sourceHash"], first["sourceHash"]);
         assert_eq!(repeated["assetId"], "source_a");
-        assert_eq!(repeated["cacheHit"], true);
+        assert_eq!(repeated["cacheHit"], matches!(kind, inspect::Kind::Frame));
         if matches!(kind, inspect::Kind::Frame) {
             assert_eq!(alias["path"], first["path"]);
             assert_eq!(alias["sha256"], first["sha256"]);
@@ -77,5 +80,67 @@ fn shared_source_evidence_keeps_the_requested_asset_identity() {
         assert_eq!(different_source["assetId"], "source_c");
         assert_ne!(different_source["sourceHash"], first["sourceHash"]);
     }
+    // A v2 cache can contain observations after the requested end. It must
+    // never be reused by the bounded detector or reported as current evidence.
+    let legacy_key = format!(
+        "{:x}",
+        Sha256::digest(
+            serde_json::to_vec(&json!({
+                "source":source_hash,"kind":"silence","startMs":3000,"endMs":4000,
+                "tool":"ffmpeg-fixture\n","version":2
+            }))
+            .unwrap()
+        )
+    );
+    fs::write(
+        root.join("analysis").join(format!("{legacy_key}.json")),
+        serde_json::to_vec(
+            &json!({"assetId":"wrong","evidence":[{"sourceTimeMs":9000}],"cacheHit":false}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let bounded = inspect::inspect(
+        &root,
+        "source_a",
+        inspect::Kind::Silence,
+        3000,
+        Some(4000),
+        &backend,
+    )
+    .unwrap();
+    assert_eq!(bounded["cacheHit"], false);
+    assert_eq!(bounded["timing"]["mapping"], "unknown");
+    assert_eq!(bounded["coverage"]["leadingCoverage"], "not-measured");
+    assert_eq!(bounded["coverage"]["trailingCoverage"], "not-measured");
+    assert_eq!(bounded["analysisStatus"], "unavailable");
+    assert_eq!(
+        bounded["unavailableReason"],
+        "source-timestamp-mapping-unavailable"
+    );
+    assert!(bounded["evidence"].as_array().unwrap().is_empty());
+    assert_eq!(
+        inspect::inspect(
+            &root,
+            "source_a",
+            inspect::Kind::Silence,
+            3000,
+            Some(4000),
+            &backend
+        )
+        .unwrap()["cacheHit"],
+        false
+    );
+    let scenes = inspect::inspect(
+        &root,
+        "source_a",
+        inspect::Kind::Scenes,
+        3000,
+        Some(4000),
+        &backend,
+    )
+    .unwrap();
+    assert_eq!(scenes["analysisStatus"], "unavailable");
+    assert!(scenes["evidence"].as_array().unwrap().is_empty());
     assert_eq!(store.project().unwrap().revision, 1);
 }

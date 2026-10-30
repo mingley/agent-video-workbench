@@ -4,6 +4,12 @@ Use a current source build. A review refers to a specific rendered artifact,
 not the project's current head. Record the reviewed output interval in
 milliseconds, the actor, and the requested change. `jobId` is the completed
 render's artifact ID; `expectedRevision` is the current editing head.
+In a delivered review page, use **Set range start** and **Set range end** at
+the desired playback positions, then copy the reference for the agent. The
+page reports the render job ID, frozen revision, `atMs` and `endMs`; it does
+not itself save a review. Times are rounded to milliseconds, and the end must
+be after the start and within the frozen output. The single-moment reference
+remains available when a range is not needed.
 
 ```json
 {

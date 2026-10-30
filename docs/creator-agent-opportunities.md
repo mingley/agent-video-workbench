@@ -68,30 +68,30 @@ multilingual search or timing accuracy.
 normalization/join policy. A missing or inaccurate transcript remains incomplete
 evidence; the agent still listens before selecting a cut.
 
-## P1 — Explain how two candidate edits differ
+## P1 — Explain changes beyond plain source cuts
 
 **Scenario:** “Show me what changed between the natural baseline and the tighter
-opening.” Named variants and a review bundle already exist, but a creator or
-agent still has to infer editorial changes from separate timelines and videos.
+opening.” [Compare outputs](compare-edits.md) now maps source ranges between two
+verified, queued plain-cut renders, including omissions, additions, proven
+reordering and ambiguous repeats. It explicitly does not compare audio, color,
+framing, cadence or appearance; composed and layered outputs are unsupported.
 
-**Slice:** Produce a read-only, source-based comparison for two explicitly
-selected frozen outputs. List retained, newly included, omitted and reordered
-source ranges with exact times and stable source IDs; link each finding to the
-relevant output time and verified review artifact. Include the source revision
-and flag content that cannot be mapped. Keep side-by-side playback optional;
-the structured comparison must work through both CLI and MCP.
+**Next slice:** Extend the comparison to independently named visual and audio
+layers, captions and supported transitions, retaining the link to each frozen
+artifact and exposing anything that cannot be mapped. Consider displaying the
+structured comparison beside the review videos. Do not imply that a temporal
+match proves identical pixels, sound or meaning.
 
-**Acceptance:** On generated clips, adding, removing, repeating and reordering
-source ranges yields the expected source and output coordinates. A repeated
-source range is reported as ambiguous where there is no unique placement;
-unsupported speeds, transitions, layered footage or missing artifacts are
-reported rather than silently matched. The comparison does not mutate either
-output, survives later edits because it names frozen revisions, and identifies
-its unsupported cases in the result and review bundle.
+**Acceptance:** Generated fixtures cover added or replaced B-roll, a changed
+caption, a moved or muted audio layer and a transition. The report distinguishes
+known changes from unknown effects and ambiguous repeats, names exact frozen
+revisions, and leaves both outputs unchanged. CLI/MCP agree, and any review-page
+presentation matches the structured result. Creator trials must separately
+assess whether the explanation helps people make a decision.
 
-**Dependencies:** Existing source maps, frozen artifact identities and review
-bundles. Start with normal-speed cuts; richer effects and visual judgments need
-separate mapping and qualification.
+**Dependencies:** Frozen artifact identities, exact timeline mappings and a
+defined comparison contract for each layer or effect. Visual and artistic
+judgments require separate qualification.
 
 ## P2 — Review word alignment without replacing corrected text
 

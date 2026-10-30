@@ -19,6 +19,11 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
 2. Inspect metadata, source frames, scenes and silence. Known unqualified SDR
    color tags refuse delivery; untagged SDR reports assumesRec709Sdr. A color
    label is not a conversion, so never relabel unsupported footage to bypass QC.
+   For scene and silence inspection, check `analysisStatus`, `unavailableReason`
+   and coverage before using evidence. An empty or unavailable result is not
+   proof that nothing happened: stream-edge coverage is unmeasured, scene scores
+   can span video gaps, and a silence end may be decoded-stream EOF. Long-GOP,
+   sparse or variable-rate seeking can be unavailable; see [inspection timing](docs/inspection-timing.md).
    `analyze-start` queues a
    `frame-index`, `proxy`, `track` or configured `provider` task. Requests identify
    `assetId`; frame/proxy/tracking ranges are at most five minutes. Frame indexes
@@ -72,7 +77,10 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    policy to bypass its restrictions. `compose` takes outputId/name/fontAssetId and ordered cuts with IDs, assetId,
    startMs/endMs as half-open intervals relative to the container origin.
    Defaults: 1080×1920, 30fps, font size 48. Source cues intersect
-   retained ranges to create captions. Cut-boundary text needs review. Captions
+   retained ranges to create captions. Cut-boundary text needs review. If a
+   nonempty cue intersection rounds to zero frames, compose refuses with the
+   source, cut and cue so timing can be reviewed; see [caption timing](docs/caption-frame-timing.md).
+   Captions
    wrap within 80% width, at most three lines, using owned font metrics and a dark
    stroke. Corrected, translated and restyled captions reflow; overflow refuses
    atomically. Bind a font covering every authored character.
@@ -113,8 +121,14 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
     HDR/10-bit and lossless masters have a separately verified SDR review video.
     Use `artifact` with preview:true to retrieve it; otherwise retrieve the master.
     A normal SDR master is also its preview. The HTML plays the SDR preview and
-    links to the master. Its feedback control copies the render ID, revision and
-    current playback time for the creator to share. Preview color is not an HDR appearance reference.
+    links to the master. Its feedback controls copy the render ID, revision and
+    either a playback time or a marked start/end range for the creator to share.
+    Marking a range does not itself save a review. Preview color is not an HDR
+    appearance reference.
+    `compare-outputs` takes two completed queued job IDs and reports retained,
+    added, omitted and uniquely reordered source ranges for plain-cut assemblies.
+    Repeats are ambiguous; the report does not compare audio, color or appearance.
+    See [compare edits](docs/compare-edits.md).
     The delivery manifest records failed batch outputs and unresolved feedback;
     the HTML presents succeeded videos. Use host file tools
     to return the bundle or MP4. Technical QC cannot approve content or appearance.

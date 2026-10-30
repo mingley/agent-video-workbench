@@ -1740,6 +1740,31 @@
     {
       "additionalProperties": false,
       "properties": {
+        "baselineJob": {
+          "type": "string"
+        },
+        "candidateJob": {
+          "type": "string"
+        },
+        "command": {
+          "const": "compare-outputs",
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "baselineJob",
+        "candidateJob"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
         "command": {
           "const": "compose",
           "type": "string"

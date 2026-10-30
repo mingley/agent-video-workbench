@@ -4,6 +4,7 @@ pub mod asr;
 pub mod assembly;
 pub mod audio;
 pub mod color;
+pub mod compare;
 pub mod delivery;
 pub mod editorial;
 pub mod inspect;

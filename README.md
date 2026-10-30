@@ -70,8 +70,12 @@ qualification; the tool reports unsupported rendering paths explicitly.
 | [First edit](docs/first-edit.md) | Tested import-to-delivery CLI/MCP walkthrough |
 | [Natural edit](docs/natural-edit.md) | Source-matched HDR/SDR baseline, preflight and review |
 | [Edit planning](docs/edit-planning.md) | Briefs, source context, speech handles and durable cut decisions |
+| [Creator workflows](docs/creator-workflows.md) | Find, edit, compare, deliver and revise content with an agent |
+| [Compare edits](docs/compare-edits.md) | Compare frozen source ranges and review unsupported cases |
 | [Transcript search](docs/transcript-search.md) | Bounded phrase search across source cues and playable context |
 | [Review feedback](docs/review-feedback.md) | Artifact-anchored intervals and mapping across later edits |
+| [Caption timing](docs/caption-frame-timing.md) | Review cue boundaries that are shorter than an output frame |
+| [Inspection timing](docs/inspection-timing.md) | Interpret bounded scene and silence evidence |
 | [Creator opportunities](docs/creator-agent-opportunities.md) | Prioritized creator trials and future product work |
 | [Editor research](docs/editor-research.md) | Official editor documentation and applied design choices |
 | [Interface reference](docs/agent-api.md) | Current envelopes, revisions, jobs and verified artifacts |

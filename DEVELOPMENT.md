@@ -171,6 +171,19 @@ candidate results describe additional work; they are not runtime contracts.
 
 ## Expanded creator and analysis qualification
 
+The focused range, caption and comparison checks also use fresh output paths:
+
+```sh
+python3 evaluation/inspect_range_smoke.py --avw "$PWD/target/release/avw" \
+  --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe --output /path/to/new-inspection-run
+python3 evaluation/captions_extra_smoke.py --avw "$PWD/target/release/avw" \
+  --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe --font /path/to/font.ttf \
+  --output /path/to/new-caption-run
+node evaluation/compare_smoke.mjs "$PWD/target/release/avw" \
+  /path/to/ffmpeg /path/to/ffprobe /path/to/new-comparison-run \
+  "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+```
+
 The same release-binary/backend arguments and fresh `--output` directories apply
 to `evaluation/studio_smoke.py` (also `--font`), `audio_smoke.py`,
 `transfer_smoke.py`, `analysis_smoke.py`, `timeline_smoke.py` and

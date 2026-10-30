@@ -129,6 +129,11 @@ enum Action {
         #[arg(long, default_value = "seq_main")]
         sequence: String,
     },
+    CompareOutputs {
+        project: PathBuf,
+        baseline_job: String,
+        candidate_job: String,
+    },
     Mcp {
         #[arg(long)]
         root: PathBuf,

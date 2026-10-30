@@ -118,8 +118,10 @@ try {
     const feedback = [];
     for (const [index, item] of delivered.entries()) {
       const section = page.locator('section').nth(index);
-      const reference = section.locator('textarea');
-      if (!(await section.locator('[data-feedback-reference]').isVisible())
+      const pointPanel = section.locator('[data-feedback-reference]');
+      const rangePanel = section.locator('[data-feedback-range]');
+      const reference = pointPanel.locator('textarea');
+      if (!(await pointPanel.isVisible()) || !(await rangePanel.isVisible())
         || !(await reference.getAttribute('readonly') === '')
         || await section.locator('video').getAttribute('aria-labelledby') !== `title-${item.jobId}`) {
         throw new Error('Feedback reference or accessible video name is missing');
@@ -137,12 +139,12 @@ try {
       if (fallback) await page.evaluate(() => Object.defineProperty(navigator.clipboard, 'writeText', {
         configurable: true, value: async () => { throw new Error('clipboard denied'); },
       }));
-      await section.getByRole('button', { name: 'Copy feedback reference' }).click();
-      await section.locator('[role=status]').filter({ hasText: fallback ? 'Reference selected' : 'Feedback reference copied' }).waitFor();
+      await pointPanel.getByRole('button', { name: 'Copy feedback reference' }).click();
+      await pointPanel.locator('[role=status]').filter({ hasText: fallback ? 'Reference selected' : 'Feedback reference copied' }).waitFor();
       if (fallback) {
         const selected = await reference.evaluate(element => document.activeElement === element
           && element.selectionStart === 0 && element.selectionEnd === element.value.length);
-        if (!selected || !(await section.locator('[role=status]').textContent()).includes('Reference selected')) {
+        if (!selected || !(await pointPanel.locator('[role=status]').textContent()).includes('Reference selected')) {
           throw new Error('Clipboard denial did not select the reference for manual copying');
         }
         await page.evaluate(() => { delete navigator.clipboard.writeText; });
@@ -152,7 +154,95 @@ try {
           throw new Error('Copied feedback reference differs from the shown timestamp: ' + JSON.stringify({ copied, expected }));
         }
       }
-      feedback.push({ jobId: item.jobId, revision: item.revision, milliseconds: ms, fallback });
+      const limitMs = Number(await section.getAttribute('data-review-limit-ms'));
+      const availableMs = Math.min(limitMs, Math.floor(media.videos[index].duration * 1000));
+      if (!Number.isSafeInteger(limitMs) || availableMs < 4) throw new Error('Fixture is too short for a range check');
+      await rangePanel.locator('summary').press('Enter');
+      if (!(await rangePanel.locator('textarea').isVisible())) throw new Error('Keyboard could not open range controls');
+      const rangeReference = rangePanel.locator('textarea');
+      const rangeCopy = rangePanel.getByRole('button', { name: 'Copy range reference' });
+      const rangeStatus = rangePanel.locator('[role=status]');
+      if (!(await rangeReference.getAttribute('readonly') === '') || !(await rangeCopy.isDisabled())
+        || await rangePanel.locator('[data-range-start]').textContent() !== 'Not set'
+        || await rangePanel.locator('[data-range-end]').textContent() !== 'Not set') {
+        throw new Error('Range controls are not initially empty');
+      }
+      await rangePanel.getByRole('button', { name: 'Set range end' }).click();
+      if (!(await rangeStatus.textContent()).includes('Set a range start first') || !(await rangeCopy.isDisabled())) {
+        throw new Error('Range end was accepted without a start');
+      }
+      const seek = async targetMs => section.locator('video').evaluate(async (video, target) => {
+        const seconds = target / 1000;
+        if (Math.abs(video.currentTime - seconds) > 0.0001) {
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('range seek did not finish')), 5000);
+            video.addEventListener('seeked', () => { clearTimeout(timeout); resolve(); }, { once: true });
+            video.currentTime = seconds;
+          });
+        }
+        return Math.round(video.currentTime * 1000);
+      }, targetMs);
+      if (availableMs >= limitMs) {
+        await seek(limitMs);
+        await rangePanel.getByRole('button', { name: 'Set range start' }).click();
+        if (!(await rangeStatus.textContent()).includes('before the end') || !(await rangeCopy.isDisabled())) {
+          throw new Error('A range start at the output end was accepted');
+        }
+      }
+      const startMs = await seek(Math.floor(availableMs / 4));
+      await rangePanel.getByRole('button', { name: 'Set range start' }).click();
+      await rangePanel.getByRole('button', { name: 'Set range end' }).click();
+      if (!(await rangeStatus.textContent()).includes('after the start') || !(await rangeCopy.isDisabled())) {
+        throw new Error('A zero-length range was accepted');
+      }
+      const endMs = await seek(Math.floor(availableMs * 3 / 4));
+      await rangePanel.getByRole('button', { name: 'Set range end' }).click();
+      const time = value => [Math.floor(value / 3600000), Math.floor(value / 60000) % 60, Math.floor(value / 1000) % 60]
+        .map(part => String(part).padStart(2, '0')).join(':') + '.' + String(value % 1000).padStart(3, '0');
+      const rangeExpected = `Video: ${title}\nRender job ID: ${item.jobId}\nRendered revision: ${item.revision}\nRange start: ${time(startMs)} (atMs: ${startMs})\nRange end: ${time(endMs)} (endMs: ${endMs})`;
+      if (await rangeCopy.isDisabled() || await rangeReference.inputValue() !== rangeExpected
+        || await rangePanel.locator('[data-range-start]').textContent() !== time(startMs)
+        || await rangePanel.locator('[data-range-end]').textContent() !== time(endMs)) {
+        throw new Error('Range lost its frozen identity or exact boundaries');
+      }
+      if (fallback) await page.evaluate(() => Object.defineProperty(navigator.clipboard, 'writeText', {
+        configurable: true, value: async () => { throw new Error('clipboard denied'); },
+      }));
+      await rangeCopy.click();
+      await rangeStatus.filter({ hasText: fallback ? 'Range reference selected' : 'Range reference copied' }).waitFor();
+      if (fallback) {
+        const selected = await rangeReference.evaluate(element => document.activeElement === element
+          && element.selectionStart === 0 && element.selectionEnd === element.value.length);
+        if (!selected) throw new Error('Clipboard denial did not select the range reference');
+        await page.evaluate(() => { delete navigator.clipboard.writeText; });
+      } else if (await page.evaluate(() => navigator.clipboard.readText()) !== rangeExpected) {
+        throw new Error('Copied range reference differs from the selected range');
+      }
+      if (label === 'small-phone' && index === 0) {
+        await rangePanel.screenshot({ path: path.join(output, 'small-phone-range.png') });
+      }
+      // A preview container can expose a few milliseconds beyond the frozen
+      // sequence. Simulate that clock tail and require an explicit refusal.
+      await section.locator('video').evaluate((video, limit) => Object.defineProperty(video, 'currentTime', {
+        configurable: true, get: () => (limit + 10) / 1000,
+      }), limitMs);
+      await rangePanel.getByRole('button', { name: 'Set range end' }).click();
+      if (!(await rangeCopy.isDisabled()) || !(await rangeStatus.textContent()).includes('within the reviewed output')) {
+        throw new Error('A range extending beyond the frozen output was accepted');
+      }
+      await section.locator('video').evaluate(video => { delete video.currentTime; });
+      await seek(startMs);
+      await rangePanel.getByRole('button', { name: 'Set range end' }).click();
+      if (!(await rangeCopy.isDisabled()) || !(await rangeStatus.textContent()).includes('after the start')) {
+        throw new Error('Invalid replacement left a stale copyable range');
+      }
+      await rangePanel.getByRole('button', { name: 'Clear range' }).click();
+      if (!(await rangeCopy.isDisabled()) || await rangePanel.locator('[data-range-start]').textContent() !== 'Not set'
+        || await rangePanel.locator('[data-range-end]').textContent() !== 'Not set') {
+        throw new Error('Clear range retained its previous boundaries');
+      }
+      await rangePanel.locator('summary').click();
+      feedback.push({ jobId: item.jobId, revision: item.revision, milliseconds: ms, range: { startMs, endMs }, fallback });
     }
     results.push({ label, requestedViewport: viewport, ...media, editingNotes: shownNotes, feedback, pageErrors: errors });
     await page.screenshot({ path: path.join(output, label + '.png'), fullPage: true });
@@ -183,7 +273,9 @@ try {
     const notice = section.locator('noscript');
     if (!(await notice.isVisible()) || !(await notice.textContent()).includes(item.jobId)
       || !(await notice.textContent()).includes(`rendered revision ${item.revision}`)
-      || await section.locator('[data-feedback-reference]').isVisible()) {
+      || !(await notice.textContent()).includes('start and end times')
+      || await section.locator('[data-feedback-reference]').isVisible()
+      || await section.locator('[data-feedback-range]').isVisible()) {
       throw new Error('No-script feedback guidance is missing or interactive controls were exposed');
     }
   }

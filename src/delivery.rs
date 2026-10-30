@@ -3,7 +3,7 @@ use crate::{
     Error, Result, media,
     process::{self, Control},
 };
-use agentcut_core::{ItemPayload, Sequence};
+use agentcut_core::{ItemPayload, Project, RationalRate, RoundingMode, Sequence};
 use agentcut_render::FfmpegBackend;
 use serde_json::{Value, json};
 use std::{
@@ -64,6 +64,13 @@ for (const section of document.querySelectorAll('[data-review-job]')) {
   const fieldset = section.querySelector('[data-feedback-reference]');
   const reference = fieldset.querySelector('textarea');
   const status = fieldset.querySelector('[role=status]');
+  const rangeField = section.querySelector('[data-feedback-range]');
+  const rangeReference = rangeField.querySelector('textarea');
+  const rangeStatus = rangeField.querySelector('[role=status]');
+  const rangeCopy = rangeField.querySelector('[data-range-copy]');
+  const reviewLimitMs = Number(section.dataset.reviewLimitMs);
+  let rangeStart = null;
+  let rangeEnd = null;
   const formatTime = ms => {
     const hours = Math.floor(ms / 3600000);
     const minutes = Math.floor(ms / 60000) % 60;
@@ -80,6 +87,72 @@ for (const section of document.querySelectorAll('[data-review-job]')) {
       + '\nRendered revision: ' + section.dataset.reviewRevision
       + '\nPlayback time: ' + formatTime(ms) + ' (' + ms + ' ms)';
   };
+  const updateRange = () => {
+    rangeField.querySelector('[data-range-start]').textContent = rangeStart === null ? 'Not set' : formatTime(rangeStart);
+    rangeField.querySelector('[data-range-end]').textContent = rangeEnd === null ? 'Not set' : formatTime(rangeEnd);
+    const ready = rangeStart !== null && rangeEnd !== null;
+    rangeCopy.disabled = !ready;
+    const title = section.querySelector('h2').textContent.replace(/\s+/g, ' ').trim() || 'Video';
+    rangeReference.value = ready ? 'Video: ' + title
+      + '\nRender job ID: ' + section.dataset.reviewJob
+      + '\nRendered revision: ' + section.dataset.reviewRevision
+      + '\nRange start: ' + formatTime(rangeStart) + ' (atMs: ' + rangeStart + ')'
+      + '\nRange end: ' + formatTime(rangeEnd) + ' (endMs: ' + rangeEnd + ')'
+      : 'Set a start and an end to create a range reference.';
+  };
+  const position = () => video.readyState >= 1 && Number.isFinite(video.currentTime)
+    ? Math.max(0, Math.round(video.currentTime * 1000)) : null;
+  rangeField.querySelector('[data-range-mark-start]').addEventListener('click', () => {
+    video.pause();
+    const ms = position();
+    rangeStart = null;
+    rangeEnd = null;
+    if (ms === null) {
+      rangeStatus.textContent = 'Load the video before setting a start.';
+    } else if (!Number.isSafeInteger(reviewLimitMs) || ms >= reviewLimitMs) {
+      rangeStatus.textContent = 'Choose a start before the end of the reviewed output.';
+    } else {
+      rangeStart = ms;
+      rangeStatus.textContent = 'Start set. Seek to a later point and set the end.';
+    }
+    updateRange();
+  });
+  rangeField.querySelector('[data-range-mark-end]').addEventListener('click', () => {
+    video.pause();
+    const ms = position();
+    rangeEnd = null;
+    if (rangeStart === null) {
+      rangeStatus.textContent = 'Set a range start first.';
+    } else if (ms === null) {
+      rangeStatus.textContent = 'Load the video before setting an end.';
+    } else if (ms <= rangeStart) {
+      rangeStatus.textContent = 'Choose an end after the start.';
+    } else if (!Number.isSafeInteger(reviewLimitMs) || ms > reviewLimitMs) {
+      rangeStatus.textContent = 'Choose an end within the reviewed output.';
+    } else {
+      rangeEnd = ms;
+      rangeStatus.textContent = 'Range selected. Copy the reference for your agent.';
+    }
+    updateRange();
+  });
+  rangeField.querySelector('[data-range-clear]').addEventListener('click', () => {
+    rangeStart = null;
+    rangeEnd = null;
+    rangeStatus.textContent = 'Range cleared.';
+    updateRange();
+  });
+  rangeCopy.addEventListener('click', async () => {
+    if (rangeStart === null || rangeEnd === null) return;
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(rangeReference.value);
+      rangeStatus.textContent = 'Range reference copied.';
+    } catch (_) {
+      rangeReference.focus();
+      rangeReference.select();
+      rangeStatus.textContent = 'Range reference selected. Copy it with your usual keyboard shortcut.';
+    }
+  });
   video.addEventListener('timeupdate', update);
   video.addEventListener('seeked', update);
   fieldset.querySelector('button').addEventListener('click', async () => {
@@ -96,7 +169,9 @@ for (const section of document.querySelectorAll('[data-review-job]')) {
     }
   });
   update();
+  updateRange();
   fieldset.hidden = false;
+  rangeField.hidden = false;
 }
 </script>"#;
 
@@ -308,15 +383,19 @@ pub fn package(root: &Path, id: &str, destination: &Path) -> Result<Value> {
         } else {
             ""
         };
-        let title = manifest["snapshot"]["sequences"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .find(|s| s["id"] == manifest["sequenceId"])
-            .and_then(|s| s["name"].as_str())
-            .unwrap_or("Video");
+        let frozen: Project = serde_json::from_value(manifest["snapshot"].clone())?;
+        let sequence_id = manifest["sequenceId"]
+            .as_str()
+            .ok_or_else(|| Error::Invalid("delivery sequence missing".into()))?;
+        let sequence = frozen.require_sequence(sequence_id)?;
+        let review_limit_ms = sequence
+            .content_duration()?
+            .rescale_to(RationalRate::frames(1000)?, RoundingMode::Floor)?
+            .value
+            .max(0);
+        let title = &sequence.name;
         let notes = editing_notes(&manifest);
-        html.push_str(&format!("<section data-review-job='{id}' data-review-revision='{revision}'><h2 id='title-{id}'>{title}</h2><video controls width=360 aria-labelledby='title-{id}' src='{id}/{preview}'></video>{label}{notes}<fieldset data-feedback-reference hidden><legend>Share feedback at this moment</legend><p>Pause at the moment you want to discuss, then copy this reference for your agent.</p><p>Playback time: <span data-feedback-time></span></p><label for='feedback-{id}'>Feedback reference</label><textarea id='feedback-{id}' rows=6 readonly></textarea><button type=button>Copy feedback reference</button><p role=status aria-live=polite></p></fieldset><noscript><p>For feedback, include render job ID {id}, rendered revision {revision}, and the playback time.</p></noscript><p><a href='{id}/video.mp4'>Master</a> · <a href='{id}/captions.vtt'>Captions</a> · <a href='{id}/manifest.json'>Manifest</a></p></section>",title=html_text(title),revision=item.revision));
+        html.push_str(&format!("<section data-review-job='{id}' data-review-revision='{revision}' data-review-limit-ms='{review_limit_ms}'><h2 id='title-{id}'>{title}</h2><video controls width=360 aria-labelledby='title-{id}' src='{id}/{preview}'></video>{label}{notes}<fieldset data-feedback-reference hidden><legend>Share feedback at this moment</legend><p>Pause at the moment you want to discuss, then copy this reference for your agent.</p><p>Playback time: <span data-feedback-time></span></p><label for='feedback-{id}'>Feedback reference</label><textarea id='feedback-{id}' rows=6 readonly></textarea><button type=button>Copy feedback reference</button><p role=status aria-live=polite></p></fieldset><details data-feedback-range hidden><summary>Share feedback for a range</summary><fieldset><legend>Mark a range</legend><p>Pause at the beginning and set the start, then seek to the end and set it.</p><p>Start: <span data-range-start>Not set</span><br>End: <span data-range-end>Not set</span></p><button type=button data-range-mark-start>Set range start</button> <button type=button data-range-mark-end>Set range end</button> <button type=button data-range-clear>Clear range</button><p><label for='range-{id}'>Range reference</label></p><textarea id='range-{id}' rows=6 readonly></textarea><button type=button data-range-copy disabled>Copy range reference</button><p role=status aria-live=polite></p></fieldset></details><noscript><p>For feedback, include render job ID {id}, rendered revision {revision}, and the playback time. For a range, include its start and end times.</p></noscript><p><a href='{id}/video.mp4'>Master</a> · <a href='{id}/captions.vtt'>Captions</a> · <a href='{id}/manifest.json'>Manifest</a></p></section>",title=html_text(title),revision=item.revision));
         items.push(json!({"jobId":id,"state":"succeeded","revision":item.revision,"sequenceId":manifest["sequenceId"],"files":files,"review":"pending","editPlan":manifest["editPreflight"]["editPlan"]}));
     }
     html.push_str("</main>");
