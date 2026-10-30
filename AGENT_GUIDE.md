@@ -23,10 +23,15 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    `frame-index`, `proxy`, `track` or configured `provider` task. Requests identify
    `assetId`; frame/proxy/tracking ranges are at most five minutes. Frame indexes
    retain original PTS; proxies are previews with explicit source maps. Analysis
-   returns evidence and never edits history. Poll and retrieve its verified artifact.
+   validates the request before queueing, returns evidence and never edits history.
+   Poll and retrieve its verified artifact. Generate and submit scoped preview
+   requests on the same service configuration; their reserved keys bind project,
+   source and media backend.
 3. Optionally queue `transcribe-start` when local Whisper is configured. Review
    machine text before `transcript-import`. Cues contain ID, startMs, endMs and
-   literal text, plus assetId/language/provider. `transcript-search` is bounded.
+   literal text, plus assetId/language/provider. `transcript-search` can optionally
+   find a literal phrase across adjacent cues, with revision-pinned pagination and
+   playable source context where available; see [transcript search](docs/transcript-search.md).
    `studio` action `transcript-correct` updates reviewed words and selected bound
    outputs. New analysis is archived without replacing corrections. Choose a
    version explicitly with `transcript-select`; unchanged cue IDs/timing preserve
@@ -50,7 +55,8 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    (the assembly), `plan.brief` (objective, natural/montage intent, default 250ms
    speech handles/1000ms context), and one `plan.decisions` reason per cut.
    Read retained/omitted ranges, actual rounded boundaries, nearby reviewed cues
-   and both contextWindows. Execute each complete previewRequest using the
+   and both contextWindows, including the boundary-specific cue excerpts.
+   Execute each complete previewRequest using the
    existing proxy analysis job, and listen to its verified attachment.
    No cues means unavailable speech evidence. Prefer restoring breathing room;
    proposed boundary expansions require playback and re-planning. Specific
@@ -107,14 +113,18 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
     HDR/10-bit and lossless masters have a separately verified SDR review video.
     Use `artifact` with preview:true to retrieve it; otherwise retrieve the master.
     A normal SDR master is also its preview. The HTML plays the SDR preview and
-    links to the master. Preview color is not an HDR appearance reference.
+    links to the master. Its feedback control copies the render ID, revision and
+    current playback time for the creator to share. Preview color is not an HDR appearance reference.
     The delivery manifest records failed batch outputs and unresolved feedback;
     the HTML presents succeeded videos. Use host file tools
     to return the bundle or MP4. Technical QC cannot approve content or appearance.
 11. `review-add` anchors actor/text/time interval to an exact artifact hash and
-    frozen source locations. `reviews` remaps its source point after edits and
-    reports resolved, removed or ambiguous placement. `review-resolve` records
-    addressed/dismissed state; moving an edit does not erase original feedback.
+    frozen source ranges. `reviews` remaps those ranges after edits and reports
+    partial, rearranged, removed or ambiguous results; older notes retain their
+    point-only mapping. Inspect the [feedback guide](docs/review-feedback.md)
+    for limitations and exact placements. A source match does not establish
+    visibility or a screen region. `review-resolve` records addressed/dismissed
+    state without erasing the original feedback.
 12. Use compact `resume` for output IDs and top-level `protectedRanges`; `status`
     returns the full project snapshot. Resume with paginated history/decisions,
     diff, job lists and

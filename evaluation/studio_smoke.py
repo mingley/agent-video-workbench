@@ -75,11 +75,19 @@ def main():
                    {'id': 'c', 'assetId': 'product', 'startMs': 4000, 'endMs': 6000}]})
     base = call('render', project=str(project), sequence='creator')
     edit('review-add', id='product-note', jobId=base['artifactId'], atMs=3000,
-         endMs=3500, actor='fixture-reviewer', text='Keep the closeup visible')
+         endMs=5000, actor='fixture-reviewer', text='Keep the closeup and product visible')
     edit('omit', id='first', itemId='creator_a', reason='shorter opening')
     mapping = call('reviews', project=str(project), sequence='creator')['items'][0]
     assert mapping['placements'][0]['atMs'] == 1000, mapping
+    assert mapping['mapping'] == 'resolved' and len(mapping['rangeMappings']) == 4, mapping
+    assert [m['source']['mediaKind'] for m in mapping['rangeMappings']] == ['video', 'audio', 'video', 'audio'], mapping
     edit('omit', id='second', itemId='creator_b', reason='another sentence')
+    mapping = call('reviews', project=str(project), sequence='creator')['items'][0]
+    assert mapping['mapping'] == 'partial' and not mapping['placements'], mapping
+    assert mapping['rangeMappings'][0]['mapping'] == 'removed_or_unmapped', mapping
+    assert mapping['rangeMappings'][1]['mapping'] == 'removed_or_unmapped', mapping
+    assert mapping['rangeMappings'][2]['placements'][0]['atMs'] == 0, mapping
+    assert mapping['rangeMappings'][3]['placements'][0]['atMs'] == 0, mapping
     profile = {'id': 'brand', 'version': 1, 'fontAssetId': 'font', 'fontSize': 20,
                'color': '#FFFFFFFF', 'fit': 'cover', 'loudnessLufs': -18, 'truePeakDb': -1}
     edit('profile-put', profile=profile)
@@ -161,7 +169,7 @@ def main():
     call('cache-gc', project=str(project), dryRun=True, graceSeconds=60)
     (root / 'summary.json').write_text(json.dumps({'passed': True, 'checks': [
         'selective restore with later style', 'corrections survive reanalysis',
-        'review source remap', 'B-roll preserves dialogue samples', 'measured loudness',
+        'multi-cut review source remap and partial removal', 'B-roll preserves dialogue samples', 'measured loudness',
         'versioned profile/template', 'frozen batch in three formats with Spanish captions',
         'sidecars/covers/hash-verified review package', 'verified backup restore and relink',
         'catalog and safe cache planning', 'portable reusable font/profile library', 'OTIO supported cut roundtrip with loss report']}, indent=2))

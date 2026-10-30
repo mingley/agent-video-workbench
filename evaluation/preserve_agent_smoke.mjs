@@ -93,6 +93,12 @@ try {
         { id: 'first-burst', startMs: 800, endMs: 1200, text: 'First synchronized light and audio burst' },
         { id: 'second-burst', startMs: 2050, endMs: 2300, text: 'Second synchronized light and audio burst' },
       ] } });
+  const phrase = await call({ command: 'transcript-search', project: 'project', expectedRevision: 4,
+    assetId: 'phone', query: 'burst second synchronized', acrossCues: true });
+  if (phrase.items.length !== 1 || JSON.stringify(phrase.items[0].matchedCueIds) !== JSON.stringify(['first-burst', 'second-burst'])
+    || !phrase.items[0].previewRequest) throw new Error('Cross-cue search did not return its source preview');
+  const phraseJob = await call(phrase.items[0].previewRequest);
+  if ((await call(phrase.items[0].previewRequest)).id !== phraseJob.id) throw new Error('Phrase preview retry created a new job');
   const plan = { brief: { objective: 'Retain both bursts <script>window.unexpectedMarkup=true</script>' },
     edit: { ...request.edit, outputId: 'planned', name: 'Reviewed HDR paper edit <test>' },
     decisions: [
@@ -118,15 +124,33 @@ try {
   }
   const planFile = path.join(root, 'plan-envelope.json');
   fs.writeFileSync(planFile, JSON.stringify({ command: 'plan-edit', project: 'project', expectedRevision: 4, plan }));
-  const cliPlan = spawnSync(avw, ['--workspace', root, 'request', planFile], { encoding: 'utf8' });
+  const cliPlan = spawnSync(avw, ['--ffmpeg', ffmpeg, '--ffprobe', ffprobe, '--workspace', root,
+    'request', planFile], { encoding: 'utf8' });
   if (cliPlan.status !== 0 || JSON.stringify(JSON.parse(cliPlan.stdout).result) !== JSON.stringify(planned)) {
     throw new Error('CLI/MCP planning differs');
   }
   const windows = planned.cuts.flatMap(cut => cut.contextWindows);
+  const expectedCues = [['first-burst'], ['first-burst', 'second-burst'],
+    ['first-burst', 'second-burst'], ['second-burst']];
+  for (const [index, window] of windows.entries()) {
+    if (JSON.stringify(window.cueExcerpts.map(cue => cue.id)) !== JSON.stringify(expectedCues[index])
+      || window.cueExcerptsTotal !== expectedCues[index].length || window.cueExcerptsTruncated !== false) {
+      throw new Error('Boundary context lost reviewed cue evidence or truncation state');
+    }
+  }
   const contextJobs = [];
   for (const window of windows) contextJobs.push(await call(window.previewRequest));
   const contextWorker = spawnSync(avw, ['worker', path.join(root, 'project')], { encoding: 'utf8', timeout: 300000 });
   if (contextWorker.status !== 0) throw new Error(contextWorker.stderr);
+  const phraseArtifact = await call({ command: 'artifact', project: 'project', id: phraseJob.id });
+  const phraseProxy = phraseArtifact.attachments.find(file => file.path.endsWith('proxy.mp4'));
+  if (!phraseArtifact.verified || !phraseProxy || phraseProxy.sha256 !== sha(phraseProxy.path)) {
+    throw new Error('Cross-cue source preview was not hash verified');
+  }
+  const phraseProbe = spawnSync(ffprobe, ['-v', 'error', '-show_streams', '-of', 'json', phraseProxy.path], { encoding: 'utf8' });
+  if (phraseProbe.status !== 0 || !JSON.parse(phraseProbe.stdout).streams.some(stream => stream.codec_type === 'audio')) {
+    throw new Error('Cross-cue source preview lost its audio');
+  }
   let contextAudioBurstSeconds;
   for (const [index, contextJob] of contextJobs.entries()) {
     const evidence = await call({ command: 'artifact', project: 'project', id: contextJob.id });
@@ -207,7 +231,8 @@ try {
   }
   await call({ command: 'delivery', project: 'project', id: plannedJob.id, destination: 'planned-review' });
   const reviewHtml = fs.readFileSync(path.join(root, 'planned-review/index.html'), 'utf8');
-  if (!reviewHtml.includes('Why these cuts') || reviewHtml.includes('<script>') || !reviewHtml.includes('&lt;test&gt;')) {
+  if (!reviewHtml.includes('Why these cuts') || reviewHtml.includes('<script>window.unexpectedMarkup=true</script>')
+    || !reviewHtml.includes('&lt;script&gt;window.unexpectedMarkup=true&lt;/script&gt;') || !reviewHtml.includes('&lt;test&gt;')) {
     throw new Error('Delivery lost frozen cut notes or treated author text as HTML');
   }
   await call({ command: 'backup', project: 'project', destination: 'planned-backup' });
@@ -223,7 +248,8 @@ try {
   fs.writeFileSync(path.join(root, 'summary.json'), JSON.stringify({ passed: true, officialMcpSdk: true,
     cliMcpReplayEquivalent: true, frozenHdrRevision: 2, currentRevision: 9, sourceUnchanged: true,
     editorialPlanning: { clippedCueRefused: true, cliMcpPlanAndReplayEquivalent: true,
-      sourceContextPreviews: windows.length, contextAudioBurstSeconds, frozenPlannedRevision: 5,
+      sourceContextPreviews: windows.length, contextCueEvidenceChecked: true, contextAudioBurstSeconds, frozenPlannedRevision: 5,
+      crossCuePhrasePreviewVerified: true,
       protectionChangeInvalidatesReview: true, otherProtectionLeavesReviewCurrent: true,
       cliMcpProtectionStatusEquivalent: true, frozenReviewUnchanged: true, restoringProtectionRestoresReview: true,
       transcriptChangeInvalidatesReview: true, backupRetainsDecisions: true, deliveryShowsEscapedFrozenIntent: true },

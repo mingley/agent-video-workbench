@@ -217,6 +217,12 @@ enum Action {
         query: String,
         #[arg(long)]
         asset_id: Option<String>,
+        #[arg(long)]
+        across_cues: bool,
+        #[arg(long, requires = "across_cues")]
+        max_gap_ms: Option<u32>,
+        #[arg(long)]
+        expected_revision: Option<u64>,
         #[arg(long, default_value_t = 0)]
         offset: u32,
         #[arg(long, default_value_t = 50)]

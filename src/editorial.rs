@@ -214,6 +214,42 @@ fn overlaps(start: RationalTime, end: RationalTime, cue: &workflow::Cue) -> Resu
         && workflow::time(cue.end_ms).checked_cmp(start)?.is_gt())
 }
 
+/// Keep the closest cues to this boundary, independent of transcript import
+/// order. Every distance uses the same exact clock for this boundary, and the
+/// selected cues are presented chronologically for reading.
+fn window_excerpts<'a>(
+    cues: &[&'a workflow::Cue],
+    start_ms: i64,
+    end_ms: i64,
+    boundary: RationalTime,
+) -> Result<(Vec<&'a workflow::Cue>, usize)> {
+    let mut matches = Vec::new();
+    for cue in cues {
+        let start = workflow::time(cue.start_ms);
+        let end = workflow::time(cue.end_ms);
+        if !overlaps(workflow::time(start_ms), workflow::time(end_ms), cue)? {
+            continue;
+        }
+        let distance = if boundary.checked_cmp(start)?.is_lt() {
+            difference(start, boundary)?.value
+        } else if boundary.checked_cmp(end)?.is_gt() {
+            difference(boundary, end)?.value
+        } else {
+            0
+        };
+        matches.push((distance, *cue));
+    }
+    matches.sort_by(|(a_distance, a), (b_distance, b)| {
+        (a_distance, a.start_ms, a.end_ms, &a.id).cmp(&(b_distance, b.start_ms, b.end_ms, &b.id))
+    });
+    let total = matches.len();
+    matches.truncate(12);
+    matches.sort_by(|(_, a), (_, b)| {
+        (a.start_ms, a.end_ms, &a.id).cmp(&(b.start_ms, b.end_ms, &b.id))
+    });
+    Ok((matches.into_iter().map(|(_, cue)| cue).collect(), total))
+}
+
 /// Planning performs no media writes or project mutations. Preview descriptors
 /// use the existing verified proxy jobs and include audio/source-time mappings.
 pub fn plan(project: &Project, plan: &EditPlan, expected: u64) -> Result<Value> {
@@ -331,14 +367,28 @@ pub fn plan(project: &Project, plan: &EditPlan, expected: u64) -> Result<Value> 
             if review.is_none() { blockers+=1; }
             json!({"risk":risk,"status":if review.is_some(){"reviewed"}else{"needs-review"},"note":review.map(|r|&r.note)})
         }).collect();
-        let windows: Vec<_> = [("in",start),("out",end)].into_iter().map(|(edge,boundary)| -> Result<Value> {
-            let ms=boundary.as_seconds_f64()*1000.0;
-            let context=workflow::time(i64::from(plan.brief.context_ms));
-            let a = boundary.checked_sub(context)?.rescale_to(workflow::time(0).rate,RoundingMode::Floor)?.value.max(0);
-            let b = boundary.checked_add(context)?.rescale_to(workflow::time(0).rate,RoundingMode::Ceil)?.value.min(source_end);
-            Ok(json!({"edge":edge,"boundary":boundary,
-                "boundaryOffsetMs":ms-a as f64,"sourceStartMs":a,"sourceEndMs":b,"previewRequest":preview(&asset.id,a,b)}))
-        }).collect::<Result<_>>()?;
+        let windows: Vec<_> = [("in", start), ("out", end)]
+            .into_iter()
+            .map(|(edge, boundary)| -> Result<Value> {
+                let ms = boundary.as_seconds_f64() * 1000.0;
+                let context = workflow::time(i64::from(plan.brief.context_ms));
+                let a = boundary
+                    .checked_sub(context)?
+                    .rescale_to(workflow::time(0).rate, RoundingMode::Floor)?
+                    .value
+                    .max(0);
+                let b = boundary
+                    .checked_add(context)?
+                    .rescale_to(workflow::time(0).rate, RoundingMode::Ceil)?
+                    .value
+                    .min(source_end);
+                let (cues, total) = window_excerpts(&selected, a, b, boundary)?;
+                Ok(json!({"edge":edge,"boundary":boundary,
+                "boundaryOffsetMs":ms-a as f64,"sourceStartMs":a,"sourceEndMs":b,
+                "cueExcerpts":cues,"cueExcerptsTotal":total,"cueExcerptsTruncated":total>12,
+                "previewRequest":preview(&asset.id,a,b)}))
+            })
+            .collect::<Result<_>>()?;
         coverage.entry(&asset.id).or_default().push((start, end));
         cuts.push(json!({"cutId":cut.id,"itemId":item.id,"assetId":asset.id,"sourceSha256":asset.fingerprint.sha256,
             "requestedRangeMs":[cut.start_ms,cut.end_ms],"sourceRange":clip.source_range,"outputStart":item.start,"outputDuration":item.duration,

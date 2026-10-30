@@ -3,6 +3,8 @@ use agent_video_workbench::{
     jobs::{self, RenderInput},
     store::Store,
 };
+use agentcut_core::OperationBatch;
+use serde_json::{Value, json};
 use std::{
     path::Path,
     sync::{Arc, atomic::AtomicBool},
@@ -18,6 +20,86 @@ fn input() -> RenderInput {
         asr: None,
         analysis: None,
     }
+}
+
+fn analysis_input(task: Value) -> RenderInput {
+    let mut config = input();
+    config.expected_revision = 1;
+    config.analysis = Some(serde_json::from_value(json!({"task": task})).unwrap());
+    config
+}
+
+#[test]
+fn invalid_analysis_is_rejected_atomically_and_valid_jobs_replay_after_edits() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("p");
+    let mut store = Store::create(&root, "analysis queue").unwrap();
+    let project = store.project().unwrap();
+    let seed: OperationBatch = serde_json::from_value(json!({
+        "schemaVersion":"1.0.0", "projectId":project.project_id, "baseRevision":0,
+        "idempotencyKey":"seed-analysis", "operations":[{"id":"add-source", "op":"asset.add",
+            "params":{"id":"source", "uri":"originals/test", "kind":"video", "metadata":{
+                "status":"available", "duration":{"value":10,"rate":{"numerator":1,"denominator":1}},
+                "video":{"size":{"width":640,"height":360},"frameRate":{"numerator":30,"denominator":1},
+                    "pixelFormat":"yuv420p","sampleAspectRatio":{"numerator":1,"denominator":1},"rotationDegrees":0}
+            }}}]
+    })).unwrap();
+    store.apply(&seed, false).unwrap();
+    let before = store.project().unwrap();
+    let history = store.history().unwrap();
+    let invalid = [
+        (
+            "retry-key",
+            json!({"kind":"proxy","assetId":"missing","startMs":0,"endMs":1000,"width":320,"height":180}),
+        ),
+        (
+            "bad-range",
+            json!({"kind":"frame-index","assetId":"source","startMs":0,"endMs":10002}),
+        ),
+        (
+            "bad-canvas",
+            json!({"kind":"proxy","assetId":"source","startMs":0,"endMs":1000,"width":321,"height":180}),
+        ),
+        (
+            "missing-provider",
+            json!({"kind":"provider","assetId":"source","task":"semantic","parameters":{}}),
+        ),
+    ];
+    for (key, task) in invalid {
+        assert!(store.enqueue(key, &analysis_input(task)).is_err(), "{key}");
+        assert_eq!(store.project().unwrap(), before);
+        assert_eq!(store.history().unwrap(), history);
+        assert!(store.jobs().unwrap().is_empty());
+    }
+    let connection = rusqlite::Connection::open(root.join("project.sqlite")).unwrap();
+    let count: i64 = connection
+        .query_row("SELECT count(*) FROM job_requests", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 0);
+
+    // A failed request did not reserve its key. A valid retry creates one job.
+    let valid = analysis_input(
+        json!({"kind":"proxy","assetId":"source","startMs":0,"endMs":1000,"width":320,"height":180}),
+    );
+    let queued = store.enqueue("retry-key", &valid).unwrap();
+    assert_eq!(queued.state, "queued");
+    assert_eq!(store.jobs().unwrap().len(), 1);
+
+    let renamed: OperationBatch = serde_json::from_value(json!({
+        "schemaVersion":"1.0.0", "projectId":before.project_id, "baseRevision":1,
+        "idempotencyKey":"rename-after-queue", "operations":[{"id":"rename","op":"project.rename","params":{"name":"later edit"}}]
+    })).unwrap();
+    store.apply(&renamed, false).unwrap();
+    assert_eq!(store.project().unwrap().revision, 2);
+    assert_eq!(store.enqueue("retry-key", &valid).unwrap().id, queued.id);
+    assert_eq!(store.jobs().unwrap().len(), 1);
+    assert!(matches!(
+        store.enqueue("different-key", &valid),
+        Err(Error::Conflict { .. })
+    ));
+    drop(store);
+    let mut reopened = Store::open(&root).unwrap();
+    assert_eq!(reopened.enqueue("retry-key", &valid).unwrap().id, queued.id);
 }
 
 #[test]

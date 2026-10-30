@@ -1,7 +1,7 @@
 use agent_video_workbench::policy::{self, ProtectedRange};
 use agentcut_core::{
     Asset, AssetKind, ClipData, Extensions, Fingerprint, ItemPayload, MediaMetadata, Project,
-    RationalRate, RationalTime, TimeRange, TimelineItem,
+    RationalRate, RationalTime, TimeRange, TimelineItem, Track, TrackType,
 };
 
 fn time(value: i64, rate: u32) -> RationalTime {
@@ -97,4 +97,39 @@ fn protection_removal_is_explicit_and_revalidates_remaining_ranges() {
     policy::validate(&project, &project).unwrap();
     assert_eq!(policy::ranges(&project).unwrap()[0].id, "keep");
     assert!(policy::remove(&mut project, "missing").is_err());
+}
+
+#[test]
+fn every_enabled_visual_solo_must_retain_the_protected_clip() {
+    let mut project = fixture();
+    policy::add(
+        &mut project,
+        ProtectedRange {
+            id: "demo".into(),
+            asset_id: "source".into(),
+            sequence_id: "seq_main".into(),
+            start: time(30, 30),
+            end: time(60, 30),
+        },
+    )
+    .unwrap();
+    for kind in [TrackType::Video, TrackType::Text, TrackType::Caption] {
+        let mut candidate = project.clone();
+        let mut solo = Track::empty("other", "other", kind, 1);
+        solo.enabled = false;
+        solo.solo = true;
+        candidate.sequences[0].tracks.push(solo);
+        // Disabled solos do not suppress a protected video track.
+        policy::validate(&project, &candidate).unwrap();
+        candidate.sequences[0].tracks.last_mut().unwrap().enabled = true;
+        assert!(policy::validate(&project, &candidate).is_err(), "{kind:?}");
+        // When the protected track is also solo, its coverage remains active.
+        candidate.sequences[0].tracks[0].solo = true;
+        policy::validate(&project, &candidate).unwrap();
+    }
+    let mut audio_solo = project.clone();
+    let mut track = Track::empty("other-audio", "other audio", TrackType::Audio, 1);
+    track.solo = true;
+    audio_solo.sequences[0].tracks.push(track);
+    policy::validate(&project, &audio_solo).unwrap();
 }

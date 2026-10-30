@@ -14,6 +14,9 @@ masters use CRF 16; lossless video encoding is optional. See the
 For subsequent candidates, [plan edits with source context](docs/edit-planning.md):
 briefs, cut reasons, reviewed speech handles, excluded material and playable
 source windows help the agent review a paper edit before committing it.
+Find literal phrases across transcript cues and listen to source context; map
+creator feedback across retained, moved or removed source intervals. Review
+pages can copy the exact render and playback time back to the agent.
 Build with latest stable Rust: `cargo build --release --locked`.
 
 **Published 0.3.1: Linux x86_64 and ARM64, October 3, 2026.** This older binary
@@ -67,6 +70,9 @@ qualification; the tool reports unsupported rendering paths explicitly.
 | [First edit](docs/first-edit.md) | Tested import-to-delivery CLI/MCP walkthrough |
 | [Natural edit](docs/natural-edit.md) | Source-matched HDR/SDR baseline, preflight and review |
 | [Edit planning](docs/edit-planning.md) | Briefs, source context, speech handles and durable cut decisions |
+| [Transcript search](docs/transcript-search.md) | Bounded phrase search across source cues and playable context |
+| [Review feedback](docs/review-feedback.md) | Artifact-anchored intervals and mapping across later edits |
+| [Creator opportunities](docs/creator-agent-opportunities.md) | Prioritized creator trials and future product work |
 | [Editor research](docs/editor-research.md) | Official editor documentation and applied design choices |
 | [Interface reference](docs/agent-api.md) | Current envelopes, revisions, jobs and verified artifacts |
 | [Agent guide](AGENT_GUIDE.md) | Source-based edits, profiles, analysis, revisions and delivery |

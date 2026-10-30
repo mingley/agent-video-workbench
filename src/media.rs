@@ -304,6 +304,10 @@ pub(crate) fn render_attempt(
     control: &mut dyn crate::process::Control,
 ) -> Result<Value> {
     control.check()?;
+    // Projects authored before the current protection rules may contain a
+    // visual solo that hides a protected clip. Revalidate the frozen input,
+    // even when no edit has occurred since that earlier revision.
+    crate::policy::validate(project, project)?;
     for asset in &project.assets {
         verify_asset_controlled(root, asset, control)?;
     }
@@ -337,7 +341,8 @@ pub(crate) fn render_attempt(
         let preset = agentcut_render::preset::require("h264-mp4")?;
         let instanced = instance_cut_sources(project, sequence)?;
         let (prepared, seeks) = seek_project(&instanced, sequence)?;
-        let prepared = crate::color::geometry(&prepared);
+        let mut prepared = crate::color::geometry(&prepared);
+        clear_disabled_track_solos(&mut prepared);
         let mut normalized = agentcut_core::normalize::normalize_sequence(&prepared, sequence)?;
         layout_caption_lines(&mut normalized)?;
         let mut ir =
@@ -602,19 +607,7 @@ pub(crate) fn verify(
         }
     }
     let duration = frames as f64 / seq.frame_rate.as_f64();
-    let solo = seq.tracks.iter().any(|t| t.solo && t.enabled);
-    let has_audio = seq
-        .tracks
-        .iter()
-        .filter(|t| t.enabled && !t.muted && (!solo || t.solo))
-        .flat_map(|t| &t.items)
-        .any(|item| {
-            item.enabled
-                && matches!(&item.payload, agentcut_core::ItemPayload::Clip(clip)
-            if clip.audio.enabled && project.assets.iter().any(|asset|
-                asset.id == clip.asset_id && asset.metadata.audio.is_some()))
-        });
-    if has_audio {
+    if has_expected_audio(project, sequence)? {
         let audio = streams
             .iter()
             .find(|s| s["codec_type"] == "audio")
@@ -775,6 +768,50 @@ pub fn layout_caption_lines(
     Ok(())
 }
 
+fn clear_disabled_track_solos(project: &mut Project) {
+    // The pinned normalizer counts disabled solos before skipping disabled
+    // tracks. Clear them only in this render copy, including nested sequences.
+    for sequence in &mut project.sequences {
+        for track in &mut sequence.tracks {
+            if !track.enabled {
+                track.solo = false;
+            }
+        }
+    }
+}
+
+fn has_expected_audio(project: &Project, sequence: &str) -> Result<bool> {
+    // Check the same per-kind solo selection and nested expansion as the
+    // compositor, rather than treating a visual solo as an audio solo.
+    let mut prepared = project.clone();
+    clear_disabled_track_solos(&mut prepared);
+    let normalized = agentcut_core::normalize::normalize_sequence(&prepared, sequence)?;
+    let duration = if normalized.duration.value > 0 {
+        normalized.duration
+    } else {
+        agentcut_core::RationalTime::new(1, normalized.frame_rate)
+    };
+    let range = agentcut_core::TimeRange::new(
+        agentcut_core::RationalTime::zero(normalized.frame_rate),
+        duration,
+    )?;
+    for item in normalized
+        .video_layers
+        .iter()
+        .chain(&normalized.audio_layers)
+        .flat_map(|layer| &layer.items)
+    {
+        if item.audio.as_ref().is_some_and(|audio| audio.enabled)
+            && let Some(asset_id) = &item.asset_id
+            && prepared.require_asset(asset_id)?.metadata.audio.is_some()
+            && item.timeline_range.intersects(range)?
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// Give repeated normal-speed cuts independent decoder clocks. Sharing one
 /// decoder across distant source ranges makes FFmpeg queue full-resolution
 /// frames for earlier branches while a later branch consumes up to its trim.
@@ -906,9 +943,113 @@ fn seek_project(
 mod render_input_tests {
     use super::*;
     use agentcut_core::{
-        Asset, AssetKind, ClipData, Fingerprint, ItemPayload, MediaMetadata, RationalRate,
-        TimeRange, TimelineItem,
+        Asset, AssetKind, AudioMetadata, BlendMode, ClipData, Fingerprint, ItemPayload,
+        MediaMetadata, RationalRate, Sequence, SequenceRefData, TimeRange, TimelineItem, Track,
+        TrackType, Transform2d,
     };
+
+    #[test]
+    fn disabled_solos_are_cleared_for_nested_render_preparation_only() {
+        let rate = RationalRate::frames(30).unwrap();
+        let mut project = Project::new("nested", 360, 640, rate);
+        let mut metadata = MediaMetadata::unprobed();
+        metadata.audio = Some(AudioMetadata {
+            sample_rate: 48000,
+            channels: 1,
+            channel_layout: "mono".into(),
+            sample_format: "fltp".into(),
+        });
+        project.assets.push(Asset {
+            id: "source".into(),
+            kind: AssetKind::Video,
+            uri: "originals/retained".into(),
+            proxy_uri: None,
+            label: "source".into(),
+            fingerprint: Fingerprint::unprobed(),
+            metadata,
+            tags: Vec::new(),
+            extensions: Default::default(),
+        });
+        let range = TimeRange::new(crate::workflow::time(0), crate::workflow::time(1000)).unwrap();
+        let clip = |id: &str| TimelineItem {
+            id: id.into(),
+            name: id.into(),
+            enabled: true,
+            start: range.start,
+            duration: range.duration,
+            linked_group_id: None,
+            payload: ItemPayload::Clip(ClipData::new("source", range)),
+            effects: Vec::new(),
+            keyframes: Vec::new(),
+            extensions: Default::default(),
+        };
+        let mut child = Sequence::new("child", "Child", 360, 640, rate, 48000);
+        child.tracks[0].id = "child-video".into();
+        child.tracks[1].id = "child-audio".into();
+        let mut video = clip("video");
+        if let ItemPayload::Clip(ref mut item) = video.payload {
+            item.audio.enabled = false;
+        }
+        child.tracks[0].items.push(video);
+        child.tracks[1].items.push(clip("audio"));
+        for (id, kind) in [
+            ("disabled-video", TrackType::Video),
+            ("disabled-audio", TrackType::Audio),
+        ] {
+            let mut track = Track::empty(id, id, kind, 1);
+            track.solo = true;
+            track.enabled = false;
+            child.tracks.push(track);
+        }
+        let nested = SequenceRefData {
+            sequence_id: "child".into(),
+            source_range: range,
+            transform: Transform2d::centered(project.sequences[0].canvas),
+            opacity: 1.0,
+            blend_mode: BlendMode::Normal,
+        };
+        for (index, id) in [(0, "nested-video"), (1, "nested-audio")] {
+            project.sequences[0].tracks[index].items.push(TimelineItem {
+                id: id.into(),
+                name: id.into(),
+                enabled: true,
+                start: range.start,
+                duration: range.duration,
+                linked_group_id: None,
+                payload: ItemPayload::Sequence(nested.clone()),
+                effects: Vec::new(),
+                keyframes: Vec::new(),
+                extensions: Default::default(),
+            });
+        }
+        project.sequences.push(child);
+        let original = project.clone();
+        let without_fix =
+            agentcut_core::normalize::normalize_sequence(&project, "seq_main").unwrap();
+        assert!(without_fix.video_layers.is_empty() && without_fix.audio_layers.is_empty());
+        let mut prepared = project.clone();
+        clear_disabled_track_solos(&mut prepared);
+        let with_fix = agentcut_core::normalize::normalize_sequence(&prepared, "seq_main").unwrap();
+        assert_eq!(
+            with_fix.video_layers[0].items[0].item_id,
+            "nested-video__video"
+        );
+        assert_eq!(
+            with_fix.audio_layers[0].items[0].item_id,
+            "nested-audio__audio"
+        );
+        assert_eq!(project, original);
+        assert!(has_expected_audio(&project, "seq_main").unwrap());
+
+        // A visual solo must not make audio QC ignore the active audio track.
+        project.sequences[0].tracks[0].solo = true;
+        assert!(has_expected_audio(&project, "seq_main").unwrap());
+        // A separate enabled audio solo still excludes non-solo audio tracks.
+        let mut solo = Track::empty("active-solo-audio", "active", TrackType::Audio, 1);
+        solo.solo = true;
+        project.sequences[0].tracks.push(solo);
+        assert!(!has_expected_audio(&project, "seq_main").unwrap());
+    }
 
     #[test]
     fn repeated_cut_inputs_preserve_source_clocks_and_original_project() {

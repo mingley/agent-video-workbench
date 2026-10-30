@@ -59,6 +59,7 @@ try {
     ['small-phone', { width: 320, height: 640 }, true],
   ]) {
     const context = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile });
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: base });
     await context.route('**/*', route => route.request().url().startsWith(base + '/')
       ? route.continue() : route.abort());
     const page = await context.newPage();
@@ -114,7 +115,46 @@ try {
       }
       return { videos, viewport: window.innerWidth, pageWidth: document.documentElement.scrollWidth };
     });
-    results.push({ label, requestedViewport: viewport, ...media, editingNotes: shownNotes, pageErrors: errors });
+    const feedback = [];
+    for (const [index, item] of delivered.entries()) {
+      const section = page.locator('section').nth(index);
+      const reference = section.locator('textarea');
+      if (!(await section.locator('[data-feedback-reference]').isVisible())
+        || !(await reference.getAttribute('readonly') === '')
+        || await section.locator('video').getAttribute('aria-labelledby') !== `title-${item.jobId}`) {
+        throw new Error('Feedback reference or accessible video name is missing');
+      }
+      const ms = Math.round(media.videos[index].seekSeconds * 1000);
+      const timestamp = [Math.floor(ms / 3600000), Math.floor(ms / 60000) % 60, Math.floor(ms / 1000) % 60]
+        .map(part => String(part).padStart(2, '0')).join(':') + '.' + String(ms % 1000).padStart(3, '0');
+      if (await section.locator('[data-feedback-time]').textContent() !== timestamp) {
+        throw new Error('Displayed playback time differs from the video position');
+      }
+      const title = expectedNotes[index].title.replace(/\s+/g, ' ').trim() || 'Video';
+      const expected = `Video: ${title}\nRender job ID: ${item.jobId}\nRendered revision: ${item.revision}\nPlayback time: ${timestamp} (${ms} ms)`;
+      if (await reference.inputValue() !== expected) throw new Error('Feedback reference lost the frozen identity or playback time');
+      const fallback = label === 'small-phone' && index === 0;
+      if (fallback) await page.evaluate(() => Object.defineProperty(navigator.clipboard, 'writeText', {
+        configurable: true, value: async () => { throw new Error('clipboard denied'); },
+      }));
+      await section.getByRole('button', { name: 'Copy feedback reference' }).click();
+      await section.locator('[role=status]').filter({ hasText: fallback ? 'Reference selected' : 'Feedback reference copied' }).waitFor();
+      if (fallback) {
+        const selected = await reference.evaluate(element => document.activeElement === element
+          && element.selectionStart === 0 && element.selectionEnd === element.value.length);
+        if (!selected || !(await section.locator('[role=status]').textContent()).includes('Reference selected')) {
+          throw new Error('Clipboard denial did not select the reference for manual copying');
+        }
+        await page.evaluate(() => { delete navigator.clipboard.writeText; });
+      } else {
+        const copied = await page.evaluate(() => navigator.clipboard.readText());
+        if (copied !== expected) {
+          throw new Error('Copied feedback reference differs from the shown timestamp: ' + JSON.stringify({ copied, expected }));
+        }
+      }
+      feedback.push({ jobId: item.jobId, revision: item.revision, milliseconds: ms, fallback });
+    }
+    results.push({ label, requestedViewport: viewport, ...media, editingNotes: shownNotes, feedback, pageErrors: errors });
     await page.screenshot({ path: path.join(output, label + '.png'), fullPage: true });
     if (errors.length || !media.videos.length || media.videos.some(video => !video.played
       || video.error || Math.abs(video.seekSeconds - video.seekTargetSeconds) > 0.05)) {
@@ -135,8 +175,21 @@ try {
     }
     await context.close();
   }
+  const noScript = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
+  const fallbackPage = await noScript.newPage();
+  await fallbackPage.goto(base + '/');
+  for (const [index, item] of delivered.entries()) {
+    const section = fallbackPage.locator('section').nth(index);
+    const notice = section.locator('noscript');
+    if (!(await notice.isVisible()) || !(await notice.textContent()).includes(item.jobId)
+      || !(await notice.textContent()).includes(`rendered revision ${item.revision}`)
+      || await section.locator('[data-feedback-reference]').isVisible()) {
+      throw new Error('No-script feedback guidance is missing or interactive controls were exposed');
+    }
+  }
+  await noScript.close();
   fs.writeFileSync(path.join(output, 'summary.json'), JSON.stringify({ passed: true,
-    browser: await browser.version(), results, requests,
+    browser: await browser.version(), results, requests, noScriptFeedbackGuidance: true,
     limitations: ['Chromium viewport emulation; no iOS Safari, physical phone, HDR display or real-camera appearance approval'],
   }, null, 2));
   console.log('Browser playback/layout passed:', path.join(output, 'summary.json'));

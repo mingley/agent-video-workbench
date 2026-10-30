@@ -35,6 +35,12 @@ The older draft schemas remain design documents. `AGENT_GUIDE.md` is embedded
 at build time; published archives retain their release-source guide, while
 repository documentation can refine examples between binary releases.
 
+During iterative development, prefer these local checks and the affected media
+or browser evaluations. A commit message containing `[skip ci]` avoids launching
+the two native GitHub Actions jobs for that push. Omit the marker when native CI
+is needed for a specific qualification or release, and record its actual result;
+local checks do not establish ARM64 or release qualification.
+
 ## Media and agent checks
 
 On this Linux route, `scripts/setup-media.sh /path/to/tools` installs a
@@ -108,8 +114,9 @@ atomic edit refusals. With the optional generated full-HD source, it also verifi
 393 HLG frames under the 4GiB child limit. The preserving SDK trial freezes a
 revision, checks CLI replay and verified master/preview retrieval, delivers the
 bundle and reopens its policy from backup.
-It also runs paper-edit planning through CLI/MCP, refuses an unreviewed clipped
-cue atomically, plays four verified source-context proxies with measured audio
+It also finds a phrase spanning two cues and verifies its playable source proxy,
+runs paper-edit planning through CLI/MCP, refuses an unreviewed clipped cue
+atomically, plays four verified source-context proxies with measured audio
 offsets, checks plan dry-run/replay and invalidates review after cue or relevant
 protection changes. It compares CLI/MCP status, checks protections on other
 outputs and frozen review state, and retains cut decisions in backup. The planned-review browser check verifies frozen
@@ -167,7 +174,9 @@ candidate results describe additional work; they are not runtime contracts.
 The same release-binary/backend arguments and fresh `--output` directories apply
 to `evaluation/studio_smoke.py` (also `--font`), `audio_smoke.py`,
 `transfer_smoke.py`, `analysis_smoke.py`, `timeline_smoke.py` and
-`highres_smoke.py` (also `--font`). These exercise selective restore/reanalysis,
+`highres_smoke.py` (also `--font`). `evaluation/solo_smoke.py` checks protected
+video and audio against disabled and enabled solo tracks using generated media,
+including refusal of unsafe older snapshots. These exercise selective restore/reanalysis,
 profiles/templates/libraries, three formats/language variants, frozen delivery,
 review remapping, hash repair/backup/OTIO, measured ducking/fades/J/L cuts,
 resumable scoped transfers, PTS/proxies/tracker/provider contracts and short

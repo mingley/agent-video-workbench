@@ -95,6 +95,10 @@ pub fn inspect(
         if matches!(kind, Kind::Frame) && result["sha256"] != media::hash_file(&image)? {
             return Err(Error::Invalid("cached frame bytes changed".into()));
         }
+        // Evidence is keyed by source bytes and may be shared by several asset
+        // IDs. Bind the returned identity to this request, not the asset that
+        // first populated the cache.
+        result["assetId"] = json!(asset_id);
         result["cacheHit"] = json!(true);
         return Ok(result);
     }

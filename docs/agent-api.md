@@ -87,7 +87,7 @@ unreviewed risks and commits intent with the sequence atomically. Preflight's
 | `status` | Full project snapshot with assets, sequences and extensions; protection is not a top-level `protectedRanges` field |
 | `history` | Revision-bounded page with `items` and `nextAfter` |
 | `studio-state` | Prefix-filtered decisions with `nextOffset`; large values are summarized |
-| `transcript-search` | Matching source cues with `nextOffset` |
+| `transcript-search` | Matching source cues, or opt-in literal matches across adjacent cues, with `nextOffset` |
 | `catalog` | Read-only workspace discovery with `nextOffset` |
 | `diff` | Changes between explicit revisions |
 | `jobs`, `artifacts`, `imports` | Operational state; these are not interchangeable with editing history |
@@ -95,6 +95,8 @@ unreviewed risks and commits intent with the sequence atomically. Preflight's
 Follow returned pagination markers rather than assuming the first page is
 complete. Read schema defaults and limits for each operation. `resume` includes
 at most 100 assets and reports truncation; use narrower discovery as needed.
+For cross-cue matching, revision-pinned pagination and source-preview requests,
+see [transcript search](transcript-search.md).
 
 ## Jobs and verified delivery
 
@@ -102,6 +104,10 @@ at most 100 assets and reports truncation; use narrower discovery as needed.
 `batch-start` returns a parent ID and freezes all selected outputs atomically.
 Use `job-status` for children and `batch-status` for aggregate completion.
 The parent is a `batch` record; aggregate status is computed from its children.
+Invalid analysis tasks are rejected against the frozen revision before a job or
+request key is recorded. Generated context-preview requests are bound to their
+project, source and media configuration; regenerate them on another service
+configuration instead of reusing their key.
 
 Runnable jobs move from `queued` to `running`, can enter `verifying`, then
 finish as `succeeded`, `failed`, `cancelled` or `interrupted`. Continue polling
@@ -128,7 +134,10 @@ The synchronous `render` alias returns `artifactId`, `path`, `manifest` and
 `revision`; retrieve `artifact` with that ID for the verification/hash response.
 `delivery` packages a succeeded render or batch into a new scoped directory.
 Read its manifest for failures and unresolved feedback, then use host file tools
-to return the files. See [support limits](implementation-status.md#explicit-support-boundaries).
+to return the files. The review page can copy the frozen render ID, revision and
+current playback time for a creator to send back to their agent. See
+[feedback mapping](review-feedback.md) and
+[support limits](implementation-status.md#explicit-support-boundaries).
 
 ## Filesystem and process boundary
 

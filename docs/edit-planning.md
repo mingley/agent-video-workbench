@@ -55,9 +55,13 @@ can differ slightly after frame rounding.
 ## Review before committing
 
 For each cut, inspect both `contextWindows`. Each contains the exact boundary,
-its offset in the surrounding source, and a complete `previewRequest` with
-scoped project, revision and stable key. Send that request unchanged, then run
-the worker and retrieve the verified analysis artifact. Its `attachments`
+its offset in the surrounding source, transcript `cueExcerpts` for that window,
+and a complete `previewRequest` with scoped project, revision and stable key.
+Each window shows up to twelve cues nearest its actual boundary, in source-time
+order; `cueExcerptsTotal` and `cueExcerptsTruncated` show when more cues overlap
+the window. This gives both ends of a long cut their own context even when the
+older whole-cut `contextCues` list is full. Send the preview request unchanged,
+then run the worker and retrieve the verified analysis artifact. Its `attachments`
 include `proxy.mp4` with audio and an explicit source-time map. Analysis leaves
 the editing head unchanged. These are SDR review proxies, never final sources
 or HDR appearance references. Inspect the original on a suitable display when

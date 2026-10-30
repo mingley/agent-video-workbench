@@ -1841,6 +1841,10 @@
     {
       "additionalProperties": false,
       "properties": {
+        "acrossCues": {
+          "default": false,
+          "type": "boolean"
+        },
         "assetId": {
           "default": null,
           "type": [
@@ -1852,11 +1856,29 @@
           "const": "transcript-search",
           "type": "string"
         },
+        "expectedRevision": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "limit": {
           "default": 50,
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "maxGapMs": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "offset": {
           "default": 0,

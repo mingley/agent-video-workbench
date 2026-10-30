@@ -5,6 +5,7 @@ use agentcut_render::FfmpegBackend;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use std::{
     path::{Path, PathBuf},
     process::Command,
@@ -166,6 +167,12 @@ pub enum Request {
         query: String,
         #[serde(default)]
         asset_id: Option<String>,
+        #[serde(default)]
+        across_cues: bool,
+        #[serde(default)]
+        max_gap_ms: Option<u32>,
+        #[serde(default)]
+        expected_revision: Option<u64>,
         #[serde(default)]
         offset: u32,
         #[serde(default = "limit")]
@@ -770,21 +777,21 @@ impl Service {
             } => {
                 let snapshot = Store::open(&self.path(&project)?)?.project()?;
                 let mut report = crate::editorial::plan(&snapshot, &plan, expected_revision)?;
-                let digest = report["planSha256"]
-                    .as_str()
-                    .expect("plan digest")
-                    .to_owned();
                 for cut in report["cuts"].as_array_mut().expect("plan cuts") {
-                    let id = cut["cutId"].as_str().expect("cut ID").to_owned();
                     for window in cut["contextWindows"]
                         .as_array_mut()
                         .expect("source windows")
                     {
-                        let edge = window["edge"].as_str().expect("boundary edge").to_owned();
+                        let task: crate::analysis::Task =
+                            serde_json::from_value(window["previewRequest"]["task"].clone())?;
                         window["previewRequest"]["project"] = json!(project);
                         window["previewRequest"]["expectedRevision"] = json!(expected_revision);
-                        window["previewRequest"]["key"] =
-                            json!(format!("context-{}-{id}-{edge}", &digest[..16]));
+                        window["previewRequest"]["key"] = json!(preview_job_key(
+                            &self.backend,
+                            task,
+                            expected_revision,
+                            &snapshot
+                        )?);
                     }
                 }
                 report["guidance"] = json!(
@@ -866,12 +873,46 @@ impl Service {
                 project,
                 query,
                 asset_id,
+                across_cues,
+                max_gap_ms,
+                expected_revision,
                 offset,
                 limit,
             } => {
                 check_limit(limit)?;
                 let p = Store::open(&self.path(&project)?)?.project()?;
+                if let Some(expected) = expected_revision
+                    && expected != p.revision
+                {
+                    return Err(Error::Conflict {
+                        expected,
+                        current: p.revision,
+                    });
+                }
                 let transcript = workflow::transcripts(&p)?;
+                if across_cues {
+                    if offset > 0 && expected_revision.is_none() {
+                        return Err(Error::Invalid(
+                            "phrase search continuation requires expectedRevision".into(),
+                        ));
+                    }
+                    return phrase_search(
+                        PhraseSearchContext {
+                            project: &p,
+                            project_path: &project,
+                            backend: &self.backend,
+                            transcripts: &transcript,
+                        },
+                        &query,
+                        asset_id.as_deref(),
+                        max_gap_ms,
+                        offset,
+                        limit,
+                    );
+                }
+                if max_gap_ms.is_some() {
+                    return Err(Error::Invalid("maxGapMs requires acrossCues".into()));
+                }
                 let query = query.to_lowercase();
                 let hits: Vec<_> = transcript
                     .iter()
@@ -1070,6 +1111,248 @@ fn check_limit(limit: u32) -> Result<()> {
     }
     Ok(())
 }
+
+fn preview_job_key(
+    backend: &FfmpegBackend,
+    task: crate::analysis::Task,
+    revision: u64,
+    project: &agentcut_core::Project,
+) -> Result<String> {
+    let input = jobs::RenderInput {
+        sequence: "seq_main".into(),
+        priority: 0,
+        expected_revision: revision,
+        ffmpeg: backend.ffmpeg_path().into(),
+        ffprobe: backend.ffprobe_path().into(),
+        asr: None,
+        analysis: Some(crate::analysis::Input {
+            task,
+            provider: None,
+        }),
+    };
+    jobs::preview_input_key(&input, project)
+}
+
+// Phrase matching is literal after Unicode lowercasing and whitespace
+// normalization. A result identifies a cue span, not word-level alignment.
+struct PhraseSearchContext<'a> {
+    project: &'a agentcut_core::Project,
+    project_path: &'a Path,
+    backend: &'a FfmpegBackend,
+    transcripts: &'a [workflow::Transcript],
+}
+
+fn phrase_search(
+    context: PhraseSearchContext<'_>,
+    query: &str,
+    asset_id: Option<&str>,
+    max_gap_ms: Option<u32>,
+    offset: u32,
+    limit: u32,
+) -> Result<Value> {
+    let PhraseSearchContext {
+        project,
+        project_path,
+        backend,
+        transcripts,
+    } = context;
+    const MAX_CUES: usize = 8;
+    if query.len() > 1024 {
+        return Err(Error::Invalid(
+            "phrase query exceeds 1024 input bytes".into(),
+        ));
+    }
+    let normalized = |text: &str| {
+        text.split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase()
+    };
+    let query = normalized(query);
+    if query.is_empty() || query.len() > 256 {
+        return Err(Error::Invalid(
+            "phrase query requires 1..256 normalized bytes".into(),
+        ));
+    }
+    let gap = max_gap_ms.unwrap_or(2000);
+    if gap > 5000 {
+        return Err(Error::Invalid("maxGapMs must be 0..5000".into()));
+    }
+    let mut transcripts: Vec<_> = transcripts
+        .iter()
+        .filter(|t| asset_id.is_none_or(|id| id == t.asset_id))
+        .collect();
+    transcripts.sort_by(|a, b| {
+        (&a.asset_id, &a.language, &a.provider).cmp(&(&b.asset_id, &b.language, &b.provider))
+    });
+    let mut items = Vec::new();
+    let mut seen = 0_usize;
+    'transcripts: for transcript in transcripts {
+        // Hash incrementally so large transcripts do not require another
+        // complete serialized copy merely to identify their version.
+        struct HashWriter(Sha256);
+        impl std::io::Write for HashWriter {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0.update(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut digest = HashWriter(Sha256::new());
+        serde_json::to_writer(&mut digest, transcript)?;
+        let transcript_sha = format!("{:x}", digest.0.finalize());
+        let asset = project.require_asset(&transcript.asset_id)?;
+        let source_sha = &asset.fingerprint.sha256;
+        let mut cues: Vec<_> = transcript.cues.iter().collect();
+        cues.sort_by(|a, b| (a.start_ms, a.end_ms, &a.id).cmp(&(b.start_ms, b.end_ms, &b.id)));
+        for first in 0..cues.len() {
+            let mut combined = normalized(&cues[first].text);
+            let first_end = combined.len();
+            let mut source_end = cues[first].end_ms;
+            for last in first..(first + MAX_CUES).min(cues.len()) {
+                let previous_len = combined.len();
+                if last > first {
+                    // Overlapping or nested cues may be simultaneous speakers;
+                    // never invent a spoken order or bridge via an enclosing cue.
+                    let previous_end = cues[last - 1].end_ms;
+                    if cues[last].start_ms < previous_end
+                        || cues[last].start_ms.saturating_sub(previous_end) > i64::from(gap)
+                    {
+                        break;
+                    }
+                    combined.push(' ');
+                    combined.push_str(&normalized(&cues[last].text));
+                    source_end = source_end.max(cues[last].end_ms);
+                }
+                // For later cues the match must begin in the first cue and
+                // extend into this new cue; each matching cue span appears once.
+                let matched = if last == first {
+                    combined.contains(&query)
+                } else {
+                    let mut earliest = previous_len.saturating_sub(query.len().saturating_sub(1));
+                    while earliest < first_end && !combined.is_char_boundary(earliest) {
+                        earliest += 1;
+                    }
+                    earliest < first_end
+                        && combined[earliest..first_end]
+                            .char_indices()
+                            .any(|(relative, _)| {
+                                let at = earliest + relative;
+                                at + query.len() > previous_len + 1
+                                    && combined[at..].starts_with(&query)
+                            })
+                };
+                if matched && seen >= offset as usize {
+                    let before = first.checked_sub(1).map(|index| cues[index]).filter(|cue| {
+                        cues[first].start_ms >= cue.end_ms
+                            && cues[first].start_ms.saturating_sub(cue.end_ms) <= i64::from(gap)
+                    });
+                    let after = cues.get(last + 1).copied().filter(|cue| {
+                        cue.start_ms >= source_end
+                            && cue.start_ms.saturating_sub(source_end) <= i64::from(gap)
+                    });
+                    let matched_cues = &cues[first..=last];
+                    let (preview, preview_reason) = if asset.metadata.video.is_none() {
+                        (None, Some("source-not-video"))
+                    } else if source_sha.is_none() {
+                        (None, Some("source-hash-unavailable"))
+                    } else if let Some(duration) = asset.metadata.duration {
+                        if let Ok(duration_ms) = duration
+                            .rescale_to(workflow::time(0).rate, agentcut_core::RoundingMode::Floor)
+                        {
+                            let duration_ms = duration_ms.value;
+                            let match_start = cues[first].start_ms;
+                            let match_duration = source_end.saturating_sub(match_start);
+                            if source_end > duration_ms || match_start < 0 || match_duration <= 0 {
+                                (None, Some("match-outside-source"))
+                            } else if match_duration > 300_000 {
+                                (None, Some("match-exceeds-proxy-limit"))
+                            } else {
+                                // Keep the entire match and use the remaining
+                                // five-minute budget for up to 1s of context on
+                                // each side. Shorten context, never the match.
+                                let budget = 300_000 - match_duration;
+                                let available_before = match_start.min(1000);
+                                let available_after =
+                                    duration_ms.saturating_sub(source_end).min(1000);
+                                let initial_before = available_before.min(budget / 2);
+                                let after = available_after.min(budget - initial_before);
+                                let before = available_before.min(budget - after);
+                                let start_ms = match_start - before;
+                                let end_ms = source_end + after;
+                                let task = crate::analysis::Task::Proxy {
+                                    asset_id: transcript.asset_id.clone(),
+                                    start_ms,
+                                    end_ms,
+                                    width: 1280,
+                                    height: 1280,
+                                };
+                                // Use the entire frozen job input, including backend paths,
+                                // so distinct clients cannot collide on a generated key.
+                                let key = preview_job_key(
+                                    backend,
+                                    task.clone(),
+                                    project.revision,
+                                    project,
+                                )?;
+                                (
+                                    Some(
+                                        json!({"command":"analyze-start","project":project_path,"expectedRevision":project.revision,
+                                    "key":key,"noLaunch":true,"priority":0,"task":task}),
+                                    ),
+                                    None,
+                                )
+                            }
+                        } else {
+                            (None, Some("source-duration-unrepresentable"))
+                        }
+                    } else {
+                        (None, Some("source-duration-unavailable"))
+                    };
+                    items.push(json!({
+                        "assetId":transcript.asset_id,
+                        "sourceSha256":source_sha,
+                        "transcript":{"sha256":transcript_sha,"language":transcript.language,"provider":transcript.provider},
+                        "sourceStartMs":cues[first].start_ms,"sourceEndMs":source_end,
+                        "matchedCueIds":matched_cues.iter().map(|cue| &cue.id).collect::<Vec<_>>(),
+                        "matchedCues":matched_cues,"contextBefore":before,"contextAfter":after,
+                        "previewRequest":preview,"previewUnavailableReason":preview_reason,
+                    }));
+                    if items.len() > limit as usize {
+                        break 'transcripts;
+                    }
+                }
+                if matched {
+                    seen += 1;
+                }
+                // A phrase beginning in the first cue can no longer reach a
+                // future cue after this many following bytes have been seen.
+                if combined.len() - first_end >= query.len() {
+                    break;
+                }
+            }
+        }
+    }
+    let more = items.len() > limit as usize;
+    items.truncate(limit as usize);
+    let next = if more {
+        Some(
+            offset
+                .checked_add(limit)
+                .ok_or_else(|| Error::Invalid("search offset exceeds supported range".into()))?,
+        )
+    } else {
+        None
+    };
+    Ok(
+        json!({"revision":project.revision,"mode":"across-cues","items":items,"nextOffset":next,
+        "maxGapMs":gap,"maxMatchedCues":MAX_CUES,
+        "guidance":"Literal cue text match; timestamps cover whole cues and are not word alignment. Listen to source context before editing."}),
+    )
+}
+
 fn job_list(store: &Store, limit: u32) -> Result<Value> {
     let mut stmt = store
         .conn

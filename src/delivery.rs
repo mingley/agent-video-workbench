@@ -39,7 +39,7 @@ fn editing_notes(manifest: &Value) -> String {
     };
     let mut html = format!("<p data-edit-objective>{}</p>", html_text(objective));
     if record["status"] == "stale" {
-        html.push_str("<p>Timing or source evidence has changed since these notes. Review this version again.</p>");
+        html.push_str("<p>This edit or its review context has changed since these notes. Review this version again.</p>");
     }
     if let Some(decisions) = record["decisions"].as_array() {
         html.push_str("<details><summary>Why these cuts</summary><ol>");
@@ -55,13 +55,63 @@ fn editing_notes(manifest: &Value) -> String {
     }
     html
 }
+
+// The reference can be selected and copied. User-supplied titles are read
+// from textContent and never interpreted as markup.
+const REVIEW_SCRIPT: &str = r#"<script>
+for (const section of document.querySelectorAll('[data-review-job]')) {
+  const video = section.querySelector('video');
+  const fieldset = section.querySelector('[data-feedback-reference]');
+  const reference = fieldset.querySelector('textarea');
+  const status = fieldset.querySelector('[role=status]');
+  const formatTime = ms => {
+    const hours = Math.floor(ms / 3600000);
+    const minutes = Math.floor(ms / 60000) % 60;
+    const seconds = Math.floor(ms / 1000) % 60;
+    return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0') + ':'
+      + String(seconds).padStart(2, '0') + '.' + String(ms % 1000).padStart(3, '0');
+  };
+  const update = () => {
+    const ms = Number.isFinite(video.currentTime) ? Math.max(0, Math.round(video.currentTime * 1000)) : 0;
+    const title = section.querySelector('h2').textContent.replace(/\s+/g, ' ').trim() || 'Video';
+    fieldset.querySelector('[data-feedback-time]').textContent = formatTime(ms);
+    reference.value = 'Video: ' + title
+      + '\nRender job ID: ' + section.dataset.reviewJob
+      + '\nRendered revision: ' + section.dataset.reviewRevision
+      + '\nPlayback time: ' + formatTime(ms) + ' (' + ms + ' ms)';
+  };
+  video.addEventListener('timeupdate', update);
+  video.addEventListener('seeked', update);
+  fieldset.querySelector('button').addEventListener('click', async () => {
+    video.pause();
+    update();
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(reference.value);
+      status.textContent = 'Feedback reference copied.';
+    } catch (_) {
+      reference.focus();
+      reference.select();
+      status.textContent = 'Reference selected. Copy it with your usual keyboard shortcut.';
+    }
+  });
+  update();
+  fieldset.hidden = false;
+}
+</script>"#;
+
 pub fn sidecars(sequence: &Sequence) -> Result<(String, String, Value)> {
     let mut cues = Vec::new();
-    let solo = sequence.tracks.iter().any(|t| t.enabled && t.solo);
+    // The renderer applies solo separately to visual and audio tracks, and
+    // clears disabled solos before normalization. Match the burned captions.
+    let solo = sequence
+        .tracks
+        .iter()
+        .any(|t| t.enabled && t.solo && t.track_type.is_visual());
     for item in sequence
         .tracks
         .iter()
-        .filter(|t| t.enabled && (!solo || t.solo))
+        .filter(|t| t.enabled && t.track_type.is_visual() && (!solo || t.solo))
         .flat_map(|t| &t.items)
         .filter(|i| i.enabled)
     {
@@ -185,6 +235,9 @@ pub fn package(root: &Path, id: &str, destination: &Path) -> Result<Value> {
          body{font-family:system-ui,sans-serif;margin:1rem auto;padding:0 1rem;max-width:60rem}\
          section{margin:0 0 2rem}video{display:block;width:360px;max-width:100%;height:auto}\
          a,h2,p,li{overflow-wrap:anywhere}\
+         fieldset{box-sizing:border-box;max-width:36rem;margin:1rem 0}\
+         textarea{box-sizing:border-box;width:100%;resize:vertical;font:inherit}\
+         button{min-height:2.75rem} [role=status]{min-height:1.5em}\
          </style><body><main><h1>Video review</h1>",
     );
     for id in ids {
@@ -263,10 +316,12 @@ pub fn package(root: &Path, id: &str, destination: &Path) -> Result<Value> {
             .and_then(|s| s["name"].as_str())
             .unwrap_or("Video");
         let notes = editing_notes(&manifest);
-        html.push_str(&format!("<section><h2>{}</h2><video controls width=360 src='{id}/{preview}'></video>{label}{notes}<p><a href='{id}/video.mp4'>Master</a> · <a href='{id}/captions.vtt'>Captions</a> · <a href='{id}/manifest.json'>Manifest</a></p></section>",html_text(title)));
+        html.push_str(&format!("<section data-review-job='{id}' data-review-revision='{revision}'><h2 id='title-{id}'>{title}</h2><video controls width=360 aria-labelledby='title-{id}' src='{id}/{preview}'></video>{label}{notes}<fieldset data-feedback-reference hidden><legend>Share feedback at this moment</legend><p>Pause at the moment you want to discuss, then copy this reference for your agent.</p><p>Playback time: <span data-feedback-time></span></p><label for='feedback-{id}'>Feedback reference</label><textarea id='feedback-{id}' rows=6 readonly></textarea><button type=button>Copy feedback reference</button><p role=status aria-live=polite></p></fieldset><noscript><p>For feedback, include render job ID {id}, rendered revision {revision}, and the playback time.</p></noscript><p><a href='{id}/video.mp4'>Master</a> · <a href='{id}/captions.vtt'>Captions</a> · <a href='{id}/manifest.json'>Manifest</a></p></section>",title=html_text(title),revision=item.revision));
         items.push(json!({"jobId":id,"state":"succeeded","revision":item.revision,"sequenceId":manifest["sequenceId"],"files":files,"review":"pending","editPlan":manifest["editPreflight"]["editPlan"]}));
     }
-    html.push_str("</main></body></html>");
+    html.push_str("</main>");
+    html.push_str(REVIEW_SCRIPT);
+    html.push_str("</body></html>");
     let report = json!({"schemaVersion":1,"batchId":job.id,"frozenRevision":job.revision,"items":items,"reviews":store.project()?.extensions.get("avw.reviews"),"editorialReview":"pending"});
     for (name, bytes) in [
         ("manifest.json", serde_json::to_vec_pretty(&report)?),

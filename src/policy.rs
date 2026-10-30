@@ -76,7 +76,7 @@ pub fn validate(current: &Project, next: &Project) -> Result<()> {
         let solo = sequence
             .tracks
             .iter()
-            .any(|t| t.enabled && t.track_type == TrackType::Video && t.solo);
+            .any(|t| t.enabled && t.track_type.is_visual() && t.solo);
         for track in &sequence.tracks {
             if !track.enabled || track.track_type != TrackType::Video || (solo && !track.solo) {
                 continue;

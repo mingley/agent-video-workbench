@@ -36,6 +36,28 @@ pub struct RenderInput {
 fn zero_priority(value: &i32) -> bool {
     *value == 0
 }
+
+pub const PREVIEW_KEY_PREFIX: &str = "avw-preview-v1-";
+
+pub fn preview_input_key(input: &RenderInput, project: &agentcut_core::Project) -> Result<String> {
+    let Some(crate::analysis::Input {
+        task: crate::analysis::Task::Proxy { asset_id, .. },
+        ..
+    }) = &input.analysis
+    else {
+        return Err(Error::Invalid(
+            "generated preview keys require a proxy analysis task".into(),
+        ));
+    };
+    let asset = project.require_asset(asset_id)?;
+    Ok(format!(
+        "{PREVIEW_KEY_PREFIX}{:x}",
+        Sha256::digest(serde_json::to_vec(&json!({
+            "input":input,"projectId":project.project_id,"sourceSha256":asset.fingerprint.sha256
+        }))?)
+    ))
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Job {
@@ -112,9 +134,6 @@ impl Store {
                 return Err(Error::Invalid(
                     "batch requires distinct render sequences".into(),
                 ));
-            }
-            if let Some(analysis) = &input.analysis {
-                crate::analysis::validate(analysis, &project)?;
             }
             let seq = project.require_sequence(&input.sequence)?;
             if seq.canvas.width > 4096
@@ -239,11 +258,19 @@ impl Store {
             |r| r.get(0),
         )?;
         let project: agentcut_core::Project = serde_json::from_str(&text)?;
+        if key.starts_with(PREVIEW_KEY_PREFIX) && key != preview_input_key(input, &project)? {
+            return Err(Error::Invalid(
+                "generated preview key does not match this project or service configuration; regenerate the preview request here".into(),
+            ));
+        }
         let seq = project.require_sequence(&input.sequence)?;
         if seq.canvas.width > 4096 || seq.canvas.height > 4096 {
             return Err(Error::Invalid(
                 "canvas exceeds the 4096-pixel worker limit".into(),
             ));
+        }
+        if let Some(analysis) = &input.analysis {
+            crate::analysis::validate(analysis, &project)?;
         }
         let id = uuid::Uuid::new_v4().to_string();
         tx.execute(

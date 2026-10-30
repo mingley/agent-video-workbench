@@ -153,6 +153,63 @@ fn ntsc_rounding_is_checked_even_when_requested_end_precedes_speech() {
 }
 
 #[test]
+fn context_windows_show_dialogue_at_both_ends_of_a_long_cut() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut store = Store::create(&tmp.path().join("p"), "Both boundaries").unwrap();
+    let mut cues = vec![cue("opening", 800, 1100)];
+    cues.extend((0..20).map(|i| cue(&format!("middle-{i}"), 2000 + i * 200, 2050 + i * 200)));
+    cues.push(cue("ending", 7900, 8100));
+    seed(&mut store, 30, 1, cues);
+    let proposed = plan(json!([{"id":"long","assetId":"source","startMs":1000,"endMs":8000}]));
+    let report = editorial::plan(&store.project().unwrap(), &proposed, 2).unwrap();
+    let cut = &report["cuts"][0];
+    assert!(
+        cut["contextCues"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|c| c["id"] != "ending")
+    );
+    let windows = cut["contextWindows"].as_array().unwrap();
+    assert_eq!(windows[0]["edge"], "in");
+    assert_eq!(windows[0]["cueExcerpts"][0]["id"], "opening");
+    assert_eq!(windows[0]["cueExcerptsTotal"], 1);
+    assert_eq!(windows[0]["cueExcerptsTruncated"], false);
+    assert_eq!(windows[1]["edge"], "out");
+    assert_eq!(windows[1]["cueExcerpts"][0]["id"], "ending");
+    assert_eq!(windows[1]["cueExcerptsTotal"], 1);
+    assert_eq!(windows[1]["cueExcerptsTruncated"], false);
+}
+
+#[test]
+fn dense_unsorted_window_prioritizes_exact_boundary_and_reports_omissions() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut store = Store::create(&tmp.path().join("p"), "Dense transcript").unwrap();
+    let mut cues: Vec<_> = (0..20)
+        .map(|i| cue(&format!("line-{i:02}"), 1500 + i * 45, 1525 + i * 45))
+        .collect();
+    cues.push(cue("crosses-actual-end", 2501, 2502));
+    cues.reverse();
+    seed(&mut store, 30000, 1001, cues);
+    let proposed = plan(json!([{"id":"take","assetId":"source","startMs":1000,"endMs":2500}]));
+    let report = editorial::plan(&store.project().unwrap(), &proposed, 2).unwrap();
+    let cut = &report["cuts"][0];
+    assert_eq!(cut["findings"][0]["risk"], "speech-boundary");
+    let exit = &cut["contextWindows"][1];
+    assert_eq!(exit["cueExcerptsTotal"], 21);
+    assert_eq!(exit["cueExcerptsTruncated"], true);
+    let selected = exit["cueExcerpts"].as_array().unwrap();
+    assert_eq!(selected.len(), 12);
+    assert_eq!(selected[0]["id"], "line-09");
+    assert_eq!(selected[11]["id"], "crosses-actual-end");
+    assert!(
+        selected
+            .windows(2)
+            .all(|pair| pair[0]["startMs"].as_i64() <= pair[1]["startMs"].as_i64())
+    );
+}
+
+#[test]
 fn omitted_ranges_are_a_union_and_silent_actions_remain_visible() {
     let tmp = tempfile::tempdir().unwrap();
     let mut store = Store::create(&tmp.path().join("p"), "Omissions").unwrap();
@@ -375,6 +432,9 @@ fn service_returns_complete_scoped_and_repeatable_context_requests() {
         report
     );
     for window in report["cuts"][0]["contextWindows"].as_array().unwrap() {
+        assert_eq!(window["cueExcerpts"], json!([]));
+        assert_eq!(window["cueExcerptsTotal"], 0);
+        assert_eq!(window["cueExcerptsTruncated"], false);
         let parsed: Request = serde_json::from_value(window["previewRequest"].clone()).unwrap();
         let Request::AnalyzeStart {
             project,

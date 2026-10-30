@@ -4,11 +4,18 @@ use crate::{
     store::{Outcome, Store},
     workflow,
 };
-use agentcut_core::{ItemPayload, OperationBatch, Project, RationalTime, Sequence, TimelineItem};
+use agentcut_core::{
+    Asset, AssetKind, ClipData, ItemPayload, OperationBatch, Project, RationalRate, RationalTime,
+    Sequence, TimelineItem, Track, TrackType, TransitionAlignment,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -334,7 +341,377 @@ fn clone_sequence(sequence: &Sequence, id: &str) -> Result<Sequence> {
     rewrite(&mut value, &map);
     Ok(serde_json::from_value(value)?)
 }
+
+/// Preserve exact source/output coordinates when frame and millisecond clocks
+/// differ. Never round a feedback anchor onto the current timeline.
+fn exact_time(a: RationalTime, b: RationalTime, subtract: bool) -> Result<RationalTime> {
+    let (a_num, b_num) = (
+        a.rate.normalized()?.numerator,
+        b.rate.normalized()?.numerator,
+    );
+    let (mut divisor, mut remainder) = (a_num, b_num);
+    while remainder != 0 {
+        (divisor, remainder) = (remainder, divisor % remainder);
+    }
+    let ticks = (a_num / divisor)
+        .checked_mul(b_num)
+        .ok_or_else(|| invalid("review times require an unsupported common clock"))?;
+    let rate = RationalRate::frames(ticks)?;
+    let (a, b) = (a.rescale_exact(rate)?, b.rescale_exact(rate)?);
+    Ok(if subtract {
+        a.checked_sub(b)?
+    } else {
+        a.checked_add(b)?
+    })
+}
+
+fn active_tracks(sequence: &Sequence) -> impl Iterator<Item = &Track> {
+    let video_solo = sequence
+        .tracks
+        .iter()
+        .any(|t| t.enabled && t.solo && t.track_type.is_visual());
+    let audio_solo = sequence
+        .tracks
+        .iter()
+        .any(|t| t.enabled && t.solo && t.track_type == TrackType::Audio);
+    sequence.tracks.iter().filter(move |track| {
+        track.enabled
+            && track.track_type != TrackType::Data
+            && !(track.track_type == TrackType::Audio
+                && (track.muted || (audio_solo && !track.solo)))
+            && !(track.track_type.is_visual() && video_solo && !track.solo)
+    })
+}
+
+/// The renderer expands transition handles beyond the nominal clip intervals.
+/// We cannot currently trace those extra source frames precisely.
+fn touches_transition(sequence: &Sequence, at: RationalTime, end: RationalTime) -> Result<bool> {
+    use agentcut_core::RoundingMode;
+    for transition in &sequence.transitions {
+        let left = sequence
+            .item(&transition.left_item_id)
+            .ok_or_else(|| invalid("transition item missing"))?;
+        let cut = left
+            .end_exclusive()?
+            .rescale_to(sequence.frame_rate, RoundingMode::Nearest)?;
+        let duration = transition
+            .duration
+            .rescale_to(sequence.frame_rate, RoundingMode::Nearest)?;
+        let start = match transition.alignment {
+            TransitionAlignment::Center => {
+                cut.checked_sub(duration.scaled(1, 2, RoundingMode::Floor)?)?
+            }
+            TransitionAlignment::StartAtCut => cut,
+            TransitionAlignment::EndAtCut => cut.checked_sub(duration)?,
+        };
+        let finish = start.checked_add(duration)?;
+        if start.checked_cmp(end)?.is_lt() && finish.checked_cmp(at)?.is_gt() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReviewSourceRange {
+    asset_id: String,
+    item_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    media_kind: Option<ReviewMediaKind>,
+    start: RationalTime,
+    end: RationalTime,
+    output_start: RationalTime,
+    output_end: RationalTime,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum ReviewMediaKind {
+    Video,
+    Audio,
+}
+
+// A clip on a visual track can also contribute its embedded audio. Explicit
+// audio tracks contribute audio only. Keep these identities independent so a
+// surviving soundtrack cannot stand in for a removed picture, or vice versa.
+fn contributes(track: &Track, clip: &ClipData, asset: &Asset, kind: ReviewMediaKind) -> bool {
+    match kind {
+        ReviewMediaKind::Video => {
+            track.track_type == TrackType::Video && asset.kind == AssetKind::Video
+        }
+        ReviewMediaKind::Audio => {
+            clip.audio.enabled
+                && (track.track_type == TrackType::Audio
+                    || (track.track_type == TrackType::Video && asset.metadata.audio.is_some()))
+        }
+    }
+}
+
+struct CapturedReviewSources {
+    points: Vec<Value>,
+    ranges: Vec<ReviewSourceRange>,
+    coverage: &'static str,
+    limitations: BTreeSet<&'static str>,
+}
+
+// Fraction components fit in i128: i64 value × two u32 rate components.
+fn compare_time(a: RationalTime, b: RationalTime) -> Ordering {
+    (i128::from(a.value) * i128::from(a.rate.denominator) * i128::from(b.rate.numerator))
+        .cmp(&(i128::from(b.value) * i128::from(b.rate.denominator) * i128::from(a.rate.numerator)))
+}
+
+/// Whether a union covers a whole interval and whether it contains overlap.
+fn coverage(
+    start: RationalTime,
+    end: RationalTime,
+    intervals: &mut [(RationalTime, RationalTime)],
+) -> Result<(bool, bool)> {
+    intervals.sort_by(|a, b| compare_time(a.0, b.0));
+    let mut cursor = start;
+    let mut complete = true;
+    let mut ambiguous = false;
+    for &(from, to) in intervals.iter() {
+        if from.checked_cmp(cursor)?.is_gt() {
+            complete = false;
+        } else if from.checked_cmp(cursor)?.is_lt() {
+            ambiguous = true;
+        }
+        if to.checked_cmp(cursor)?.is_gt() {
+            cursor = to;
+        }
+    }
+    Ok((complete && cursor.checked_cmp(end)?.is_ge(), ambiguous))
+}
+
+fn capture_review_sources(
+    project: &Project,
+    sequence: &Sequence,
+    at_ms: i64,
+    end_ms: i64,
+) -> Result<CapturedReviewSources> {
+    let (at, end) = (workflow::time(at_ms), workflow::time(end_ms));
+    let mut points = Vec::new();
+    let mut ranges = Vec::new();
+    let mut timeline = Vec::new();
+    let mut limitations = BTreeSet::new();
+    if touches_transition(sequence, at, end)? {
+        limitations.insert("transition-handles");
+    }
+    for (track, item) in active_tracks(sequence)
+        .flat_map(|track| track.items.iter().map(move |item| (track, item)))
+        .filter(|(_, item)| item.enabled)
+    {
+        let from = item.start.max_of(at)?;
+        let to = item.end_exclusive()?.min_of(end)?;
+        if from.checked_cmp(to)?.is_ge() {
+            continue;
+        }
+        let ItemPayload::Clip(clip) = &item.payload else {
+            if matches!(item.payload, ItemPayload::Sequence(_)) {
+                limitations.insert("nested-sequence");
+            }
+            continue;
+        };
+        if track.track_type == TrackType::Audio && !clip.audio.enabled {
+            continue;
+        }
+        if !clip.video.speed.is_normal() {
+            limitations.insert("non-normal-speed");
+            continue;
+        }
+        if item.start.checked_cmp(at)?.is_le() && item.end_exclusive()?.checked_cmp(at)?.is_gt() {
+            points.push(json!({"assetId":clip.asset_id,"start":exact_time(clip.source_range.start,exact_time(at,item.start,true)?,false)?,"itemId":item.id}));
+        }
+        let asset = project.require_asset(&clip.asset_id)?;
+        if !matches!(asset.kind, AssetKind::Video | AssetKind::Audio)
+            || !clip.source_range.duration.same_instant(item.duration)?
+        {
+            limitations.insert("non-temporal-or-mismatched-source");
+            continue;
+        }
+        let mut contributed = false;
+        for kind in [ReviewMediaKind::Video, ReviewMediaKind::Audio] {
+            if !contributes(track, clip, asset, kind) {
+                continue;
+            }
+            ranges.push(ReviewSourceRange {
+                asset_id: clip.asset_id.clone(),
+                item_id: item.id.clone(),
+                media_kind: Some(kind),
+                start: exact_time(
+                    clip.source_range.start,
+                    exact_time(from, item.start, true)?,
+                    false,
+                )?,
+                end: exact_time(
+                    clip.source_range.start,
+                    exact_time(to, item.start, true)?,
+                    false,
+                )?,
+                output_start: from,
+                output_end: to,
+            });
+            contributed = true;
+        }
+        if contributed {
+            timeline.push((from, to));
+        }
+    }
+    let (complete, _) = coverage(at, end, &mut timeline)?;
+    let status = if ranges.is_empty() {
+        "unmapped"
+    } else if complete && limitations.is_empty() {
+        "complete"
+    } else {
+        "partial"
+    };
+    Ok(CapturedReviewSources {
+        points,
+        ranges,
+        coverage: status,
+        limitations,
+    })
+}
+
+fn map_review_range(
+    project: &Project,
+    sequence: &Sequence,
+    range: &ReviewSourceRange,
+) -> Result<Value> {
+    range.start.rate.normalized()?;
+    range.end.rate.normalized()?;
+    if !range.start.checked_cmp(range.end)?.is_lt() {
+        return Err(invalid("invalid review source range"));
+    }
+    let mut placements = Vec::new();
+    let mut source_intervals = Vec::new();
+    let mut offsets = Vec::new();
+    let mut limitations = BTreeSet::new();
+    if range.media_kind.is_none() {
+        limitations.insert("media-kind-unknown");
+    }
+    for (track, item) in active_tracks(sequence)
+        .flat_map(|track| track.items.iter().map(move |item| (track, item)))
+        .filter(|(_, item)| item.enabled)
+    {
+        let ItemPayload::Clip(clip) = &item.payload else {
+            if matches!(item.payload, ItemPayload::Sequence(_)) {
+                limitations.insert("nested-sequence");
+            }
+            continue;
+        };
+        if (track.track_type == TrackType::Audio && !clip.audio.enabled)
+            || clip.asset_id != range.asset_id
+        {
+            continue;
+        }
+        let asset = project.require_asset(&clip.asset_id)?;
+        let kinds = [ReviewMediaKind::Video, ReviewMediaKind::Audio];
+        if !kinds.into_iter().any(|kind| {
+            range.media_kind.is_none_or(|saved| saved == kind)
+                && contributes(track, clip, asset, kind)
+        }) {
+            continue;
+        }
+        let from = clip.source_range.start.max_of(range.start)?;
+        let to = clip.source_range.end_exclusive()?.min_of(range.end)?;
+        if !from.checked_cmp(to)?.is_lt() {
+            continue;
+        }
+        if !clip.video.speed.is_normal() {
+            limitations.insert("non-normal-speed");
+            continue;
+        }
+        if !matches!(asset.kind, AssetKind::Video | AssetKind::Audio)
+            || !clip.source_range.duration.same_instant(item.duration)?
+        {
+            limitations.insert("non-temporal-or-mismatched-source");
+            continue;
+        }
+        let output_start = exact_time(
+            item.start,
+            exact_time(from, clip.source_range.start, true)?,
+            false,
+        )?;
+        let output_end = exact_time(
+            item.start,
+            exact_time(to, clip.source_range.start, true)?,
+            false,
+        )?;
+        if touches_transition(sequence, output_start, output_end)? {
+            limitations.insert("transition-handles");
+        }
+        placements.push(json!({"itemId":item.id,"sourceStart":from,"sourceEnd":to,"start":output_start,"end":output_end,
+            "atMs":output_start.rescale_to(workflow::time(0).rate,agentcut_core::RoundingMode::Nearest)?.value,
+            "endMs":output_end.rescale_to(workflow::time(0).rate,agentcut_core::RoundingMode::Nearest)?.value}));
+        source_intervals.push((from, to));
+        offsets.push((from, to, exact_time(output_start, from, true)?));
+    }
+    let (complete, _) = coverage(range.start, range.end, &mut source_intervals)?;
+    // Overlapping audio and video can refer to the same source at the same
+    // output time; only differing source-to-output offsets are ambiguous.
+    offsets.sort_by(|a, b| compare_time(a.0, b.0));
+    let mut active: Option<(RationalTime, RationalTime)> = None;
+    let mut ambiguous = false;
+    for (from, to, offset) in offsets {
+        if let Some((last_end, last_offset)) = active {
+            if from.checked_cmp(last_end)?.is_lt() && !offset.same_instant(last_offset)? {
+                ambiguous = true;
+            }
+            if to.checked_cmp(last_end)?.is_gt() {
+                active = Some((to, offset));
+            }
+        } else {
+            active = Some((to, offset));
+        }
+    }
+    let status = if placements.is_empty() {
+        "removed_or_unmapped"
+    } else if ambiguous {
+        "ambiguous"
+    } else if complete && limitations.is_empty() {
+        "resolved"
+    } else {
+        "partial"
+    };
+    Ok(json!({"source":range,"mapping":status,"placements":placements,"limitations":limitations}))
+}
+
+// Multiple source segments may all survive but move apart or change order.
+// They preserve the reviewed interval only when every piece moves by the same
+// exact output-time offset, including pieces created by later clip splits.
+fn range_arrangement(mappings: &[Value]) -> Result<bool> {
+    let mut offset: Option<RationalTime> = None;
+    for mapping in mappings {
+        let source: ReviewSourceRange = serde_json::from_value(mapping["source"].clone())?;
+        for placement in mapping["placements"]
+            .as_array()
+            .ok_or_else(|| invalid("review placements missing"))?
+        {
+            let source_start: RationalTime =
+                serde_json::from_value(placement["sourceStart"].clone())?;
+            let output_start: RationalTime = serde_json::from_value(placement["start"].clone())?;
+            let original_start = exact_time(
+                source.output_start,
+                exact_time(source_start, source.start, true)?,
+                false,
+            )?;
+            let shift = exact_time(output_start, original_start, true)?;
+            if let Some(previous) = offset {
+                if !previous.same_instant(shift)? {
+                    return Ok(false);
+                }
+            } else {
+                offset = Some(shift);
+            }
+        }
+    }
+    Ok(true)
+}
+
 pub fn remap_reviews(project: &Project, sequence: &str) -> Result<Value> {
+    let sequence = project.require_sequence(sequence)?;
     let reviews = project
         .extensions
         .get("avw.reviews")
@@ -349,14 +726,12 @@ pub fn remap_reviews(project: &Project, sequence: &str) -> Result<Value> {
         if let Some(refs) = review["sources"].as_array() {
             for source in refs {
                 let start: RationalTime = serde_json::from_value(source["start"].clone())?;
-                for item in project
-                    .require_sequence(sequence)?
-                    .tracks
-                    .iter()
-                    .flat_map(|t| &t.items)
-                    .filter(|i| i.enabled)
+                for (track, item) in active_tracks(sequence)
+                    .flat_map(|track| track.items.iter().map(move |item| (track, item)))
+                    .filter(|(_, item)| item.enabled)
                 {
                     if let ItemPayload::Clip(clip) = &item.payload
+                        && !(track.track_type == TrackType::Audio && !clip.audio.enabled)
                         && source["assetId"] == clip.asset_id
                         && clip.video.speed.is_normal()
                         && clip.source_range.start.checked_cmp(start)?.is_le()
@@ -366,14 +741,53 @@ pub fn remap_reviews(project: &Project, sequence: &str) -> Result<Value> {
                             .checked_cmp(start)?
                             .is_gt()
                     {
-                        placements.push(json!({"itemId":item.id,"atMs":(item.start.checked_add(start.checked_sub(clip.source_range.start)?)?.as_seconds_f64()*1000.0).round() as i64}));
+                        let at = exact_time(
+                            item.start,
+                            exact_time(start, clip.source_range.start, true)?,
+                            false,
+                        )?;
+                        placements.push(json!({"itemId":item.id,"atMs":at.rescale_to(workflow::time(0).rate,agentcut_core::RoundingMode::Nearest)?.value}));
                     }
                 }
             }
         }
-        result.push(json!({"review":review,"placements":placements,"mapping":match placements.len(){0=>"removed_or_unmapped",1=>"resolved",_=>"ambiguous"}}));
+        let mut range_mappings = Vec::new();
+        let mut arrangement = "unknown";
+        let mapping = if let Some(value) = review.get("sourceRanges") {
+            let ranges: Vec<ReviewSourceRange> = serde_json::from_value(value.clone())?;
+            for range in &ranges {
+                range_mappings.push(map_review_range(project, sequence, range)?);
+            }
+            if range_mappings.iter().any(|m| m["mapping"] == "ambiguous") {
+                "ambiguous"
+            } else if range_mappings
+                .iter()
+                .all(|m| m["mapping"] == "removed_or_unmapped")
+            {
+                "removed_or_unmapped"
+            } else if review["sourceRangeCoverage"] != "complete"
+                || range_mappings.iter().any(|m| m["mapping"] != "resolved")
+            {
+                "partial"
+            } else if range_arrangement(&range_mappings)? {
+                arrangement = "preserved";
+                "resolved"
+            } else {
+                arrangement = "changed";
+                "rearranged"
+            }
+        } else {
+            match placements.len() {
+                0 => "removed_or_unmapped",
+                1 => "resolved",
+                _ => "ambiguous",
+            }
+        };
+        result.push(json!({"review":review,"placements":placements,"mapping":mapping,
+            "mappingBasis":if review.get("sourceRanges").is_some(){"source-range"}else{"legacy-point"},
+            "arrangement":arrangement,"rangeMappings":range_mappings}));
     }
-    Ok(json!({"revision":project.revision,"sequenceId":sequence,"items":result}))
+    Ok(json!({"revision":project.revision,"sequenceId":sequence.id,"items":result}))
 }
 fn reflow_captions(previous: &Project, next: &mut Project, root: &Path) -> Result<()> {
     let assets = next
@@ -592,8 +1006,8 @@ impl Store {
                 Edit::ReviewAdd{id,job_id,at_ms,end_ms,actor,text}=>{
                     workflow::id(id)?;if *at_ms<0 || end_ms<=at_ms || actor.trim().is_empty() || text.trim().is_empty() || text.len()>4000{return Err(invalid("review requires an interval, actor and 1..4000 bytes of text"));}
                     let manifest=review.as_ref().ok_or_else(||invalid("review manifest missing"))?;let snapshot:Project=serde_json::from_value(manifest["snapshot"].clone())?;let sequence=manifest["sequenceId"].as_str().ok_or_else(||invalid("review sequence missing"))?;let seq=snapshot.require_sequence(sequence)?;if *end_ms as f64>seq.content_duration()?.as_seconds_f64()*1000.0+1.0{return Err(invalid("review extends beyond artifact duration"));}
-                    let mut sources=Vec::new();for item in seq.tracks.iter().flat_map(|t| &t.items).filter(|i|i.enabled){let start=workflow::time(*at_ms);if item.start.checked_cmp(start)?.is_le() && item.end_exclusive()?.checked_cmp(start)?.is_gt() && let ItemPayload::Clip(c)=&item.payload && c.video.speed.is_normal(){sources.push(json!({"assetId":c.asset_id,"start":c.source_range.start.checked_add(start.checked_sub(item.start)?)?,"itemId":item.id}));}}
-                    let reviews=next.extensions.entry("avw.reviews".into()).or_insert(json!([])).as_array_mut().ok_or_else(||invalid("invalid reviews"))?;if reviews.iter().any(|r|r["id"]==*id){return Err(invalid("review ID exists"));}reviews.push(json!({"id":id,"jobId":job_id,"artifactSha256":manifest["verification"]["sha256"],"artifactRevision":snapshot.revision,"sequenceId":sequence,"atMs":at_ms,"endMs":end_ms,"actor":actor,"text":text,"sources":sources,"state":"open"}));
+                    let sources=capture_review_sources(&snapshot,seq,*at_ms,*end_ms)?;
+                    let reviews=next.extensions.entry("avw.reviews".into()).or_insert(json!([])).as_array_mut().ok_or_else(||invalid("invalid reviews"))?;if reviews.iter().any(|r|r["id"]==*id){return Err(invalid("review ID exists"));}reviews.push(json!({"id":id,"jobId":job_id,"artifactSha256":manifest["verification"]["sha256"],"artifactRevision":snapshot.revision,"sequenceId":sequence,"atMs":at_ms,"endMs":end_ms,"actor":actor,"text":text,"sources":sources.points,"sourceRanges":sources.ranges,"sourceRangeCoverage":sources.coverage,"sourceRangeLimitations":sources.limitations,"state":"open"}));
                 },
                 Edit::ReviewResolve{id,state,note}=>{let reviews=next.extensions.get_mut("avw.reviews").and_then(Value::as_array_mut).ok_or_else(||invalid("reviews missing"))?;let review=reviews.iter_mut().find(|r|r["id"]==*id).ok_or_else(||invalid("review missing"))?;review["state"]=serde_json::to_value(state)?;review["resolution"]=json!({"revision":expected+1,"note":note});}
             }

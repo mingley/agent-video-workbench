@@ -1,5 +1,13 @@
 # Implementation completion and remaining qualification
 
+October 30 source additions: bounded literal search across transcript cues,
+per-boundary cue context, source-range feedback remapping, and copyable review
+references extend the agent/creator loop. Analysis requests are validated before
+queueing, and protected-content rendering and subtitle sidecars use consistent
+track-solo rules. These are source-build changes, not additions to the published
+0.3.1 release. [Creator opportunities](creator-agent-opportunities.md) separates
+remaining proposals and real-user qualification from implemented behavior.
+
 October 6 addition: [source-context paper edits](edit-planning.md) now provide
 briefs, per-cut reasons, explicit speech handles and risk review, source-window
 proxy requests, omitted material, revision-bound plan application and stale review

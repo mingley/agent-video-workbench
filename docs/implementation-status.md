@@ -1,5 +1,42 @@
 # Implementation and qualification
 
+## Creator workflow and rendering reliability on current 0.4.0 source
+
+The source build adds opt-in [cross-cue transcript search](transcript-search.md),
+separate transcript excerpts for each paper-edit boundary, and
+[source-range feedback mapping](review-feedback.md) for normal-speed video and
+audio. Feedback reports missing, repeated and rearranged material and retains
+legacy point-based records. A review page can copy the frozen render ID,
+revision and playback time for a creator to share with their agent.
+
+Analysis requests now validate before queueing; generated preview requests bind
+their project, source and media configuration. Cached source inspection returns
+the requested asset ID even when two assets share the same original bytes.
+Disabled solo tracks no longer suppress enabled tracks during rendering, and
+rendering rechecks protections so older unsafe snapshots cannot silently hide
+protected footage. Enabled visual solos also participate in protection checks.
+Subtitle sidecars now follow visual solos independently of audio solos.
+Existing render artifacts and sidecars are unchanged; review and re-render any
+affected earlier output to regenerate them.
+
+Local Linux x86_64 validation used Rust 1.99.1 and FFmpeg 8.0.1. All 62 Rust
+tests, formatting, strict Clippy, release build and generated-schema checks
+passed. Generated-media regressions verified protected picture and audio under
+disabled solos, explicit refusal of unsafe older snapshots, independent enabled
+solos, analysis and creator workflows, and multi-cut feedback after removal.
+The official MCP SDK workflow found a phrase across cues and verified its audio
+proxy, replayed the request, and exercised paper edits and frozen review. Chromium
+played and sought the delivered review at 1280, 390 and 320 pixels, including
+copied references and clipboard fallback. These are generated fixtures and
+viewport emulation, not human or physical-device qualification.
+
+These changes do not establish which image layer or screen region a review
+comment refers to, semantic transcript search, real-creator approval, physical
+phone appearance, or additional operating-system support. The
+[creator opportunities](creator-agent-opportunities.md) plan lists further work
+and qualification gates. These additions have not been qualified on a new
+native ARM64 run.
+
 ## Review freshness on current 0.4.0 source
 
 Edit-plan review now includes the output's protected source ranges in its
@@ -14,8 +51,9 @@ the release build and generated schema check. The official MCP SDK workflow
 passed with a generated 60fps PQ fixture and FFmpeg 8.0.1: CLI/MCP agreed on
 protection-related staleness, an unrelated output stayed current, removing the
 new protection restored the reviewed state, and the already-frozen render kept
-its original review state. These changes are newer than the native qualification
-below; no new ARM64 or real-camera qualification is claimed.
+its original review state. The earlier [native run](https://github.com/mingley/agent-video-workbench/actions/runs/41098553110)
+passed on x86_64 and ARM64 at commit `6517e40`; the subsequent additions above
+are not covered by that run.
 
 ## Editorial planning on main, October 6, 2026
 
