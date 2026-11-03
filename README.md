@@ -40,11 +40,10 @@ Start with [installation and MCP connection](docs/deployment.md), then run
 [releases](https://github.com/mingley/agent-video-workbench/releases).
 From a repository checkout, choose a published version listed on the releases
 page. The native binary installer needs no Rust compiler, Node, GUI or root
-(see deployment for installation without a checkout). If 0.4.0 is not yet
-listed, build current source to use its features:
+(see deployment for installation without a checkout):
 
 ```sh
-AVW_VERSION=0.4.0 # replace with a version listed on the releases page
+AVW_VERSION=0.4.0
 scripts/install-release.sh /path/to/new-bin "$AVW_VERSION"
 scripts/setup-media.sh /path/to/tools
 /path/to/new-bin/avw --ffmpeg /path/to/tools/ffmpeg8/linux/ffmpeg \

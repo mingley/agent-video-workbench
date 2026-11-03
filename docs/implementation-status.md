@@ -36,6 +36,16 @@ SQLite sidecars. The tests do not establish real-creator acceptance, physical
 phone or HDR appearance, translation or speech accuracy, or model consumption
 of media in a particular host. See the [creator-agent toolkit](creator-agent-toolkit.md).
 
+[Native qualification](https://github.com/mingley/agent-video-workbench/actions/runs/41579096448)
+passed for source commit `2ce17fbcc98b92c1ec9199af47bbda5708ae03f6` on Linux
+x86_64 and ARM64, with 35 and 30 required workflow summaries respectively;
+browser tests run on x86_64. The [0.4.0 release](https://github.com/mingley/agent-video-workbench/releases/tag/v0.4.0)
+contains the two qualified archives. The public installer verified and installed
+the x86_64 release locally; its binary hash matched the published native
+manifest, and the official MCP SDK media, host-readiness and checked-batch
+workflows passed against it. ARM64 was qualified in native CI, not installed on
+the local x86_64 host.
+
 Earlier sections retain the evidence and feature scope reported at the time of
 those checks; later source changes can extend their behavior.
 

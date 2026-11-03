@@ -1,9 +1,9 @@
 # Install and connect an agent
 
 The 0.4.0 build is a local single-user Linux CLI and MCP stdio server. It
-includes source-preserving HDR cuts and verified SDR preview retrieval; use a
-matching [published release](https://github.com/mingley/agent-video-workbench/releases)
-when available, or build main with latest stable Rust using `cargo build
+includes source-preserving HDR cuts and verified SDR preview retrieval; use the
+matching [published release](https://github.com/mingley/agent-video-workbench/releases/tag/v0.4.0)
+or build main with latest stable Rust using `cargo build
 --release --locked` to try [natural edits](natural-edit.md) and
 [source-context planning](edit-planning.md). The older published 0.3.1 binary
 does not include these capabilities. The service persists
