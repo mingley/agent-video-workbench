@@ -32,10 +32,27 @@ The times cover complete cues; they do not identify the exact spoken word.
 Repeated occurrences in one identical cue span are returned once, while
 distinct matching cue spans produce separate results.
 
-The mode lowercases text, collapses whitespace and inserts one space between
-cues. Punctuation is literal; Unicode normalization and full case folding are
-not applied. Phrases in scripts that do not use spaces between words may not
-match across cues. Cues are sorted by source start, end and ID. Search joins at
+By default, the mode lowercases text, collapses whitespace and inserts one
+space between cues. Punctuation and accents are literal; Unicode normalization
+and full case folding are not applied. For other scripts or text encodings,
+choose either or both options explicitly:
+
+```sh
+avw transcript-search project "こんにちは世界" --asset-id source \
+  --across-cues --join-without-spaces --canonical-unicode
+```
+
+The equivalent JSON/MCP fields are `joinWithoutSpaces: true` and
+`canonicalUnicode: true`; each requires `acrossCues: true`. No-space joining
+trims cue-edge whitespace and joins the remaining text literally. Canonical
+mode applies Unicode NFC before and after lowercasing, separately to the query
+and each cue. Opt-in results report the selected `matchOptions`. Stored text,
+cue IDs, timestamps and generated preview requests are unchanged. This does not
+detect languages, perform linguistic segmentation, remove accents, use full
+Unicode case folding, or find all case/combining sequences split across cue
+boundaries. Listen to the source and review the original words.
+
+Cues are sorted by source start, end and ID. Search joins at
 most eight successive, non-overlapping cues from one asset, and only when each
 adjacent gap is at most `maxGapMs` (default 2000; accepted range 0–5000).
 Overlapping or nested cues are never joined, because their spoken order may be
@@ -47,6 +64,9 @@ Read `revision` and `nextOffset`. To request a continuation, set
 the named CLI flags are `--expected-revision` and `--offset`. A changed project
 returns a revision conflict, so restart the search instead of mixing pages from
 different revisions. A nonzero offset requires the revision guard in this mode.
+Repeat the same query, asset, gap and match options on every page. Restart after
+changing any of them or upgrading the binary; the revision guard does not bind
+the query or search implementation.
 
 When the selected source has video, a source hash and a known duration, a result
 may provide a complete `previewRequest`. It covers the whole matched cue span

@@ -17,6 +17,12 @@ Playwright and an installed Chromium to verify the delivered HTML's playback,
 seeking, links and desktop/phone layouts. This is viewport emulation, not physical
 phone or iOS Safari qualification.
 
+`creator_research_smoke.mjs`, `caption_sidecar_smoke.py` and
+`review_duration_smoke.mjs` cover the newer search, selected-marker chapter,
+delivery-constraint, sidecar-timing and review-bound workflows. They use
+generated media and fresh output directories; the review-duration regression
+also uses Chromium. See the commands in [DEVELOPMENT.md](../DEVELOPMENT.md).
+
 The rest of this document records a separate historical candidate comparison.
 Its media, assertions and known failures do not describe 0.3 application
 qualification.

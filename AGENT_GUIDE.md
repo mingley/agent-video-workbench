@@ -36,7 +36,8 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    machine text before `transcript-import`. Cues contain ID, startMs, endMs and
    literal text, plus assetId/language/provider. `transcript-search` can optionally
    find a literal phrase across adjacent cues, with revision-pinned pagination and
-   playable source context where available; see [transcript search](docs/transcript-search.md).
+   playable source context where available; opt into canonical Unicode matching
+   or no-space cue joining when appropriate. See [transcript search](docs/transcript-search.md).
    `studio` action `transcript-correct` updates reviewed words and selected bound
    outputs. New analysis is archived without replacing corrections. Choose a
    version explicitly with `transcript-select`; unchanged cue IDs/timing preserve
@@ -129,6 +130,11 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
     added, omitted and uniquely reordered source ranges for plain-cut assemblies.
     Repeats are ambiguous; the report does not compare audio, color or appearance.
     See [compare edits](docs/compare-edits.md).
+    Before delivery, `delivery-check` can check a caller-supplied brief against
+    one frozen render's verified bytes and measured properties. `chapter-draft`
+    prepares public chapter text only from explicitly selected markers and
+    caller-supplied titles. Neither operation uploads or establishes acceptance;
+    see [delivery checks and chapters](docs/creator-delivery-checks.md).
     The delivery manifest records failed batch outputs and unresolved feedback;
     the HTML presents succeeded videos. Use host file tools
     to return the bundle or MP4. Technical QC cannot approve content or appearance.

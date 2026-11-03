@@ -1005,7 +1005,9 @@ impl Store {
                 },
                 Edit::ReviewAdd{id,job_id,at_ms,end_ms,actor,text}=>{
                     workflow::id(id)?;if *at_ms<0 || end_ms<=at_ms || actor.trim().is_empty() || text.trim().is_empty() || text.len()>4000{return Err(invalid("review requires an interval, actor and 1..4000 bytes of text"));}
-                    let manifest=review.as_ref().ok_or_else(||invalid("review manifest missing"))?;let snapshot:Project=serde_json::from_value(manifest["snapshot"].clone())?;let sequence=manifest["sequenceId"].as_str().ok_or_else(||invalid("review sequence missing"))?;let seq=snapshot.require_sequence(sequence)?;if *end_ms as f64>seq.content_duration()?.as_seconds_f64()*1000.0+1.0{return Err(invalid("review extends beyond artifact duration"));}
+                    let manifest=review.as_ref().ok_or_else(||invalid("review manifest missing"))?;let snapshot:Project=serde_json::from_value(manifest["snapshot"].clone())?;let sequence=manifest["sequenceId"].as_str().ok_or_else(||invalid("review sequence missing"))?;let seq=snapshot.require_sequence(sequence)?;
+                    let duration=crate::delivery::review_duration(seq,manifest).map_err(|_|invalid("reviewed output timing is unavailable or inconsistent; re-render this output before adding a range"))?;
+                    if workflow::time(*end_ms).checked_cmp(duration)?.is_gt(){return Err(invalid("review extends beyond artifact duration"));}
                     let sources=capture_review_sources(&snapshot,seq,*at_ms,*end_ms)?;
                     let reviews=next.extensions.entry("avw.reviews".into()).or_insert(json!([])).as_array_mut().ok_or_else(||invalid("invalid reviews"))?;if reviews.iter().any(|r|r["id"]==*id){return Err(invalid("review ID exists"));}reviews.push(json!({"id":id,"jobId":job_id,"artifactSha256":manifest["verification"]["sha256"],"artifactRevision":snapshot.revision,"sequenceId":sequence,"atMs":at_ms,"endMs":end_ms,"actor":actor,"text":text,"sources":sources.points,"sourceRanges":sources.ranges,"sourceRangeCoverage":sources.coverage,"sourceRangeLimitations":sources.limitations,"state":"open"}));
                 },

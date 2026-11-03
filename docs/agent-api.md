@@ -89,6 +89,8 @@ unreviewed risks and commits intent with the sequence atomically. Preflight's
 | `studio-state` | Prefix-filtered decisions with `nextOffset`; large values are summarized |
 | `transcript-search` | Matching source cues, or opt-in literal matches across adjacent cues, with `nextOffset` |
 | `compare-outputs` | Exact source-range comparison of two verified queued plain-cut renders |
+| `delivery-check` | Check a caller's brief against a frozen render's verified bytes and freshly probed properties |
+| `chapter-draft` | Prepare reviewed public chapter text from selected frozen sequence markers |
 | `catalog` | Read-only workspace discovery with `nextOffset` |
 | `diff` | Changes between explicit revisions |
 | `jobs`, `artifacts`, `imports` | Operational state; these are not interchangeable with editing history |
@@ -100,6 +102,8 @@ For cross-cue matching, revision-pinned pagination and source-preview requests,
 see [transcript search](transcript-search.md).
 For comparison scope, artifact integrity and unsupported cases, see
 [compare edits](compare-edits.md).
+For delivery-brief fields, evidence, chapter selection and limitations, see
+[delivery checks and chapters](creator-delivery-checks.md).
 For scene and silence inspection, check `analysisStatus`, `unavailableReason`
 and coverage: empty evidence is not proof of absence. Long-GOP or sparse seeks,
 missing timestamps and discontinuous audio can make analysis unavailable. Stream
@@ -141,6 +145,10 @@ video-preview retrieval.
 The synchronous `render` alias returns `artifactId`, `path`, `manifest` and
 `revision`; retrieve `artifact` with that ID for the verification/hash response.
 `delivery` packages a succeeded render or batch into a new scoped directory.
+`delivery-check` reports pass/fail/unknown per requested constraint for one
+completed queued render; it does not automatically attach the report to that
+package or prove upload acceptance. `chapter-draft` reports exact selected
+marker times and copyable, whole-second text while leaving eligibility unknown.
 Read its manifest for failures and unresolved feedback, then use host file tools
 to return the files. The review page can copy the frozen render ID, revision and
 current playback time for a creator to send back to their agent. See

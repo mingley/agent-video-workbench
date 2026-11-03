@@ -11,6 +11,15 @@ not itself save a review. Times are rounded to milliseconds, and the end must
 be after the start and within the frozen output. The single-moment reference
 remains available when a range is not needed.
 
+Range bounds follow the verified rendered video duration, including an explicit
+sequence duration, rather than just the last timeline item. When a separate
+review preview exists, the shorter verified master/preview duration is used.
+If the stored timing evidence is missing or inconsistent, a new package keeps
+playback and point references available but explains why range controls are
+unavailable; new `review-add` intervals require a re-render. Previously saved
+reviews and request replays remain available. Existing review pages are static:
+create a new delivery package to get corrected bounds.
+
 ```json
 {
   "command": "studio",

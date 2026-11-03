@@ -145,6 +145,16 @@ pub enum Request {
         baseline_job: String,
         candidate_job: String,
     },
+    ChapterDraft {
+        project: PathBuf,
+        id: String,
+        selections: Vec<crate::chapters::ChapterSelection>,
+    },
+    DeliveryCheck {
+        project: PathBuf,
+        id: String,
+        brief: crate::delivery_check::DeliveryBrief,
+    },
     Compose {
         project: PathBuf,
         edit: workflow::Compose,
@@ -174,6 +184,10 @@ pub enum Request {
         asset_id: Option<String>,
         #[serde(default)]
         across_cues: bool,
+        #[serde(default)]
+        canonical_unicode: bool,
+        #[serde(default)]
+        join_without_spaces: bool,
         #[serde(default)]
         max_gap_ms: Option<u32>,
         #[serde(default)]
@@ -579,6 +593,15 @@ impl Service {
                 id,
                 destination,
             } => crate::delivery::package(&self.path(&project)?, &id, &self.path(&destination)?),
+            Request::DeliveryCheck { project, id, brief } => {
+                brief.validate()?;
+                crate::delivery_check::check(&self.path(&project)?, &id, &brief, &self.backend)
+            }
+            Request::ChapterDraft {
+                project,
+                id,
+                selections,
+            } => crate::chapters::draft(&self.path(&project)?, &id, &selections),
             Request::Studio {
                 project,
                 edit,
@@ -630,7 +653,7 @@ impl Service {
             ),
             Request::Schema {} => Ok(serde_json::to_value(schemars::schema_for!(Request))?),
             Request::Capabilities {} => Ok(
-                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["plan-edit","apply-edit-plan","assemble","edit-preflight","compare-outputs","maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"Composed SDR H.264/AAC; source-preserving Rec.709 or 10-bit PQ/HLG HEVC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"assemble color:preserve retains PQ/HLG in 10-bit HEVC; composed outputs tone map to Rec.709; Dolby Vision compatible base layer only","recommendedWorkflow":["inspect","assemble","plan-edit","apply-edit-plan","edit-preflight","render-start","artifact","compare-outputs","delivery"],"asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"analysisProviderConfigured":self.provider.is_some(),"renderAnimation":"opacity; linear/step position and constant-viewport crop; other channels refused", "downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
+                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["chapter-draft","delivery-check","plan-edit","apply-edit-plan","assemble","edit-preflight","compare-outputs","maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"Composed SDR H.264/AAC; source-preserving Rec.709 or 10-bit PQ/HLG HEVC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"assemble color:preserve retains PQ/HLG in 10-bit HEVC; composed outputs tone map to Rec.709; Dolby Vision compatible base layer only","recommendedWorkflow":["inspect","assemble","plan-edit","apply-edit-plan","edit-preflight","render-start","artifact","compare-outputs","chapter-draft","delivery-check","delivery"],"asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"analysisProviderConfigured":self.provider.is_some(),"renderAnimation":"opacity; linear/step position and constant-viewport crop; other channels refused", "downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
             ),
             Request::AgentGuide {} => Ok(json!({"guide":include_str!("../AGENT_GUIDE.md")})),
             Request::Doctor {} => doctor(&self.backend),
@@ -888,6 +911,8 @@ impl Service {
                 query,
                 asset_id,
                 across_cues,
+                canonical_unicode,
+                join_without_spaces,
                 max_gap_ms,
                 expected_revision,
                 offset,
@@ -916,6 +941,8 @@ impl Service {
                             project_path: &project,
                             backend: &self.backend,
                             transcripts: &transcript,
+                            canonical_unicode,
+                            join_without_spaces,
                         },
                         &query,
                         asset_id.as_deref(),
@@ -926,6 +953,11 @@ impl Service {
                 }
                 if max_gap_ms.is_some() {
                     return Err(Error::Invalid("maxGapMs requires acrossCues".into()));
+                }
+                if canonical_unicode || join_without_spaces {
+                    return Err(Error::Invalid(
+                        "canonicalUnicode and joinWithoutSpaces require acrossCues".into(),
+                    ));
                 }
                 let query = query.to_lowercase();
                 let hits: Vec<_> = transcript
@@ -1148,12 +1180,15 @@ fn preview_job_key(
 }
 
 // Phrase matching is literal after Unicode lowercasing and whitespace
-// normalization. A result identifies a cue span, not word-level alignment.
+// normalization. Optional canonical normalization applies separately to the
+// query and each cue. A result identifies a cue span, not word alignment.
 struct PhraseSearchContext<'a> {
     project: &'a agentcut_core::Project,
     project_path: &'a Path,
     backend: &'a FfmpegBackend,
     transcripts: &'a [workflow::Transcript],
+    canonical_unicode: bool,
+    join_without_spaces: bool,
 }
 
 fn phrase_search(
@@ -1169,6 +1204,8 @@ fn phrase_search(
         project_path,
         backend,
         transcripts,
+        canonical_unicode,
+        join_without_spaces,
     } = context;
     const MAX_CUES: usize = 8;
     if query.len() > 1024 {
@@ -1176,11 +1213,17 @@ fn phrase_search(
             "phrase query exceeds 1024 input bytes".into(),
         ));
     }
+    let normalizer = icu_normalizer::ComposingNormalizerBorrowed::new_nfc();
     let normalized = |text: &str| {
-        text.split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
-            .to_lowercase()
+        let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        if canonical_unicode {
+            // Lowercasing can create combining sequences, so normalize both
+            // before and after it. Never rewrite the stored transcript.
+            let canonical = normalizer.normalize(&collapsed);
+            normalizer.normalize(&canonical.to_lowercase()).into_owned()
+        } else {
+            collapsed.to_lowercase()
+        }
     };
     let query = normalized(query);
     if query.is_empty() || query.len() > 256 {
@@ -1236,7 +1279,9 @@ fn phrase_search(
                     {
                         break;
                     }
-                    combined.push(' ');
+                    if !join_without_spaces {
+                        combined.push(' ');
+                    }
                     combined.push_str(&normalized(&cues[last].text));
                     source_end = source_end.max(cues[last].end_ms);
                 }
@@ -1254,7 +1299,7 @@ fn phrase_search(
                             .char_indices()
                             .any(|(relative, _)| {
                                 let at = earliest + relative;
-                                at + query.len() > previous_len + 1
+                                at + query.len() > previous_len + usize::from(!join_without_spaces)
                                     && combined[at..].starts_with(&query)
                             })
                 };
@@ -1360,11 +1405,14 @@ fn phrase_search(
     } else {
         None
     };
-    Ok(
-        json!({"revision":project.revision,"mode":"across-cues","items":items,"nextOffset":next,
+    let mut response = json!({"revision":project.revision,"mode":"across-cues","items":items,"nextOffset":next,
         "maxGapMs":gap,"maxMatchedCues":MAX_CUES,
-        "guidance":"Literal cue text match; timestamps cover whole cues and are not word alignment. Listen to source context before editing."}),
-    )
+        "guidance":"Literal cue text match; timestamps cover whole cues and are not word alignment. Listen to source context before editing."});
+    if canonical_unicode || join_without_spaces {
+        response["matchOptions"] =
+            json!({"canonicalUnicode":canonical_unicode,"joinWithoutSpaces":join_without_spaces});
+    }
+    Ok(response)
 }
 
 fn job_list(store: &Store, limit: u32) -> Result<Value> {

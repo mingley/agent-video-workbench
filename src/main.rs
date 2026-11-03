@@ -134,6 +134,18 @@ enum Action {
         baseline_job: String,
         candidate_job: String,
     },
+    ChapterDraft {
+        project: PathBuf,
+        id: String,
+        #[arg(long)]
+        request: PathBuf,
+    },
+    DeliveryCheck {
+        project: PathBuf,
+        id: String,
+        #[arg(long)]
+        request: PathBuf,
+    },
     Mcp {
         #[arg(long)]
         root: PathBuf,
@@ -224,6 +236,10 @@ enum Action {
         asset_id: Option<String>,
         #[arg(long)]
         across_cues: bool,
+        #[arg(long, requires = "across_cues")]
+        canonical_unicode: bool,
+        #[arg(long, requires = "across_cues")]
+        join_without_spaces: bool,
         #[arg(long, requires = "across_cues")]
         max_gap_ms: Option<u32>,
         #[arg(long)]
@@ -418,6 +434,24 @@ fn execute(cli: Cli) -> Result<Value> {
             expected_revision,
             key,
             dry_run,
+        },
+        Action::ChapterDraft {
+            project,
+            id,
+            request,
+        } => Request::ChapterDraft {
+            project,
+            id,
+            selections: agent_video_workbench::json::read(&request)?,
+        },
+        Action::DeliveryCheck {
+            project,
+            id,
+            request,
+        } => Request::DeliveryCheck {
+            project,
+            id,
+            brief: agent_video_workbench::json::read(&request)?,
         },
         Action::Apply {
             project,

@@ -308,6 +308,10 @@ pub(crate) fn render_attempt(
     // visual solo that hides a protected clip. Revalidate the frozen input,
     // even when no edit has occurred since that earlier revision.
     crate::policy::validate(project, project)?;
+    // A collapsed subtitle interval cannot be represented by the sidecars.
+    // Catch it before the potentially expensive encode, while preserving the
+    // frozen input and any previously published artifact.
+    crate::delivery::sidecars(project.require_sequence(sequence)?)?;
     for asset in &project.assets {
         verify_asset_controlled(root, asset, control)?;
     }

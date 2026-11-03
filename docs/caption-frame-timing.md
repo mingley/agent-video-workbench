@@ -23,3 +23,17 @@ that was omitted at the time. Review the existing caption/source bindings and
 SRT/VTT alongside the video; after adjusting the cut or cue if needed, compose
 a new named output with a new key and render it again. Originals and existing
 history remain available.
+
+## Sidecar millisecond timing
+
+SRT and WebVTT use millisecond timestamps. For any visible caption, including
+one added through a generic timeline operation, sidecar export rounds exact
+timeline boundaries to the nearest millisecond, with positive half-millisecond
+ties rounded up. If the resulting end is not later than the start, a new render
+fails before encoding and identifies the caption. Adjust its timing and queue a
+new render; existing artifacts and past request outcomes are not rewritten.
+
+WebVTT escapes literal markup characters in caption text. SRT players differ in
+how they interpret HTML-like text, so review SRT output in the intended player
+when captions contain angle-bracketed text. Neither format by itself establishes
+accurate speech transcription or complete coverage of meaningful sounds.

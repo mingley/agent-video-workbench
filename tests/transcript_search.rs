@@ -302,6 +302,223 @@ fn phrase_limits_unicode_overlap_gap_and_input_validation() {
 }
 
 #[test]
+fn opt_in_search_supports_canonical_unicode_and_unspaced_cue_joins() {
+    let (_tmp, mut store, service) = setup();
+    store
+        .transcript_import(
+            transcript(
+                "a",
+                vec![
+                    cue("cafe", 0, 300, "Cafe\u{301}"),
+                    cue("noir", 300, 600, "NOIR"),
+                    cue("jp1", 2000, 2300, "未来"),
+                    cue("jp2", 2300, 2600, "の"),
+                    cue("jp3", 2600, 2900, "世界"),
+                    cue("jp4", 6000, 6300, "未来"),
+                    cue("jp5", 6300, 6600, "の"),
+                    cue("jp6", 6600, 6900, "世界"),
+                    cue("hangul", 8000, 8300, "각"),
+                    cue("literal", 9000, 9300, "Straße ①"),
+                    cue("overlap-a", 11000, 12000, "この"),
+                    cue("overlap-b", 11500, 12500, "番組"),
+                    cue("split-base", 14000, 14100, "deja"),
+                    cue("split-mark", 14100, 14200, "\u{301}"),
+                ],
+            ),
+            4,
+            "multilingual",
+        )
+        .unwrap();
+    let request = |query: &str| {
+        json!({"command":"transcript-search","project":"project","query":query,
+        "assetId":"a","acrossCues":true,"expectedRevision":5})
+    };
+    let plain = search(&service, request("CAFÉ NOIR")).unwrap();
+    assert!(plain["items"].as_array().unwrap().is_empty());
+    assert!(plain.get("matchOptions").is_none());
+    let mut canonical = request("CAFÉ NOIR");
+    canonical["canonicalUnicode"] = json!(true);
+    let found = search(&service, canonical.clone()).unwrap();
+    assert_eq!(
+        found["matchOptions"],
+        json!({"canonicalUnicode":true,"joinWithoutSpaces":false})
+    );
+    assert_eq!(found["items"][0]["matchedCueIds"], json!(["cafe", "noir"]));
+    assert_eq!(found["items"][0]["matchedCues"][0]["text"], "Cafe\u{301}");
+    let preview = &found["items"][0]["previewRequest"];
+    let job = service
+        .execute(serde_json::from_value::<Request>(preview.clone()).unwrap())
+        .unwrap();
+    canonical["query"] = json!("Cafe\u{301} noir");
+    let equivalent = search(&service, canonical).unwrap();
+    assert_eq!(equivalent["items"][0]["previewRequest"], *preview);
+    assert_eq!(
+        service
+            .execute(
+                serde_json::from_value::<Request>(equivalent["items"][0]["previewRequest"].clone())
+                    .unwrap()
+            )
+            .unwrap()["id"],
+        job["id"]
+    );
+    for query in ["CAFE NOIR", "STRASSE", "1"] {
+        let mut literal = request(query);
+        literal["canonicalUnicode"] = json!(true);
+        assert!(
+            search(&service, literal).unwrap()["items"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+    }
+    let mut hangul = request("각");
+    hangul["canonicalUnicode"] = json!(true);
+    assert_eq!(
+        search(&service, hangul).unwrap()["items"][0]["matchedCueIds"],
+        json!(["hangul"])
+    );
+    let mut japanese = request("未来の世界");
+    assert!(
+        search(&service, japanese.clone()).unwrap()["items"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    japanese["joinWithoutSpaces"] = json!(true);
+    japanese["limit"] = json!(1);
+    let first = search(&service, japanese.clone()).unwrap();
+    assert_eq!(
+        first["matchOptions"],
+        json!({"canonicalUnicode":false,"joinWithoutSpaces":true})
+    );
+    assert_eq!(
+        first["items"][0]["matchedCueIds"],
+        json!(["jp1", "jp2", "jp3"])
+    );
+    assert_eq!(first["nextOffset"], 1);
+    japanese["offset"] = first["nextOffset"].clone();
+    let second = search(&service, japanese).unwrap();
+    assert_eq!(
+        second["items"][0]["matchedCueIds"],
+        json!(["jp4", "jp5", "jp6"])
+    );
+    assert!(second["nextOffset"].is_null());
+    let mut overlapping = request("この番組");
+    overlapping["joinWithoutSpaces"] = json!(true);
+    assert!(
+        search(&service, overlapping).unwrap()["items"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    // Each cue is normalized separately; a combining sequence split at a cue
+    // boundary is intentionally not promised to normalize as one string.
+    let mut split = request("dejá");
+    split["canonicalUnicode"] = json!(true);
+    split["joinWithoutSpaces"] = json!(true);
+    assert!(
+        search(&service, split).unwrap()["items"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    let mut length = request(&"e\u{301}".repeat(128));
+    length["canonicalUnicode"] = json!(true);
+    assert!(search(&service, length.clone()).is_ok());
+    length["query"] = json!("e\u{301}".repeat(129));
+    assert_eq!(
+        search(&service, length).unwrap_err().code(),
+        "E_INVALID_REQUEST"
+    );
+    for name in ["canonicalUnicode", "joinWithoutSpaces"] {
+        let mut invalid = json!({"command":"transcript-search","project":"project","query":"a"});
+        invalid[name] = json!(true);
+        assert_eq!(
+            search(&service, invalid).unwrap_err().code(),
+            "E_INVALID_REQUEST"
+        );
+    }
+}
+
+#[test]
+fn opted_in_search_options_match_on_named_cli_json_and_mcp() {
+    let (tmp, mut store, service) = setup();
+    store
+        .transcript_import(
+            transcript(
+                "a",
+                vec![
+                    cue("one", 0, 200, "Cafe\u{301}"),
+                    cue("two", 200, 400, " noir"),
+                ],
+            ),
+            4,
+            "unicode-cli",
+        )
+        .unwrap();
+    let request = json!({"command":"transcript-search","project":"project","query":"CAFÉNOIR",
+        "assetId":"a","acrossCues":true,"canonicalUnicode":true,"joinWithoutSpaces":true,"expectedRevision":5});
+    let direct = search(&service, request.clone()).unwrap();
+    assert_eq!(direct["items"][0]["matchedCueIds"], json!(["one", "two"]));
+    let request_file = tmp.path().join("unicode-search.json");
+    std::fs::write(&request_file, serde_json::to_vec(&request).unwrap()).unwrap();
+    let run = |args: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_avw"))
+            .args(["--workspace", tmp.path().to_str().unwrap()])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        serde_json::from_slice::<Value>(&output.stdout).unwrap()["result"].clone()
+    };
+    assert_eq!(run(&["request", request_file.to_str().unwrap()]), direct);
+    assert_eq!(
+        run(&[
+            "transcript-search",
+            "project",
+            "CAFÉNOIR",
+            "--asset-id",
+            "a",
+            "--across-cues",
+            "--canonical-unicode",
+            "--join-without-spaces",
+            "--expected-revision",
+            "5"
+        ]),
+        direct
+    );
+    let input = format!(
+        "{}\n{}\n",
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}),
+        json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"avw","arguments":request}})
+    );
+    let mut output = Vec::new();
+    agent_video_workbench::mcp::serve(&service, &mut std::io::Cursor::new(input), &mut output)
+        .unwrap();
+    let reply: Value =
+        serde_json::from_str(String::from_utf8(output).unwrap().lines().nth(1).unwrap()).unwrap();
+    assert_eq!(reply["result"]["structuredContent"]["result"], direct);
+    for flag in ["--canonical-unicode", "--join-without-spaces"] {
+        let rejected = Command::new(env!("CARGO_BIN_EXE_avw"))
+            .args([
+                "--workspace",
+                tmp.path().to_str().unwrap(),
+                "transcript-search",
+                "project",
+                "text",
+                flag,
+            ])
+            .output()
+            .unwrap();
+        assert!(!rejected.status.success());
+    }
+}
+
+#[test]
 fn phrase_search_is_identical_in_cli_json_named_cli_and_mcp() {
     let (tmp, _store, service) = setup();
     let request = json!({"command":"transcript-search","project":"project","query":"changed the packaging",

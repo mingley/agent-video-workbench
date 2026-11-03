@@ -41,18 +41,19 @@ the same workflow.
 ## P1 — Broaden phrase discovery across scripts and uncertain speech
 
 **Scenario:** “Find the part where I explain why we changed the packaging.”
-Opt-in `acrossCues` now performs a bounded literal search over adjacent,
+Opt-in `acrossCues` performs a bounded literal search over adjacent,
 nonoverlapping cues from one source and supplies source/transcript identities,
 whole-cue times and a scoped preview request where available. It lowercases and
-normalizes whitespace, inserts a space at cue boundaries, and is limited to
-eight cues. Continuations require the reported project revision. It neither
+normalizes whitespace and is limited to eight cues. Optional canonical Unicode
+matching and no-space boundary joining support additional literal searches;
+defaults still insert a space and do not normalize Unicode. Continuations
+require the reported project revision and the same query/options. It neither
 establishes word alignment nor searches the meaning of an inaccurate transcript.
 
-**Next slice:** Make boundary joining explicit for languages where cue breaks
-do not imply spaces, and support documented canonical Unicode equivalence while
-preserving source cue IDs. Report when overlaps, gaps or the cue limit prevented
-a candidate from being searched as a continuous phrase. Keep the existing
-literal, space-separated behavior as the default and keep source playback and
+**Next slice:** Report when overlaps, gaps or the cue limit prevented a
+candidate from being searched as a continuous phrase. Investigate combining
+sequences and case context split across cue boundaries, plus language-aware
+search as a distinct, explicitly qualified mode. Keep source playback and
 editorial selection with the agent.
 
 **Acceptance:** Licensed or generated multilingual text fixtures include a
@@ -123,14 +124,16 @@ assumed, and a missing provider must not block ordinary cue-based editing.
 100 MB, with captions I can edit.” Existing variants and verified packages make
 the files; the constraints are still scattered across agent instructions.
 
-**Slice:** Introduce a versioned, user-supplied delivery brief for each named
-output: requested dimensions/aspect, duration and optional maximum bytes,
-caption sidecars and color intent. Preflight should distinguish constraints it
-can check before rendering from those requiring a verified file. The package
-should record pass, fail or unknown for each requested constraint and preserve
-successful siblings when one fails. Do not embed unverified platform rules.
+**Current slice:** `delivery-check` evaluates one caller-supplied versioned
+brief against a completed queued render. It reports per-constraint pass, fail
+or unknown and the artifact identity; see [delivery checks](creator-delivery-checks.md).
+The report is returned to the caller and does not itself modify a package.
 
-**Acceptance:** Exercise one passing and one failing output in a frozen batch,
+**Next slice:** Support pre-render planning and bind briefs/reports for multiple
+named outputs into a delivery package, preserving successful siblings when one
+fails. Do not embed unverified platform rules.
+
+**Next-slice acceptance:** Exercise one passing and one failing output in a frozen batch,
 including an actual file-size check, missing sidecar, mismatched duration and
 unknown measurement. The manifest ties each result to its requested brief,
 revision and verified artifact; a later project edit cannot alter the package.

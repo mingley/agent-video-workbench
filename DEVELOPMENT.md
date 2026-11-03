@@ -182,7 +182,21 @@ python3 evaluation/captions_extra_smoke.py --avw "$PWD/target/release/avw" \
 node evaluation/compare_smoke.mjs "$PWD/target/release/avw" \
   /path/to/ffmpeg /path/to/ffprobe /path/to/new-comparison-run \
   "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+node evaluation/creator_research_smoke.mjs "$PWD/target/release/avw" \
+  /path/to/ffmpeg /path/to/ffprobe /path/to/new-research-run \
+  "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+python3 evaluation/caption_sidecar_smoke.py --avw "$PWD/target/release/avw" \
+  --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe --font /path/to/font.ttf \
+  --output /path/to/new-sidecar-run
+node evaluation/review_duration_smoke.mjs "$PWD/target/release/avw" \
+  /path/to/ffmpeg /path/to/ffprobe /path/to/chromium /path/to/new-review-duration-run
 ```
+
+These generated-media checks exercise Unicode cue joins, selected-marker
+chapters, frozen delivery briefs and tamper rejection through CLI/MCP; exact
+sidecar timing and pre-encode refusal; and explicit-duration review bounds with
+a Chromium check of missing-timing fallback. They do not establish caption
+accuracy, platform acceptance or physical-device appearance.
 
 The same release-binary/backend arguments and fresh `--output` directories apply
 to `evaluation/studio_smoke.py` (also `--font`), `audio_smoke.py`,

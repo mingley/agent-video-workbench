@@ -1,5 +1,12 @@
 # Implementation completion and remaining qualification
 
+The current source also offers opt-in canonical Unicode/no-space phrase
+search, user-supplied checks against frozen rendered files, and chapter drafts
+from selected markers. Sidecars reject sub-millisecond collapsed cues before
+encoding; review ranges use verified output timing. See [delivery checks](creator-delivery-checks.md)
+and [current evidence](implementation-status.md). Batch-integrated briefs,
+real creator trials and account-specific publication remain open.
+
 Current source also adds [frozen plain-cut comparison](compare-edits.md), a
 range marker in delivered review pages, and a refusal for caption cues that
 would vanish at the output frame rate. Bounded scene/silence inspection

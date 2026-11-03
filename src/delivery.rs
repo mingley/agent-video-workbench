@@ -3,7 +3,7 @@ use crate::{
     Error, Result, media,
     process::{self, Control},
 };
-use agentcut_core::{ItemPayload, Project, RationalRate, RoundingMode, Sequence};
+use agentcut_core::{ItemPayload, Project, RationalRate, RationalTime, RoundingMode, Sequence};
 use agentcut_render::FfmpegBackend;
 use serde_json::{Value, json};
 use std::{
@@ -22,6 +22,28 @@ fn timestamp(ms: i64, separator: char) -> String {
         ms / 1000 % 60,
         ms % 1000
     )
+}
+
+// SRT and WebVTT represent timestamps in whole milliseconds. Preserve the
+// exporter's existing nearest-millisecond convention (positive half values
+// round up), but calculate it exactly so fractional frame rates and large
+// timestamps cannot be changed by a float conversion.
+fn sidecar_milliseconds(time: RationalTime, item_id: &str) -> Result<i64> {
+    if time.value < 0 || time.rate.numerator == 0 || time.rate.denominator == 0 {
+        return Err(Error::Invalid(format!(
+            "caption {item_id} has an invalid sidecar timestamp"
+        )));
+    }
+    // Even the largest i64 value multiplied by u32::MAX and 1000 fits i128.
+    let numerator = i128::from(time.value) * i128::from(time.rate.denominator) * 1000;
+    let denominator = i128::from(time.rate.numerator);
+    let rounded =
+        numerator / denominator + i128::from((numerator % denominator) * 2 >= denominator);
+    i64::try_from(rounded).map_err(|_| {
+        Error::Invalid(format!(
+            "caption {item_id} exceeds the sidecar timestamp range"
+        ))
+    })
 }
 
 fn html_text(text: &str) -> String {
@@ -69,6 +91,8 @@ for (const section of document.querySelectorAll('[data-review-job]')) {
   const rangeStatus = rangeField.querySelector('[role=status]');
   const rangeCopy = rangeField.querySelector('[data-range-copy]');
   const reviewLimitMs = Number(section.dataset.reviewLimitMs);
+  const rangeTimingKnown = section.dataset.reviewLimitMs !== ''
+    && Number.isSafeInteger(reviewLimitMs) && reviewLimitMs > 0;
   let rangeStart = null;
   let rangeEnd = null;
   const formatTime = ms => {
@@ -171,7 +195,7 @@ for (const section of document.querySelectorAll('[data-review-job]')) {
   update();
   updateRange();
   fieldset.hidden = false;
-  rangeField.hidden = false;
+  if (rangeTimingKnown) rangeField.hidden = false;
 }
 </script>"#;
 
@@ -191,8 +215,29 @@ pub fn sidecars(sequence: &Sequence) -> Result<(String, String, Value)> {
         .filter(|i| i.enabled)
     {
         if let ItemPayload::Caption(caption) = &item.payload {
-            let start = (item.start.as_seconds_f64() * 1000.0).round() as i64;
-            let end = (item.end_exclusive()?.as_seconds_f64() * 1000.0).round() as i64;
+            if item.duration.value <= 0
+                || item.duration.rate.numerator == 0
+                || item.duration.rate.denominator == 0
+            {
+                return Err(Error::Invalid(format!(
+                    "caption {} has an invalid sidecar duration",
+                    item.id
+                )));
+            }
+            let start = sidecar_milliseconds(item.start, &item.id)?;
+            let end_time = item.end_exclusive().map_err(|error| {
+                Error::Invalid(format!(
+                    "caption {} has an invalid sidecar interval: {error}",
+                    item.id
+                ))
+            })?;
+            let end = sidecar_milliseconds(end_time, &item.id)?;
+            if end <= start {
+                return Err(Error::Invalid(format!(
+                    "caption {} has no duration after sidecar millisecond rounding; review and adjust its timing",
+                    item.id
+                )));
+            }
             cues.push((
                 start,
                 end,
@@ -279,6 +324,42 @@ pub fn extras(
     files.push(json!({"path":"cover.png","sha256":media::hash_file_controlled(&cover,control)?,"mimeType":"image/png","outputFrame":0}));
     Ok(json!({"files":files,"captions":mapping,"editorialReview":"pending"}))
 }
+
+/// Bound feedback to the verified master and, when present, the review video.
+/// Old or inconsistent probe records do not establish a safe range bound.
+pub(crate) fn review_duration(sequence: &Sequence, manifest: &Value) -> Result<RationalTime> {
+    let master =
+        crate::chapters::duration_from_verified_stream(sequence, &manifest["verification"])?;
+    match &manifest["delivery"]["reviewVideo"] {
+        Value::Null => Ok(master),
+        Value::String(name) if name == "video.mp4" => Ok(master),
+        Value::String(name) if name == "review-sdr.mp4" => {
+            let files = manifest["delivery"]["files"]
+                .as_array()
+                .ok_or_else(|| Error::Invalid("review video timing evidence is missing".into()))?;
+            let mut matches = files.iter().filter(|file| file["path"] == "review-sdr.mp4");
+            let preview = matches
+                .next()
+                .ok_or_else(|| Error::Invalid("review video timing evidence is missing".into()))?;
+            if matches.next().is_some() {
+                return Err(Error::Invalid(
+                    "review video timing evidence is ambiguous".into(),
+                ));
+            }
+            let preview =
+                crate::chapters::duration_from_verified_stream(sequence, &preview["verification"])?;
+            if preview.checked_cmp(master)?.is_lt() {
+                Ok(preview)
+            } else {
+                Ok(master)
+            }
+        }
+        _ => Err(Error::Invalid(
+            "review video timing evidence is unavailable".into(),
+        )),
+    }
+}
+
 pub fn package(root: &Path, id: &str, destination: &Path) -> Result<Value> {
     let store = crate::store::Store::open(root)?;
     let job = store.job(id)?;
@@ -388,14 +469,34 @@ pub fn package(root: &Path, id: &str, destination: &Path) -> Result<Value> {
             .as_str()
             .ok_or_else(|| Error::Invalid("delivery sequence missing".into()))?;
         let sequence = frozen.require_sequence(sequence_id)?;
-        let review_limit_ms = sequence
-            .content_duration()?
-            .rescale_to(RationalRate::frames(1000)?, RoundingMode::Floor)?
-            .value
-            .max(0);
+        // The rendered stream can differ from content_duration when a sequence
+        // declares an explicit duration. Never round a fractional millisecond
+        // past the verified end; leave range controls unavailable if evidence
+        // is missing, while keeping the review page and point references.
+        let review_limit_ms = review_duration(sequence, &manifest)
+            .and_then(|duration| {
+                Ok(duration
+                    .rescale_to(RationalRate::frames(1000)?, RoundingMode::Floor)?
+                    .value)
+            })
+            .ok()
+            .filter(|limit| *limit > 0);
+        let range_notice = if review_limit_ms.is_none() {
+            "<p data-range-unavailable>Range feedback is unavailable because the output timing could not be verified. Re-render this output to create a range reference.</p>"
+        } else {
+            ""
+        };
+        let no_script_range = if review_limit_ms.is_some() {
+            " For a range, include its start and end times."
+        } else {
+            ""
+        };
+        let review_limit_ms = review_limit_ms
+            .map(|limit| limit.to_string())
+            .unwrap_or_default();
         let title = &sequence.name;
         let notes = editing_notes(&manifest);
-        html.push_str(&format!("<section data-review-job='{id}' data-review-revision='{revision}' data-review-limit-ms='{review_limit_ms}'><h2 id='title-{id}'>{title}</h2><video controls width=360 aria-labelledby='title-{id}' src='{id}/{preview}'></video>{label}{notes}<fieldset data-feedback-reference hidden><legend>Share feedback at this moment</legend><p>Pause at the moment you want to discuss, then copy this reference for your agent.</p><p>Playback time: <span data-feedback-time></span></p><label for='feedback-{id}'>Feedback reference</label><textarea id='feedback-{id}' rows=6 readonly></textarea><button type=button>Copy feedback reference</button><p role=status aria-live=polite></p></fieldset><details data-feedback-range hidden><summary>Share feedback for a range</summary><fieldset><legend>Mark a range</legend><p>Pause at the beginning and set the start, then seek to the end and set it.</p><p>Start: <span data-range-start>Not set</span><br>End: <span data-range-end>Not set</span></p><button type=button data-range-mark-start>Set range start</button> <button type=button data-range-mark-end>Set range end</button> <button type=button data-range-clear>Clear range</button><p><label for='range-{id}'>Range reference</label></p><textarea id='range-{id}' rows=6 readonly></textarea><button type=button data-range-copy disabled>Copy range reference</button><p role=status aria-live=polite></p></fieldset></details><noscript><p>For feedback, include render job ID {id}, rendered revision {revision}, and the playback time. For a range, include its start and end times.</p></noscript><p><a href='{id}/video.mp4'>Master</a> · <a href='{id}/captions.vtt'>Captions</a> · <a href='{id}/manifest.json'>Manifest</a></p></section>",title=html_text(title),revision=item.revision));
+        html.push_str(&format!("<section data-review-job='{id}' data-review-revision='{revision}' data-review-limit-ms='{review_limit_ms}'><h2 id='title-{id}'>{title}</h2><video controls width=360 aria-labelledby='title-{id}' src='{id}/{preview}'></video>{label}{notes}<fieldset data-feedback-reference hidden><legend>Share feedback at this moment</legend><p>Pause at the moment you want to discuss, then copy this reference for your agent.</p><p>Playback time: <span data-feedback-time></span></p><label for='feedback-{id}'>Feedback reference</label><textarea id='feedback-{id}' rows=6 readonly></textarea><button type=button>Copy feedback reference</button><p role=status aria-live=polite></p></fieldset>{range_notice}<details data-feedback-range hidden><summary>Share feedback for a range</summary><fieldset><legend>Mark a range</legend><p>Pause at the beginning and set the start, then seek to the end and set it.</p><p>Start: <span data-range-start>Not set</span><br>End: <span data-range-end>Not set</span></p><button type=button data-range-mark-start>Set range start</button> <button type=button data-range-mark-end>Set range end</button> <button type=button data-range-clear>Clear range</button><p><label for='range-{id}'>Range reference</label></p><textarea id='range-{id}' rows=6 readonly></textarea><button type=button data-range-copy disabled>Copy range reference</button><p role=status aria-live=polite></p></fieldset></details><noscript><p>For feedback, include render job ID {id}, rendered revision {revision}, and the playback time.{no_script_range}</p></noscript><p><a href='{id}/video.mp4'>Master</a> · <a href='{id}/captions.vtt'>Captions</a> · <a href='{id}/manifest.json'>Manifest</a></p></section>",title=html_text(title),revision=item.revision));
         items.push(json!({"jobId":id,"state":"succeeded","revision":item.revision,"sequenceId":manifest["sequenceId"],"files":files,"review":"pending","editPlan":manifest["editPreflight"]["editPlan"]}));
     }
     html.push_str("</main>");

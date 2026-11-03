@@ -30,13 +30,14 @@ fn scoped_file(root: &Path, path: &Path) -> Result<PathBuf> {
 }
 
 #[derive(Clone)]
-struct Frozen {
-    snapshot: Project,
-    sequence_id: String,
-    identity: Value,
+pub(crate) struct Frozen {
+    pub(crate) snapshot: Project,
+    pub(crate) sequence_id: String,
+    pub(crate) identity: Value,
+    pub(crate) manifest: Value,
 }
 
-fn artifact(store: &Store, root: &Path, id: &str) -> Result<Frozen> {
+pub(crate) fn artifact(store: &Store, root: &Path, id: &str) -> Result<Frozen> {
     let job = store.job(id)?;
     if job.state != "succeeded" {
         return Err(invalid(format!("render job {id} is not succeeded")));
@@ -144,6 +145,7 @@ fn artifact(store: &Store, root: &Path, id: &str) -> Result<Frozen> {
         snapshot,
         sequence_id: sequence_id.to_owned(),
         identity,
+        manifest: manifest.clone(),
     })
 }
 

@@ -2,6 +2,12 @@ use agent_video_workbench::{store::Store, studio::Edit};
 use agentcut_core::OperationBatch;
 use serde_json::json;
 
+fn verified_timing(sha256: String) -> serde_json::Value {
+    json!({"sha256":sha256,"decoded":true,"expectedFrames":90,
+        "probe":{"streams":[{"codec_type":"video","nb_read_frames":"90", "avg_frame_rate":"30/1",
+            "start_pts":0,"duration_ts":90,"time_base":"1/30"}]}})
+}
+
 fn seed(store: &mut Store) {
     let p = store.project().unwrap();
     let mut ops = vec![
@@ -14,6 +20,85 @@ fn seed(store: &mut Store) {
     let b:OperationBatch=serde_json::from_value(json!({"schemaVersion":"1.0.0","projectId":p.project_id,"baseRevision":0,"idempotencyKey":"seed-studio","operations":ops})).unwrap();
     store.apply(&b, false).unwrap();
 }
+
+#[test]
+fn review_range_uses_verified_stream_duration_and_preserves_replay_without_timing() {
+    use agent_video_workbench::media;
+    use std::fs;
+
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("project");
+    let mut store = Store::create(&root, "Exact review bounds").unwrap();
+    let project = store.project().unwrap();
+    let rate = json!({"numerator":30000,"denominator":1001});
+    let batch: OperationBatch = serde_json::from_value(json!({
+        "schemaVersion":"1.0.0","projectId":project.project_id,"baseRevision":0,
+        "idempotencyKey":"range-timing-setup","operations":[
+            {"id":"source","op":"asset.add","params":{"id":"source","uri":"originals/test","kind":"video"}},
+            {"id":"seq","op":"sequence.add","params":{"id":"ntsc","name":"NTSC","width":360,"height":640,"frameRate":rate}},
+            {"id":"track","op":"track.add","params":{"id":"ntsc_video","sequence":"ntsc","type":"video"}},
+            {"id":"clip","op":"clip.add","params":{"id":"take","asset":"source","track":"ntsc_video",
+                "at":{"value":0,"rate":rate},"sourceIn":{"value":0,"rate":rate},
+                "duration":{"value":45,"rate":rate},"fit":"contain"}},
+            {"id":"duration","op":"sequence.set","target":"ntsc",
+                "params":{"duration":{"value":46,"rate":rate}}}
+        ]
+    })).unwrap();
+    store.apply(&batch, false).unwrap();
+    let artifact = root.join("artifact.bin");
+    let manifest = root.join("artifact.json");
+    fs::write(&artifact, b"verified fixture").unwrap();
+    let mut recorded = json!({"snapshot":store.project().unwrap(),"sequenceId":"ntsc",
+        "verification":{"sha256":media::hash_file(&artifact).unwrap(),"decoded":true,"expectedFrames":46,
+            "probe":{"streams":[{"codec_type":"video","nb_read_frames":"46", "avg_frame_rate":"30000/1001",
+                "start_pts":0,"duration_ts":46046,"time_base":"1/30000"}]}}});
+    fs::write(&manifest, serde_json::to_vec(&recorded).unwrap()).unwrap();
+    store.start_job("reviewed-job", 1).unwrap();
+    store
+        .finish_job(
+            "reviewed-job",
+            &json!({"path":artifact,"manifest":manifest}),
+        )
+        .unwrap();
+    let review = |id: &str, end_ms| Edit::ReviewAdd {
+        id: id.into(),
+        job_id: "reviewed-job".into(),
+        at_ms: 1500,
+        end_ms,
+        actor: "creator".into(),
+        text: "Review the ending".into(),
+    };
+
+    // 46 × 1001 / 30000 seconds is 1534.866...ms; 1534 is within
+    // the video even though the clip content itself ended at 1501.5ms.
+    let edit = review("inside", 1534);
+    let accepted = store.studio(&edit, 1, "in-bounds", false).unwrap();
+    assert_eq!(store.project().unwrap().revision, 2);
+    let error = store
+        .studio(&review("outside", 1535), 2, "out-of-bounds", false)
+        .unwrap_err();
+    assert!(error.to_string().contains("beyond artifact duration"));
+    assert_eq!(store.project().unwrap().revision, 2);
+
+    // Removing recorded evidence prevents a new range from being asserted,
+    // but a previously committed idempotent outcome still replays unchanged.
+    recorded["verification"]["probe"] = serde_json::Value::Null;
+    fs::write(&manifest, serde_json::to_vec(&recorded).unwrap()).unwrap();
+    let error = store
+        .studio(&review("unknown", 1530), 2, "missing-timing", false)
+        .unwrap_err();
+    assert!(error.to_string().contains("re-render"));
+    assert_eq!(
+        store.studio(&edit, 1, "in-bounds", false).unwrap(),
+        accepted
+    );
+    assert_eq!(store.project().unwrap().revision, 2);
+    assert_eq!(
+        store.project().unwrap().extensions["avw.reviews"][0]["endMs"],
+        1534
+    );
+}
+
 #[test]
 fn selective_restore_preserves_a_second_omission_and_later_edits_after_reopen() {
     let dir = tempfile::tempdir().unwrap();
@@ -283,7 +368,7 @@ fn interval_feedback_maps_across_cuts_without_hiding_removed_or_repeated_materia
         &manifest,
         serde_json::to_vec(&json!({
             "snapshot":store.project().unwrap(),"sequenceId":"seq_main",
-            "verification":{"sha256":media::hash_file(&artifact).unwrap()}
+            "verification":verified_timing(media::hash_file(&artifact).unwrap())
         }))
         .unwrap(),
     )
@@ -599,7 +684,7 @@ fn review_flags_unsupported_source_coverage_only_where_it_intersects() {
     let artifact = root.join("artifact.bin");
     let manifest = root.join("artifact.json");
     fs::write(&artifact, b"fixture").unwrap();
-    fs::write(&manifest,serde_json::to_vec(&json!({"snapshot":snapshot,"sequenceId":"seq_main", "verification":{"sha256":media::hash_file(&artifact).unwrap()}})).unwrap()).unwrap();
+    fs::write(&manifest,serde_json::to_vec(&json!({"snapshot":snapshot,"sequenceId":"seq_main", "verification":verified_timing(media::hash_file(&artifact).unwrap())})).unwrap()).unwrap();
     store.start_job("fixture-job", 1).unwrap();
     store
         .finish_job("fixture-job", &json!({"path":artifact,"manifest":manifest}))
@@ -653,7 +738,7 @@ fn review_distinguishes_video_and_audio_even_when_they_share_a_source() {
     let artifact = root.join("artifact.bin");
     let manifest = root.join("artifact.json");
     fs::write(&artifact, b"fixture").unwrap();
-    fs::write(&manifest,serde_json::to_vec(&json!({"snapshot":snapshot,"sequenceId":"seq_main", "verification":{"sha256":media::hash_file(&artifact).unwrap()}})).unwrap()).unwrap();
+    fs::write(&manifest,serde_json::to_vec(&json!({"snapshot":snapshot,"sequenceId":"seq_main", "verification":verified_timing(media::hash_file(&artifact).unwrap())})).unwrap()).unwrap();
     store.start_job("fixture-job", 1).unwrap();
     store
         .finish_job("fixture-job", &json!({"path":artifact,"manifest":manifest}))

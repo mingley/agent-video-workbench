@@ -1,5 +1,52 @@
 # Implementation and qualification
 
+## Research-backed creator delivery on current source
+
+`transcript-search` now offers opt-in canonical Unicode normalization and
+no-space cue joining while retaining its original defaults. Normalization and
+lowercasing apply per cue; split combining sequences, language-aware word
+boundaries and full case folding are not established. Search remains literal,
+with whole-cue timing and source listening still required.
+
+`delivery-check` evaluates one user-supplied brief against a completed queued
+render. It rehashes the master and freshly probes it for metadata-dependent
+checks, returning pass, fail or unknown for requested geometry, aspect,
+container and stream duration, bytes,
+sidecars and color tags. Sidecar checks reconstruct frozen caption data; they
+cannot establish accuracy or completeness. `chapter-draft` formats explicitly
+selected frozen markers with caller-supplied titles, exact marker times and
+rounding disclosures. It reports documented timestamp checks while leaving
+account/video eligibility unknown. Both refuse synchronous jobs without a
+sequence-bound queue record. The render manifest is not independently
+authenticated; reports do not establish platform acceptance, visual quality or
+editorial approval. Delivery reports are returned for individual renders and
+are not yet embedded in packages or evaluated as a batch. See [delivery checks
+and chapters](creator-delivery-checks.md) and the [research](creator-delivery-research.md).
+
+Visible caption sidecars now use exact millisecond rounding and refuse cues that
+would collapse to zero duration before starting a new encode. SRT consumers can
+interpret literal markup differently. Review ranges use recorded verified
+master/preview timing, including explicit sequence duration. If timing evidence
+is missing, new range submissions are refused and a newly generated review page
+keeps playback and point references while explaining why range controls are
+unavailable. Existing artifacts, review pages and previously saved request
+outcomes remain unchanged; regenerate the package or render as needed.
+
+Local Linux x86_64 validation used Rust 1.99.1 and FFmpeg 8.0.1. All 99 Rust
+tests, formatting, strict Clippy, release build and generated-schema checks
+passed. Generated-media tests exercised search, chapter and delivery checks
+through named CLI, JSON and the official MCP SDK, including pass/fail/unknown,
+unchanged originals and master tamper rejection. Both queued and synchronous
+caption renders refused a sub-millisecond cue before invoking the backend, with
+prior artifacts intact; a separate queued captioned render passed the sidecar
+brief, and altered SRT bytes failed it. An explicit six-second render with four
+seconds of content accepted feedback in its last two seconds; missing evidence
+was refused without losing a prior replay. Chromium checked fallback and range controls at
+desktop and phone-width viewports, including clipboard fallback. Existing
+comparison and creator workflow regressions also passed. These tests use
+generated media and viewport emulation; real creators, physical devices,
+account-specific platform behavior and a new ARM64 build remain unqualified.
+
 ## Frozen comparison and source-review improvements on current source
 
 `compare-outputs` compares source intervals from two successful queued

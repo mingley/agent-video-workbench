@@ -97,7 +97,9 @@ fn range_reference_uses_frozen_sequence_duration_without_rounding_past_it() {
             {"id":"track","op":"track.add","params":{"id":"ntsc_video","sequence":"ntsc","type":"video"}},
             {"id":"clip","op":"clip.add","params":{"id":"take","asset":"source","track":"ntsc_video",
                 "at":{"value":0,"rate":rate},"sourceIn":{"value":0,"rate":rate},
-                "duration":{"value":45,"rate":rate},"fit":"contain"}}
+                "duration":{"value":45,"rate":rate},"fit":"contain"}},
+            {"id":"duration","op":"sequence.set","target":"ntsc",
+                "params":{"duration":{"value":46,"rate":rate}}}
         ]
     })).unwrap();
     store.apply(&batch, false).unwrap();
@@ -112,7 +114,9 @@ fn range_reference_uses_frozen_sequence_duration_without_rounding_past_it() {
         &manifest,
         serde_json::to_vec(&json!({
             "snapshot":store.project().unwrap(),"sequenceId":"ntsc",
-            "verification":{"sha256":media::hash_file(&video).unwrap()},
+            "verification":{"sha256":media::hash_file(&video).unwrap(),"decoded":true,"expectedFrames":46,
+                "probe":{"streams":[{"codec_type":"video","nb_read_frames":"46", "avg_frame_rate":"30000/1001",
+                    "start_pts":0,"duration_ts":46046,"time_base":"1/30000"}]}},
             "contactSheet":{"sha256":media::hash_file(&sheet).unwrap()},
             "delivery":{"files":[]},"editPreflight":{}
         }))
@@ -126,11 +130,43 @@ fn range_reference_uses_frozen_sequence_duration_without_rounding_past_it() {
     let output = temp.path().join("review");
     delivery::package(&root, "fixture-job", &output).unwrap();
     let page = std::fs::read_to_string(output.join("index.html")).unwrap();
-    // 45 × 1001 / 30000 seconds = 1501.5ms; review-add accepts integral
-    // milliseconds, so the upper bound must never be rounded to 1502ms.
-    assert!(page.contains("data-review-limit-ms='1501'"));
+    // Explicit duration is 46 frames, while the last clip ends at 45. The
+    // rendered bound is 1534.866...ms and must never be rounded to 1535ms.
+    assert!(page.contains("data-review-limit-ms='1534'"));
     assert!(page.contains("Review &lt;take&gt;"));
     assert!(!page.contains("Review <take>"));
     assert!(page.contains("data-feedback-range hidden"));
     assert!(page.contains("id='range-fixture-job'"));
+
+    // The review page still opens if historical probe evidence is unavailable,
+    // but it must not expose a guessed range as verified output timing.
+    let mut recorded: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+    recorded["verification"]["probe"] = serde_json::Value::Null;
+    std::fs::write(&manifest, serde_json::to_vec(&recorded).unwrap()).unwrap();
+    let old_output = temp.path().join("review-no-timing");
+    delivery::package(&root, "fixture-job", &old_output).unwrap();
+    let page = std::fs::read_to_string(old_output.join("index.html")).unwrap();
+    assert!(page.contains("data-review-limit-ms=''"));
+    assert!(page.contains("data-range-unavailable"));
+    assert!(page.contains("data-feedback-reference hidden"));
+    assert!(page.contains("if (rangeTimingKnown) rangeField.hidden = false"));
+
+    // A separate review preview can have a shorter verified video stream;
+    // feedback from its player must stay within both streams.
+    let preview = artifact_dir.join("review-sdr.mp4");
+    std::fs::write(&preview, b"preview fixture").unwrap();
+    recorded["verification"]["probe"] = json!({"streams":[{"codec_type":"video","nb_read_frames":"46",
+        "avg_frame_rate":"30000/1001","start_pts":0,"duration_ts":46046,"time_base":"1/30000"}]});
+    recorded["delivery"] = json!({"reviewVideo":"review-sdr.mp4","files":[{
+        "path":"review-sdr.mp4","sha256":media::hash_file(&preview).unwrap(),
+        "verification":{"decoded":true,"expectedFrames":45,"probe":{"streams":[{
+            "codec_type":"video","nb_read_frames":"45","avg_frame_rate":"30000/1001",
+            "start_pts":0,"duration_ts":45045,"time_base":"1/30000"}]}}}]});
+    std::fs::write(&manifest, serde_json::to_vec(&recorded).unwrap()).unwrap();
+    let preview_output = temp.path().join("review-short-preview");
+    delivery::package(&root, "fixture-job", &preview_output).unwrap();
+    let page = std::fs::read_to_string(preview_output.join("index.html")).unwrap();
+    assert!(page.contains("data-review-limit-ms='1501'"));
+    assert!(!page.contains("data-range-unavailable"));
 }

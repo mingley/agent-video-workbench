@@ -17,6 +17,8 @@ source windows help the agent review a paper edit before committing it.
 Find literal phrases across transcript cues and listen to source context; map
 creator feedback across retained, moved or removed source intervals. Review
 pages can copy the exact render and playback time back to the agent.
+Check a creator's delivery brief against verified render bytes and draft
+chapters from selected markers; both keep the frozen revision visible.
 Build with latest stable Rust: `cargo build --release --locked`.
 
 **Published 0.3.1: Linux x86_64 and ARM64, October 3, 2026.** This older binary
@@ -71,6 +73,7 @@ qualification; the tool reports unsupported rendering paths explicitly.
 | [Natural edit](docs/natural-edit.md) | Source-matched HDR/SDR baseline, preflight and review |
 | [Edit planning](docs/edit-planning.md) | Briefs, source context, speech handles and durable cut decisions |
 | [Creator workflows](docs/creator-workflows.md) | Find, edit, compare, deliver and revise content with an agent |
+| [Delivery checks and chapters](docs/creator-delivery-checks.md) | Check a creator's constraints and prepare reviewed chapter drafts |
 | [Compare edits](docs/compare-edits.md) | Compare frozen source ranges and review unsupported cases |
 | [Transcript search](docs/transcript-search.md) | Bounded phrase search across source cues and playable context |
 | [Review feedback](docs/review-feedback.md) | Artifact-anchored intervals and mapping across later edits |
@@ -78,6 +81,7 @@ qualification; the tool reports unsupported rendering paths explicitly.
 | [Inspection timing](docs/inspection-timing.md) | Interpret bounded scene and silence evidence |
 | [Creator opportunities](docs/creator-agent-opportunities.md) | Prioritized creator trials and future product work |
 | [Editor research](docs/editor-research.md) | Official editor documentation and applied design choices |
+| [Creator delivery research](docs/creator-delivery-research.md) | Research behind discovery, captions, chapters and delivery checks |
 | [Interface reference](docs/agent-api.md) | Current envelopes, revisions, jobs and verified artifacts |
 | [Agent guide](AGENT_GUIDE.md) | Source-based edits, profiles, analysis, revisions and delivery |
 | [Deployment](docs/deployment.md) | Published installation, MCP, providers, storage and maintenance |

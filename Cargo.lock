@@ -10,6 +10,7 @@ dependencies = [
  "agentcut-render",
  "clap",
  "ctrlc",
+ "icu_normalizer",
  "nix",
  "rusqlite",
  "schemars",

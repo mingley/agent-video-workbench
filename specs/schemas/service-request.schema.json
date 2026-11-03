@@ -88,6 +88,30 @@
       ],
       "type": "object"
     },
+    "ChapterSelection": {
+      "additionalProperties": false,
+      "properties": {
+        "markerId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "markerId",
+        "title"
+      ],
+      "type": "object"
+    },
+    "Color": {
+      "enum": [
+        "sdr",
+        "hdr-pq",
+        "hdr-hlg"
+      ],
+      "type": "string"
+    },
     "Compose": {
       "additionalProperties": false,
       "properties": {
@@ -205,6 +229,72 @@
       "required": [
         "cutId",
         "reason"
+      ],
+      "type": "object"
+    },
+    "DeliveryBrief": {
+      "additionalProperties": false,
+      "properties": {
+        "aspectRatio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "color": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Color"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dimensions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxBytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "maxDurationMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "requiredSidecars": {
+          "items": {
+            "$ref": "#/$defs/Sidecar"
+          },
+          "type": "array"
+        },
+        "schemaVersion": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schemaVersion"
       ],
       "type": "object"
     },
@@ -1027,6 +1117,33 @@
       ],
       "type": "string"
     },
+    "Sidecar": {
+      "enum": [
+        "srt",
+        "vtt"
+      ],
+      "type": "string"
+    },
+    "Size": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "type": "object"
+    },
     "Slot": {
       "additionalProperties": false,
       "properties": {
@@ -1766,6 +1883,59 @@
       "additionalProperties": false,
       "properties": {
         "command": {
+          "const": "chapter-draft",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "selections": {
+          "items": {
+            "$ref": "#/$defs/ChapterSelection"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "id",
+        "selections"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "brief": {
+          "$ref": "#/$defs/DeliveryBrief"
+        },
+        "command": {
+          "const": "delivery-check",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "id",
+        "brief"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
           "const": "compose",
           "type": "string"
         },
@@ -1877,6 +2047,10 @@
             "null"
           ]
         },
+        "canonicalUnicode": {
+          "default": false,
+          "type": "boolean"
+        },
         "command": {
           "const": "transcript-search",
           "type": "string"
@@ -1889,6 +2063,10 @@
             "integer",
             "null"
           ]
+        },
+        "joinWithoutSpaces": {
+          "default": false,
+          "type": "boolean"
         },
         "limit": {
           "default": 50,
