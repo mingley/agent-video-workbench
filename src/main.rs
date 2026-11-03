@@ -46,6 +46,10 @@ struct Cli {
 )]
 enum Action {
     Doctor,
+    HostReadiness {
+        #[arg(value_name = "WORKSPACE")]
+        directory: PathBuf,
+    },
     Catalog {
         workspace: PathBuf,
         #[arg(long, default_value = "")]
@@ -143,6 +147,140 @@ enum Action {
     DeliveryCheck {
         project: PathBuf,
         id: String,
+        #[arg(long)]
+        request: PathBuf,
+    },
+    BatchDeliveryCheck {
+        project: PathBuf,
+        id: String,
+        #[arg(long)]
+        request: PathBuf,
+    },
+    BatchDelivery {
+        project: PathBuf,
+        id: String,
+        destination: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
+    },
+    ThumbnailCandidates {
+        project: PathBuf,
+        id: String,
+        destination: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
+    },
+    AgentMedia {
+        #[arg(long)]
+        request: PathBuf,
+    },
+    SourceEvidence {
+        project: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        request: PathBuf,
+    },
+    PrepareHighlights {
+        project: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        request: PathBuf,
+    },
+    ProviderSearch {
+        project: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        request: PathBuf,
+    },
+    ProviderSearchResults {
+        project: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        job_id: String,
+        #[arg(long)]
+        output_prefix: String,
+    },
+    SuggestReframe {
+        project: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        request: PathBuf,
+    },
+    AudioCleanup {
+        project: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    ReviewImport {
+        project: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    PreviewWordAlignment {
+        project: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        request: PathBuf,
+    },
+    AcceptWordAlignment {
+        project: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        review: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    WordAlignment {
+        project: PathBuf,
+        #[arg(long)]
+        asset_id: String,
+        #[arg(long)]
+        expected_revision: Option<u64>,
+        #[arg(long, default_value_t = 0)]
+        offset: u32,
+        #[arg(long, default_value_t = 50)]
+        limit: u32,
+    },
+    TranslationContext {
+        project: PathBuf,
+        #[arg(long)]
+        sequence: String,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long, default_value_t = 0)]
+        offset: u32,
+        #[arg(long, default_value_t = 50)]
+        limit: u32,
+    },
+    PlanTranslation {
+        project: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
         #[arg(long)]
         request: PathBuf,
     },
@@ -400,6 +538,9 @@ fn execute(cli: Cli) -> Result<Value> {
         },
     };
     let request = match cli.command {
+        Action::HostReadiness { directory } => Request::HostReadiness {
+            workspace: directory,
+        },
         Action::Worker {
             project,
             idle_seconds,
@@ -452,6 +593,137 @@ fn execute(cli: Cli) -> Result<Value> {
             project,
             id,
             brief: agent_video_workbench::json::read(&request)?,
+        },
+        Action::BatchDeliveryCheck {
+            project,
+            id,
+            request,
+        } => Request::BatchDeliveryCheck {
+            project,
+            id,
+            brief: agent_video_workbench::json::read(&request)?,
+        },
+        Action::BatchDelivery {
+            project,
+            id,
+            destination,
+            request,
+        } => Request::BatchDelivery {
+            project,
+            id,
+            destination,
+            brief: agent_video_workbench::json::read(&request)?,
+        },
+        Action::ThumbnailCandidates {
+            project,
+            id,
+            destination,
+            request,
+        } => Request::ThumbnailCandidates {
+            project,
+            id,
+            destination,
+            selection: agent_video_workbench::json::read(&request)?,
+        },
+        Action::AgentMedia { request } => Request::AgentMedia {
+            media: agent_video_workbench::json::read(&request)?,
+        },
+        Action::SourceEvidence {
+            project,
+            expected_revision,
+            request,
+        } => Request::SourceEvidence {
+            project,
+            expected_revision,
+            query: agent_video_workbench::json::read(&request)?,
+        },
+        Action::PrepareHighlights {
+            project,
+            expected_revision,
+            request,
+        } => Request::PrepareHighlights {
+            project,
+            expected_revision,
+            brief: agent_video_workbench::json::read(&request)?,
+        },
+        Action::ProviderSearch {
+            project,
+            expected_revision,
+            request,
+        } => Request::ProviderSearch {
+            project,
+            expected_revision,
+            search: agent_video_workbench::json::read(&request)?,
+        },
+        Action::SuggestReframe {
+            project,
+            expected_revision,
+            request,
+        } => Request::SuggestReframe {
+            project,
+            expected_revision,
+            observations: agent_video_workbench::json::read(&request)?,
+        },
+        Action::AudioCleanup {
+            project,
+            expected_revision,
+            key,
+            request,
+            dry_run,
+        } => Request::AudioCleanup {
+            project,
+            expected_revision,
+            key,
+            edit: agent_video_workbench::json::read(&request)?,
+            dry_run,
+        },
+        Action::ReviewImport {
+            project,
+            expected_revision,
+            key,
+            request,
+            dry_run,
+        } => Request::ReviewImport {
+            project,
+            expected_revision,
+            key,
+            draft: agent_video_workbench::json::read(&request)?,
+            dry_run,
+        },
+        Action::PreviewWordAlignment {
+            project,
+            expected_revision,
+            request,
+        } => Request::PreviewWordAlignment {
+            project,
+            expected_revision,
+            proposal: agent_video_workbench::json::read(&request)?,
+        },
+        Action::AcceptWordAlignment {
+            project,
+            expected_revision,
+            key,
+            request,
+            review,
+            dry_run,
+        } => Request::AcceptWordAlignment {
+            project,
+            expected_revision,
+            key,
+            proposal: agent_video_workbench::json::read(&request)?,
+            review: agent_video_workbench::json::read(&review)?,
+            dry_run,
+        },
+        Action::PlanTranslation {
+            project,
+            expected_revision,
+            key,
+            request,
+        } => Request::PlanTranslation {
+            project,
+            expected_revision,
+            key,
+            proposal: agent_video_workbench::json::read(&request)?,
         },
         Action::Apply {
             project,

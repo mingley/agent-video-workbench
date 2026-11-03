@@ -14,6 +14,34 @@ def run(*args):
     return subprocess.check_output(list(map(str, args)), text=True).strip()
 
 
+def required_summaries(tag, arch):
+    """Native, installed-client and browser evidence required for a release."""
+    if not re.fullmatch(r'v\d+\.\d+\.\d+', tag) or arch not in ('x86_64', 'aarch64'):
+        raise ValueError('invalid qualification identity')
+    required = {'application', 'jobs', 'matrix', 'agent', 'studio', 'audio',
+                'transfer', 'analysis', 'highres', 'timeline'}
+    if tag != 'v0.3.0':
+        required.add('combined')
+        if arch == 'x86_64':
+            required.add('browser')
+    if tuple(map(int, tag[1:].split('.'))) >= (0, 4, 0):
+        required.update({'color-memory', 'source-preserve', 'preserve-agent',
+                         'inspect-range', 'captions-extra', 'caption-sidecar', 'solo',
+                         'subject-reframe', 'compare', 'creator-research', 'mcp-media', 'host-readiness',
+                         'discovery', 'provider-search', 'thumbnail', 'word-alignment', 'translation', 'audio-cleanup',
+                         'delivery-batch'})
+        if arch == 'x86_64':
+            required.update({'preserve-browser', 'review-duration', 'review-compare', 'review-import'})
+    return required
+
+
+def verify_summaries(native, required):
+    summaries = {p.parent.name: p for p in native.glob('*/summary.json')}
+    if set(summaries) != required or any(
+            json.loads(p.read_text()).get('passed') is not True for p in summaries.values()):
+        raise ValueError('every required native workflow summary must pass')
+
+
 def main():
     output = Path(sys.argv[1])
     output.mkdir(parents=True, exist_ok=False)
@@ -34,20 +62,7 @@ def main():
     for arch in ('x86_64', 'aarch64'):
         native = output / arch
         run('gh', 'run', 'download', run_id, '--name', f'qualified-native-{arch}-bundle', '--dir', native)
-        required = {'application', 'jobs', 'matrix', 'agent', 'studio', 'audio',
-                    'transfer', 'analysis', 'highres', 'timeline'}
-        if tag != 'v0.3.0':
-            required.add('combined')
-            if arch == 'x86_64':
-                required.add('browser')
-        if tuple(map(int, tag[1:].split('.'))) >= (0, 4, 0):
-            required.update({'color-memory', 'source-preserve', 'preserve-agent'})
-            if arch == 'x86_64':
-                required.add('preserve-browser')
-        summaries = {p.parent.name: p for p in native.glob('*/summary.json')}
-        if set(summaries) != required or any(
-                json.loads(p.read_text()).get('passed') is not True for p in summaries.values()):
-            raise ValueError('every required native workflow summary must pass')
+        verify_summaries(native, required_summaries(tag, arch))
         archive = native / 'release' / f'avw-{tag[1:]}-linux-{arch}.tar.gz'
         actual = hashlib.sha256(archive.read_bytes()).hexdigest()
         expected = (native / 'release/SHA256SUMS').read_text().split()

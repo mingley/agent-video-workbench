@@ -166,6 +166,7 @@ fn variants_have_independent_entity_ids_and_frozen_source_revisions() {
         height: 360,
         language: None,
         captions: Default::default(),
+        translation_provenance: None,
     };
     store.studio(&edit, 1, "create-square", false).unwrap();
     store

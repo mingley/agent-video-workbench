@@ -1,7 +1,7 @@
 # Creator-agent opportunities
 
-Status: proposed work, not a release commitment or a list of implemented
-features. Priorities are hypotheses until creators have tried the workflow.
+Status: opportunities and remaining work, not a release commitment.
+Priorities are hypotheses until creators have tried the workflow.
 The goal is to help an agent turn recordings into useful, reviewable content
 while the creator retains control over meaning, appearance and final choices.
 
@@ -14,7 +14,11 @@ status](implementation-status.md), the [agent guide](../AGENT_GUIDE.md), and
 the [API reference](agent-api.md) for actual behavior and qualification. The
 existing [editor research](editor-research.md) describes relevant editing
 workflows observed in official documentation; it is not a competitive benchmark.
-Published 0.3.1 and current 0.4.0 source have different capabilities.
+Published 0.3.1 and current 0.4.0 source have different capabilities. The
+[creator toolkit](creator-agent-toolkit.md) describes the current slices for
+source evidence, optional provider search, reviewed word timing, translation
+proposals, subject observations and checked batch delivery. These slices do
+not replace the research and quality work below.
 
 ## First: learn from complete creator workflows
 
@@ -100,12 +104,11 @@ judgments require separate qualification.
 the captions still match what I said.” Current source transcripts use timed
 cues; cue boundaries do not guarantee word-level precision.
 
-**Slice:** Define an optional alignment-provider result containing source hash,
-transcript version, word text/IDs, source-time spans, provider identity and
-explicit uncertainty. Present alignments as proposals against a selected
-transcript, with original audio context, not as an automatic destructive edit.
-Allow the agent or creator to accept a reviewed alignment without discarding
-existing text corrections; reject incompatible or stale input explicitly.
+**Current slice:** An agent can submit a source- and transcript-bound alignment
+proposal, inspect its validation and accept it with a reviewer and note. It
+preserves corrected text, retains provider attribution and exposes stale
+alignments without silently applying them to captions. A separate provider or
+agent must produce the word spans; the workbench does not align speech itself.
 
 **Acceptance:** Fixtures cover repeated words, cue-boundary words, overlapping
 or out-of-bounds spans, missing words, changed source/transcript and correction
@@ -129,9 +132,13 @@ brief against a completed queued render. It reports per-constraint pass, fail
 or unknown and the artifact identity; see [delivery checks](creator-delivery-checks.md).
 The report is returned to the caller and does not itself modify a package.
 
-**Next slice:** Support pre-render planning and bind briefs/reports for multiple
-named outputs into a delivery package, preserving successful siblings when one
-fails. Do not embed unverified platform rules.
+**Current batch slice:** `batch-delivery-check` evaluates each requested output,
+and `batch-delivery` binds reports and successful review artifacts into a
+package while retaining failed and unavailable siblings as explicit results.
+The package minimizes project metadata; its selected media and caller-authored
+metadata still need review before sharing. Pre-render constraint planning and
+maintained platform templates remain future work. Do not embed unverified
+platform rules.
 
 **Next-slice acceptance:** Exercise one passing and one failing output in a frozen batch,
 including an actual file-size check, missing sidecar, mismatched duration and

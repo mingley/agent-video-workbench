@@ -114,6 +114,8 @@ pub enum Edit {
         language: Option<String>,
         #[serde(default)]
         captions: BTreeMap<String, String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        translation_provenance: Option<Box<crate::translation::TranslationProvenance>>,
     },
     Omit {
         id: String,
@@ -574,6 +576,23 @@ fn capture_review_sources(
     })
 }
 
+/// Reuse the exact same source mapping for an atomically imported review
+/// draft and for the existing individual `review-add` operation.
+pub(crate) fn capture_review_json(
+    project: &Project,
+    sequence: &Sequence,
+    at_ms: i64,
+    end_ms: i64,
+) -> Result<Value> {
+    let sources = capture_review_sources(project, sequence, at_ms, end_ms)?;
+    Ok(json!({
+        "sources": sources.points,
+        "sourceRanges": sources.ranges,
+        "sourceRangeCoverage": sources.coverage,
+        "sourceRangeLimitations": sources.limitations,
+    }))
+}
+
 fn map_review_range(
     project: &Project,
     sequence: &Sequence,
@@ -787,7 +806,24 @@ pub fn remap_reviews(project: &Project, sequence: &str) -> Result<Value> {
             "mappingBasis":if review.get("sourceRanges").is_some(){"source-range"}else{"legacy-point"},
             "arrangement":arrangement,"rangeMappings":range_mappings}));
     }
-    Ok(json!({"revision":project.revision,"sequenceId":sequence.id,"items":result}))
+    // Decisions refer to a frozen artifact, not to the current contents of a
+    // sequence. Return their original identities without inferring approval of
+    // later renders or treating the latest decision as a global project state.
+    let decisions = project
+        .extensions
+        .get("avw.reviewDecisions")
+        .cloned()
+        .unwrap_or(json!([]));
+    let decisions: Vec<_> = decisions
+        .as_array()
+        .ok_or_else(|| invalid("invalid review decisions"))?
+        .iter()
+        .filter(|decision| decision["sequenceId"] == sequence.id)
+        .cloned()
+        .collect();
+    Ok(
+        json!({"revision":project.revision,"sequenceId":sequence.id,"items":result,"decisions":decisions}),
+    )
 }
 fn reflow_captions(previous: &Project, next: &mut Project, root: &Path) -> Result<()> {
     let assets = next
@@ -929,9 +965,10 @@ impl Store {
                     let compose=workflow::Compose{output_id:output_id.clone(),name:name.clone(),font_asset_id:p.font_asset_id.clone(),cuts,width:t.width,height:t.height,font_size:p.font_size};
                     next=workflow::compose_project(project,&root,&compose,expected,key)?;next=apply_profile(&next,output_id,&p)?;next.require_sequence_mut(output_id)?.extensions.insert("avw.template".into(),serde_json::to_value(t)?);
                 },
-                Edit::Variant{sequence,id,name,width,height,language,captions,..}=>{
+                Edit::Variant{sequence,id,name,width,height,language,captions,translation_provenance,..}=>{
                     workflow::id(id)?;if *width==0 || *height==0 || *width>4096 || *height>4096 || !width.is_multiple_of(2) || !height.is_multiple_of(2){return Err(invalid("variant canvas requires even dimensions in 2..4096"));}
                     let source=origin.as_ref().ok_or_else(||invalid("source revision missing"))?;
+                    if let Some(provenance)=translation_provenance {crate::translation::validate_variant_provenance(source,edit,provenance)?;}
                     let original=source.require_sequence(sequence)?;
                     for asset in &source.assets {if let Some(current)=next.assets.iter().find(|a| a.id==asset.id){if current.fingerprint!=asset.fingerprint{return Err(invalid("variant asset identity conflicts with current project"));}}else{next.assets.push(asset.clone());}}
                     let mut copy=clone_sequence(original,id)?;copy.name=name.clone();let sx=*width as f64/original.canvas.width as f64;let sy=*height as f64/original.canvas.height as f64;copy.canvas.width= *width;copy.canvas.height= *height;
@@ -942,7 +979,9 @@ impl Store {
                     }}}
                     let actual=original.tracks.iter().flat_map(|t| &t.items).filter(|i| matches!(i.payload,ItemPayload::Caption(_))).count();if language.is_some() && captions.len()!=actual{return Err(invalid("language variants require an explicit translation for every caption"));}
                     if captions.keys().any(|id| !original.tracks.iter().flat_map(|t| &t.items).any(|i| &i.id==id && matches!(i.payload,ItemPayload::Caption(_)))){return Err(invalid("translation targets an unknown caption"));}
-                    copy.extensions.insert("avw.variant".into(),json!({"sequenceId":sequence,"sourceRevision":source.revision,"language":language,"translationReview":"required","alignment":"one imported translated segment per source caption"}));next.sequences.push(copy);
+                    copy.extensions.insert("avw.variant".into(),json!({"sequenceId":sequence,"sourceRevision":source.revision,"language":language,"translationReview":"required","alignment":"one imported translated segment per source caption"}));
+                    if let Some(provenance)=translation_provenance {copy.extensions.insert("avw.translationProvenance".into(),serde_json::to_value(provenance)?);}
+                    next.sequences.push(copy);
                 },
                 Edit::Omit{id,item_id,reason}=>{
                     workflow::id(id)?;let name=format!("avw.omission.{id}");if next.extensions.contains_key(&name){return Err(invalid("omission ID already exists"));}

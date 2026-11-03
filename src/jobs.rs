@@ -263,6 +263,13 @@ impl Store {
                 "generated preview key does not match this project or service configuration; regenerate the preview request here".into(),
             ));
         }
+        if key.starts_with(crate::discovery::PROVIDER_KEY_PREFIX)
+            && key != crate::discovery::provider_input_key(input, &project)?
+        {
+            return Err(Error::Invalid(
+                "generated search key does not match this project or provider configuration; regenerate the search request here".into(),
+            ));
+        }
         let seq = project.require_sequence(&input.sequence)?;
         if seq.canvas.width > 4096 || seq.canvas.height > 4096 {
             return Err(Error::Invalid(

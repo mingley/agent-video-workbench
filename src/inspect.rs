@@ -9,7 +9,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use std::{fs::File, path::Path, process::Command, time::Duration};
+use std::{fs::File, os::unix::fs::OpenOptionsExt, path::Path, process::Command, time::Duration};
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
@@ -214,11 +214,15 @@ pub fn inspect(
     if start_ms < 0 {
         return Err(Error::Invalid("startMs must be nonnegative".into()));
     }
+    // Validate the actual project-owned directory before cache reads, media
+    // inspection or FFmpeg can write any staged file.
+    let directory = media::project_directory(root, "analysis")?;
     let lease = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
         .read(true)
         .write(true)
+        .custom_flags(nix::libc::O_NOFOLLOW)
         .open(root.join("analysis.lock"))?;
     lease.lock_shared()?;
     let project = Store::open(root)?.project()?;
@@ -301,13 +305,21 @@ pub fn inspect(
                 "probeTool":probe_tool,"probePath":backend.ffprobe_path(),"version":4})
         )?)
     );
-    let directory = root.join("analysis");
     let manifest = directory.join(format!("{key}.json"));
     let image = directory.join(format!("{key}.png"));
-    if manifest.exists() {
+    let cached = match std::fs::symlink_metadata(&manifest) {
+        Ok(_) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => return Err(error.into()),
+    };
+    if cached {
+        media::regular_file(&manifest, "cached inspection manifest")?;
         let mut result: Value = crate::json::read(&manifest)?;
-        if matches!(kind, Kind::Frame) && result["sha256"] != media::hash_file(&image)? {
-            return Err(Error::Invalid("cached frame bytes changed".into()));
+        if matches!(kind, Kind::Frame) {
+            media::regular_file(&image, "cached inspection frame")?;
+            if result["sha256"] != media::hash_file(&image)? {
+                return Err(Error::Invalid("cached frame bytes changed".into()));
+            }
         }
         // Evidence is keyed by source bytes and may be shared by several asset
         // IDs. Bind the returned identity to this request, not the asset that

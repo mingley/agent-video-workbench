@@ -4,8 +4,16 @@ The current source also offers opt-in canonical Unicode/no-space phrase
 search, user-supplied checks against frozen rendered files, and chapter drafts
 from selected markers. Sidecars reject sub-millisecond collapsed cues before
 encoding; review ranges use verified output timing. See [delivery checks](creator-delivery-checks.md)
-and [current evidence](implementation-status.md). Batch-integrated briefs,
-real creator trials and account-specific publication remain open.
+and [current evidence](implementation-status.md). Checked batch packages now
+bind briefs to individual frozen outputs. Pre-render constraint planning, real
+creator trials and account-specific publication remain open.
+
+The current [creator toolkit](creator-agent-toolkit.md) adds agent-visible
+media, external moment-search and word/translation proposals, sampled subject
+reframing, imported review decisions, thumbnail candidates and optional
+spectral noise reduction. Semantic understanding, alignment, translation and
+subject detection still need separately supplied observations or providers,
+and their quality has not been established by the generated fixtures.
 
 Current source also adds [frozen plain-cut comparison](compare-edits.md), a
 range marker in delivered review pages, and a refusal for caption cues that

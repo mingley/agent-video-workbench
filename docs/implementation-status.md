@@ -1,6 +1,45 @@
 # Implementation and qualification
 
-## Research-backed creator delivery on current source
+## Creator-agent toolkit on current source
+
+The current source adds bounded source-evidence pages, proposals for highlight
+plans, and a source-bound contract for an explicitly configured moment-search
+provider. Agents can receive verified frame, contact-sheet and short audio
+content over MCP or its CLI/JSON equivalent. Word alignment, translation and
+subject observations are supplied by an agent or provider, validated against
+the source or captions, and kept reviewable; the workbench does not include a
+semantic model, aligner, translator or subject detector. Crop suggestions
+refuse existing geometry and effects that invalidate their sampled fit check.
+
+Offline review pages support side-by-side playback, timestamped notes and an
+explicit render-bound decision. Import verifies that artifact, commits the
+draft atomically and supports replay. Checked batch packages retain individual
+pass/fail/unknown results and successful outputs; they omit full project
+snapshots, saved reviews and edit notes. Selected media, captions, images,
+identities and caller-authored metadata remain visible and need review before
+sharing. The older `delivery` package retains full project snapshots and may
+include saved reviews. Thumbnail candidates use creator-selected times from a
+verified SDR review. Optional per-item spectral noise reduction applies after
+gain, pan and fades; a generated tone fixture measured approximately 20 ms of
+added onset delay, so listen and check synchronization.
+
+On local Linux x86_64, 166 Rust tests, formatting, strict Clippy, the release
+build, generated-schema check and all 35 required native-workflow summaries
+passed. The generated-media and official MCP SDK checks exercise these workflows,
+including a recursive privacy regression for a real batch package and feedback
+import against its minimized review page. Chromium tests review decisions and
+side-by-side playback at desktop and phone-width viewports. Managed inspection
+and analysis paths now reject existing symlinks, and the project database is
+opened with SQLite's no-follow flag. These checks do not provide filesystem
+isolation against concurrent component replacement, hard links, bind mounts or
+SQLite sidecars. The tests do not establish real-creator acceptance, physical
+phone or HDR appearance, translation or speech accuracy, or model consumption
+of media in a particular host. See the [creator-agent toolkit](creator-agent-toolkit.md).
+
+Earlier sections retain the evidence and feature scope reported at the time of
+those checks; later source changes can extend their behavior.
+
+## Earlier research-backed creator delivery validation
 
 `transcript-search` now offers opt-in canonical Unicode normalization and
 no-space cue joining while retaining its original defaults. Normalization and

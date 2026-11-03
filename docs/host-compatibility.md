@@ -14,6 +14,12 @@ Current installation is Linux x86_64/ARM64 with CLI or local MCP stdio; see
 [deployment](deployment.md). The remote transport, additional OS bundles and machine-readable installer
 result discussed below are design targets, not shipped interfaces.
 
+The source build also offers opt-in MCP image and audio content through
+`avw-media`, with equivalent bounded JSON through `agent-media`. These provide
+verified files as content blocks when requested; whether a specific host passes
+them to a model or its user is still a separate compatibility test. Local
+official-SDK tests do not establish every hosted account's capabilities.
+
 The intended agent is a hosted product, possibly an OpenAI dot, Grok Bot, or
 Meta Muse. None was exercised through an account during this evaluation.
 Official documentation establishes useful capabilities, but it does not

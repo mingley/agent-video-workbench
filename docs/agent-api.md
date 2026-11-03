@@ -88,6 +88,17 @@ unreviewed risks and commits intent with the sequence atomically. Preflight's
 | `history` | Revision-bounded page with `items` and `nextAfter` |
 | `studio-state` | Prefix-filtered decisions with `nextOffset`; large values are summarized |
 | `transcript-search` | Matching source cues, or opt-in literal matches across adjacent cues, with `nextOffset` |
+| `source-evidence`, `prepare-highlights` | Revision-pinned source windows and reviewable, externally proposed clip plans |
+| `provider-search`, `provider-search-results` | Explicitly queue and validate configured provider moment-search proposals |
+| `agent-media` | Bounded verified frame, sheet or proxy-audio content as base64 JSON |
+| `preview-word-alignment`, `accept-word-alignment`, `word-alignment` | Validate, review and retrieve caller-supplied source-word timing |
+| `translation-context`, `plan-translation` | Review supplied caption translations and prepare a provenance-bound variant |
+| `suggest-reframe` | Review an editable crop path from caller-supplied subject observations |
+| `audio-cleanup` | Explicitly set or remove reversible spectral noise reduction on a composed audio item |
+| `review-import` | Atomically import a creator's frozen-artifact notes or explicit version decision |
+| `batch-delivery-check`, `batch-delivery` | Check and package frozen outputs independently with caller-supplied briefs |
+| `thumbnail-candidates` | Extract creator-selected, timestamp-verified images from a frozen review video |
+| `host-readiness` | Check local workspace and media prerequisites while reporting host-specific unknowns |
 | `compare-outputs` | Exact source-range comparison of two verified queued plain-cut renders |
 | `delivery-check` | Check a caller's brief against a frozen render's verified bytes and freshly probed properties |
 | `chapter-draft` | Prepare reviewed public chapter text from selected frozen sequence markers |
@@ -104,6 +115,10 @@ For comparison scope, artifact integrity and unsupported cases, see
 [compare edits](compare-edits.md).
 For delivery-brief fields, evidence, chapter selection and limitations, see
 [delivery checks and chapters](creator-delivery-checks.md).
+The [creator-agent toolkit](creator-agent-toolkit.md) describes the newer
+workflows, including optional provider disclosure and model-visible evidence.
+The separate MCP `avw-media` tool exposes the same checked media as native
+image/audio blocks; the agent host determines whether it can consume them.
 For scene and silence inspection, check `analysisStatus`, `unavailableReason`
 and coverage: empty evidence is not proof of absence. Long-GOP or sparse seeks,
 missing timestamps and discontinuous audio can make analysis unavailable. Stream
@@ -145,6 +160,10 @@ video-preview retrieval.
 The synchronous `render` alias returns `artifactId`, `path`, `manifest` and
 `revision`; retrieve `artifact` with that ID for the verification/hash response.
 `delivery` packages a succeeded render or batch into a new scoped directory.
+Its legacy manifests include the full frozen project snapshot and current
+review history, which can contain unrelated private material; inspect before
+sharing. The checked `batch-delivery` workflow provides a reduced manifest for
+sharing and reports each output's state separately.
 `delivery-check` reports pass/fail/unknown per requested constraint for one
 completed queued render; it does not automatically attach the report to that
 package or prove upload acceptance. `chapter-draft` reports exact selected

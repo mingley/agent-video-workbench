@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
     process::Command,
@@ -176,6 +176,10 @@ pub fn run(
         started,
     };
     validate(input, project)?;
+    // Refuse redirected cache/scratch parents before invoking tools or
+    // reading any cached result. This checks existing paths, not races.
+    let analysis_dir = media::project_directory(root, "analysis")?;
+    let cache_dir = media::project_directory(root, "cache")?;
     let asset = project.require_asset(input.task.asset_id())?;
     media::verify_asset_controlled(root, asset, &mut control)?;
     if let Some(provider) = &input.provider
@@ -194,11 +198,24 @@ pub fn run(
             &json!({"source":asset.fingerprint.sha256,"input":input,"tool":String::from_utf8_lossy(&tool.stdout),"adapterVersion":2})
         )?)
     );
-    let final_dir = root.join("analysis").join(&key);
+    let final_dir = analysis_dir.join(&key);
     let manifest_path = final_dir.join("manifest.json");
-    if manifest_path.exists() {
+    let cached = match std::fs::symlink_metadata(&final_dir) {
+        Ok(metadata) if metadata.file_type().is_dir() => true,
+        Ok(_) => return Err(invalid("cached analysis must be a real directory")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => return Err(error.into()),
+    };
+    if cached {
+        if !manifest_path.exists() {
+            return Err(invalid(
+                "incomplete analysis cache requires collection before retry",
+            ));
+        }
+        media::regular_file(&manifest_path, "cached analysis manifest")?;
         let manifest: Value = crate::json::read(&manifest_path)?;
         let result_path = final_dir.join("result.json");
+        media::regular_file(&result_path, "cached analysis result")?;
         if manifest["resultSha256"] != media::hash_file_controlled(&result_path, &mut control)? {
             return Err(invalid("cached analysis bytes changed"));
         }
@@ -209,10 +226,12 @@ pub fn run(
             let name = file["name"]
                 .as_str()
                 .ok_or_else(|| invalid("analysis filename missing"))?;
-            if Path::new(name).components().count() != 1
-                || file["sha256"]
-                    != media::hash_file_controlled(&final_dir.join(name), &mut control)?
-            {
+            if Path::new(name).components().count() != 1 {
+                return Err(invalid("cached analysis attachment changed"));
+            }
+            let attachment = final_dir.join(name);
+            media::regular_file(&attachment, "cached analysis attachment")?;
+            if file["sha256"] != media::hash_file_controlled(&attachment, &mut control)? {
                 return Err(invalid("cached analysis attachment changed"));
             }
         }
@@ -220,14 +239,7 @@ pub fn run(
             json!({"path":result_path,"sha256":manifest["resultSha256"],"mimeType":"application/json","manifest":manifest_path,"cacheHit":true,"analysisKey":key,"needsReview":true}),
         );
     }
-    if final_dir.exists() {
-        return Err(invalid(
-            "incomplete analysis cache requires collection before retry",
-        ));
-    }
-    let scratch = root
-        .join("cache")
-        .join(format!("analysis-{}", uuid::Uuid::new_v4()));
+    let scratch = cache_dir.join(format!("analysis-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir(&scratch)?;
     let result = (|| {
         let source = root.join(&asset.uri);
@@ -390,6 +402,7 @@ pub fn run(
                     Duration::from_secs(900),
                     &mut control,
                 )?;
+                media::regular_file(&output, "analysis provider output")?;
                 let output: Value = crate::json::read(&output)?;
                 if output["schemaVersion"] != 1
                     || output["kind"] != "analysis"
@@ -405,11 +418,17 @@ pub fn run(
         };
         let report = json!({"schemaVersion":1,"sourceSha256":asset.fingerprint.sha256,"task":input.task,"analysisKey":key,"data":data,"files":files,"executedWallMs":started.elapsed().as_millis() as u64,"cost":{"providerDollars":null,"localCompute":"measured wall time; no configured dollar rate"},"reviewRequired":true});
         let output = scratch.join("result.json");
-        let mut file = File::create(&output)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&output)?;
         file.write_all(&serde_json::to_vec_pretty(&report)?)?;
         file.sync_all()?;
         let sha = media::hash_file_controlled(&output, &mut control)?;
-        let mut manifest = File::create(scratch.join("manifest.json"))?;
+        let mut manifest = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(scratch.join("manifest.json"))?;
         manifest.write_all(&serde_json::to_vec_pretty(
             &json!({"resultSha256":sha,"files":files}),
         )?)?;
@@ -426,7 +445,7 @@ pub fn run(
         }
         control.check()?;
         std::fs::rename(&scratch, &final_dir)?;
-        File::open(root.join("analysis"))?.sync_all()?;
+        File::open(&analysis_dir)?.sync_all()?;
         Ok(
             json!({"path":final_dir.join("result.json"),"sha256":sha,"mimeType":"application/json","manifest":final_dir.join("manifest.json"),"cacheHit":false,"analysisKey":key,"needsReview":true}),
         )

@@ -1,5 +1,5 @@
 name: Rust and agent workflow
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 jobs:
   qualify:
     strategy:
@@ -23,7 +23,9 @@ jobs:
           cache: npm
           cache-dependency-path: evaluation/package-lock.json
       - name: Strict Rust checks, schema and native bundle
-        run: scripts/package.sh "$RUNNER_TEMP/release"
+        run: |
+          python3 tests/test_release_qualification.py
+          scripts/package.sh "$RUNNER_TEMP/release"
       - name: Checksum-verified FFmpeg runtime
         run: scripts/setup-media.sh "$RUNNER_TEMP/tools"
       - name: Application, media and worker qualification
@@ -39,10 +41,16 @@ jobs:
           python3 evaluation/source_preserve_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --large-source "$RUNNER_TEMP/color-memory/hlg.mp4" --output "$RUNNER_TEMP/source-preserve"
           python3 evaluation/studio_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/studio"
           python3 evaluation/audio_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/audio"
+          python3 evaluation/audio_cleanup_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/audio-cleanup"
           python3 evaluation/transfer_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/transfer"
           python3 evaluation/analysis_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/analysis"
           python3 evaluation/highres_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/highres"
           python3 evaluation/timeline_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/timeline"
+          python3 evaluation/inspect_range_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/inspect-range"
+          python3 evaluation/captions_extra_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/captions-extra"
+          python3 evaluation/caption_sidecar_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/caption-sidecar"
+          python3 evaluation/solo_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/solo"
+          python3 evaluation/subject_reframe_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/subject-reframe"
       - name: Official MCP client, installed binary and CLI conformance
         shell: bash
         run: |
@@ -52,6 +60,16 @@ jobs:
           media="$RUNNER_TEMP/tools/ffmpeg8/linux"
           node evaluation/agent_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf "$RUNNER_TEMP/agent" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
           node evaluation/preserve_agent_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" "$RUNNER_TEMP/source-preserve/pq.mp4" "$RUNNER_TEMP/preserve-agent" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+          node evaluation/compare_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" "$RUNNER_TEMP/compare" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+          node evaluation/creator_research_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" "$RUNNER_TEMP/creator-research" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+          node evaluation/mcp_media_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" "$RUNNER_TEMP/mcp-media" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+          node evaluation/host_readiness_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" "$RUNNER_TEMP/host-readiness" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+          node evaluation/discovery_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" "$RUNNER_TEMP/discovery" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+          node evaluation/provider_search_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" "$RUNNER_TEMP/provider-search" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+          node evaluation/thumbnail_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" "$RUNNER_TEMP/thumbnail" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+          node evaluation/word_alignment_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf "$RUNNER_TEMP/word-alignment" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+          node evaluation/translation_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf "$RUNNER_TEMP/translation" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+          node evaluation/delivery_batch_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf "$RUNNER_TEMP/delivery-batch" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
       - name: Browser playback, seeking and phone layout
         if: matrix.arch == 'x86_64'
         shell: bash
@@ -59,6 +77,9 @@ jobs:
           set -euo pipefail
           node evaluation/browser_smoke.mjs "$(command -v google-chrome)" "$RUNNER_TEMP/agent/review-set" "$RUNNER_TEMP/browser" "$PWD/evaluation/node_modules/playwright"
           node evaluation/browser_smoke.mjs "$(command -v google-chrome)" "$RUNNER_TEMP/preserve-agent/planned-review" "$RUNNER_TEMP/preserve-browser" "$PWD/evaluation/node_modules/playwright"
+          node evaluation/review_duration_smoke.mjs "$RUNNER_TEMP/bin/avw" "$RUNNER_TEMP/tools/ffmpeg8/linux/ffmpeg" "$RUNNER_TEMP/tools/ffmpeg8/linux/ffprobe" "$(command -v google-chrome)" "$RUNNER_TEMP/review-duration"
+          node evaluation/review_compare_smoke.mjs "$RUNNER_TEMP/bin/avw" "$RUNNER_TEMP/tools/ffmpeg8/linux/ffmpeg" "$RUNNER_TEMP/tools/ffmpeg8/linux/ffprobe" "$(command -v google-chrome)" "$RUNNER_TEMP/review-compare" "$PWD/evaluation/node_modules/playwright"
+          node evaluation/review_import_smoke.mjs "$RUNNER_TEMP/bin/avw" "$RUNNER_TEMP/agent/project" "$RUNNER_TEMP/browser/feedback-draft.json" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk" "$RUNNER_TEMP/review-import"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1, Node 24
         if: always()
         with:
@@ -78,7 +99,26 @@ jobs:
             ${{ runner.temp }}/agent/summary.json
             ${{ runner.temp }}/studio/summary.json
             ${{ runner.temp }}/audio/summary.json
+            ${{ runner.temp }}/audio-cleanup/summary.json
             ${{ runner.temp }}/transfer/summary.json
             ${{ runner.temp }}/analysis/summary.json
             ${{ runner.temp }}/highres/summary.json
             ${{ runner.temp }}/timeline/summary.json
+            ${{ runner.temp }}/inspect-range/summary.json
+            ${{ runner.temp }}/captions-extra/summary.json
+            ${{ runner.temp }}/caption-sidecar/summary.json
+            ${{ runner.temp }}/solo/summary.json
+            ${{ runner.temp }}/subject-reframe/summary.json
+            ${{ runner.temp }}/compare/summary.json
+            ${{ runner.temp }}/creator-research/summary.json
+            ${{ runner.temp }}/mcp-media/summary.json
+            ${{ runner.temp }}/host-readiness/summary.json
+            ${{ runner.temp }}/discovery/summary.json
+            ${{ runner.temp }}/provider-search/summary.json
+            ${{ runner.temp }}/thumbnail/summary.json
+            ${{ runner.temp }}/word-alignment/summary.json
+            ${{ runner.temp }}/translation/summary.json
+            ${{ runner.temp }}/delivery-batch/summary.json
+            ${{ runner.temp }}/review-duration/summary.json
+            ${{ runner.temp }}/review-compare/summary.json
+            ${{ runner.temp }}/review-import/summary.json

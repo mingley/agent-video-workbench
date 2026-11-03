@@ -137,6 +137,13 @@ fn range_reference_uses_frozen_sequence_duration_without_rounding_past_it() {
     assert!(!page.contains("Review <take>"));
     assert!(page.contains("data-feedback-range hidden"));
     assert!(page.contains("id='range-fixture-job'"));
+    assert!(page.contains(&format!("data-review-project='{}'", project.project_id)));
+    assert!(page.contains(&format!(
+        "data-review-sha256='{}'",
+        media::hash_file(&video).unwrap()
+    )));
+    assert!(page.contains("data-feedback-draft hidden"));
+    assert!(page.contains("id='draft-json-fixture-job'"));
 
     // The review page still opens if historical probe evidence is unavailable,
     // but it must not expose a guessed range as verified output timing.
@@ -151,6 +158,7 @@ fn range_reference_uses_frozen_sequence_duration_without_rounding_past_it() {
     assert!(page.contains("data-range-unavailable"));
     assert!(page.contains("data-feedback-reference hidden"));
     assert!(page.contains("if (rangeTimingKnown) rangeField.hidden = false"));
+    assert!(page.contains("data-feedback-draft hidden"));
 
     // A separate review preview can have a shorter verified video stream;
     // feedback from its player must stay within both streams.

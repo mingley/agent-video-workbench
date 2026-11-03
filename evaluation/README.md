@@ -1,5 +1,15 @@
 # Application qualification
 
+The creator-toolkit checks cover bounded MCP media and CLI parity, source
+evidence and an explicitly configured search provider, host readiness,
+reviewed word alignments, translation provenance, sampled subject reframing,
+thumbnail timestamps, audio cleanup, minimized batch packages, and offline
+review decisions and import. Their scripts use generated media; the browser
+checks use viewport emulation. Exact commands are in
+[DEVELOPMENT.md](../DEVELOPMENT.md). These checks do not establish creative
+quality, speech or translation accuracy, physical-device appearance, or the
+ability of a particular host model to consume image/audio blocks.
+
 The 0.4.0 source-preservation and existing application checks and exact commands are in
 [DEVELOPMENT.md](../DEVELOPMENT.md). The current scope and evidence are in
 [implementation status](../docs/implementation-status.md) and

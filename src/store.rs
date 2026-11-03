@@ -1,6 +1,6 @@
 use crate::{Error, Result};
 use agentcut_core::{OperationBatch, Project, RationalRate, apply_batch};
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -25,15 +25,16 @@ pub struct Outcome {
 
 impl Store {
     fn connect(path: &Path) -> Result<Self> {
-        let conn = Connection::open(path.join("project.sqlite"))?;
+        let root = path.canonicalize()?;
+        let conn = Connection::open_with_flags(
+            root.join("project.sqlite"),
+            OpenFlags::default() | OpenFlags::SQLITE_OPEN_NOFOLLOW,
+        )?;
         conn.busy_timeout(Duration::from_secs(10))?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "FULL")?;
-        Ok(Self {
-            conn,
-            root: path.canonicalize()?,
-        })
+        Ok(Self { conn, root })
     }
 
     pub fn create(path: &Path, name: &str) -> Result<Self> {
@@ -88,8 +89,12 @@ impl Store {
     }
 
     pub(crate) fn open_backup(path: &Path) -> Result<Self> {
-        if !path.join("project.sqlite").is_file() {
-            return Err(Error::Invalid("project.sqlite is missing".into()));
+        if !std::fs::symlink_metadata(path.join("project.sqlite"))
+            .is_ok_and(|meta| meta.file_type().is_file())
+        {
+            return Err(Error::Invalid(
+                "project.sqlite must be a regular file".into(),
+            ));
         }
         let mut store = Self::connect(path)?;
         let version: u32 = store

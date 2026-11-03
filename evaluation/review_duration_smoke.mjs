@@ -137,6 +137,9 @@ try {
   await page.route('**/*', route => route.request().url().startsWith(base + '/') ? route.continue() : route.abort());
   for (const [packageName, known] of [['valid', true], ['unknown', false]]) {
     await page.goto(base + '/' + packageName + '/index.html');
+    if (await page.locator('[data-review-compare]').count() !== 0) {
+      throw new Error('A single-version package exposed an unusable comparison');
+    }
     const video = page.locator('video');
     await video.evaluate(async element => {
       if (element.readyState < 1) await new Promise((resolve, reject) => {
@@ -154,10 +157,61 @@ try {
       throw new Error('Point feedback controls are not available at the played time');
     }
     if ((await page.locator('[data-feedback-range]').isVisible()) !== known
-        || (await page.locator('[data-range-unavailable]').count()) !== (known ? 0 : 1)) {
+        || (await page.locator('[data-range-unavailable]').count()) !== (known ? 0 : 1)
+        || !(await page.locator('[data-feedback-draft]').isVisible())) {
       throw new Error('Range controls do not reflect the available timing evidence');
     }
+    if (!known) {
+      const draft = page.locator('[data-feedback-draft]');
+      await draft.locator('summary').click();
+      if (!(await draft.locator('[data-draft-add-point]').isDisabled())
+          || !(await draft.locator('[data-draft-add-range]').isDisabled())) {
+        throw new Error('Timed feedback was enabled with unknown output timing');
+      }
+      await draft.locator('[data-draft-decision-choice]').selectOption('approved');
+      if (!(await draft.locator('[data-draft-copy]').isDisabled())) {
+        throw new Error('A selected approval was recorded without an explicit action');
+      }
+      await draft.locator('[data-draft-set-decision]').click();
+      const decision = JSON.parse(await draft.locator('[data-draft-json]').inputValue());
+      if (decision.items.length !== 0 || decision.decision.status !== 'approved'
+          || decision.jobId !== render.artifactId || decision.artifactRevision !== 2
+          || decision.artifactSha256 !== masterSha || await draft.locator('[data-draft-copy]').isDisabled()) {
+        throw new Error('Missing timing incorrectly prevented version-level approval');
+      }
+    }
   }
+  // Older browsers without randomUUID can use cryptographic random bytes;
+  // never fall back to a collision-prone draft identity if crypto is missing.
+  const fallback = await browser.newContext();
+  await fallback.addInitScript(() => Object.defineProperty(globalThis.crypto, 'randomUUID',
+    { configurable: true, value: undefined }));
+  const fallbackPage = await fallback.newPage();
+  await fallbackPage.goto(base + '/valid/index.html');
+  const fallbackDraft = fallbackPage.locator('[data-feedback-draft]');
+  if (!(await fallbackDraft.isVisible())) throw new Error('Secure random-bytes fallback is unavailable');
+  await fallbackDraft.locator('summary').click();
+  await fallbackPage.locator('video').evaluate(async video => {
+    if (video.readyState < 1) await new Promise(resolve => video.addEventListener('loadedmetadata', resolve, {once: true}));
+  });
+  await fallbackDraft.locator('[data-draft-text]').fill('Fallback identity');
+  await fallbackDraft.getByRole('button', {name: 'Add feedback at playback time'}).click();
+  const fallbackId = JSON.parse(await fallbackDraft.locator('[data-draft-json]').inputValue()).draftId;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(fallbackId)) {
+    throw new Error('Secure random-bytes fallback did not generate a UUID');
+  }
+  await fallback.close();
+  const noCrypto = await browser.newContext();
+  await noCrypto.addInitScript(() => Object.defineProperty(globalThis, 'crypto',
+    { configurable: true, value: undefined }));
+  const noCryptoPage = await noCrypto.newPage();
+  await noCryptoPage.goto(base + '/valid/index.html');
+  if (await noCryptoPage.locator('[data-feedback-draft]').isVisible()
+      || !(await noCryptoPage.locator('[data-feedback-draft-unavailable]').isVisible())
+      || !(await noCryptoPage.locator('[data-feedback-reference]').isVisible())) {
+    throw new Error('Missing secure randomness did not withhold draft creation safely');
+  }
+  await noCrypto.close();
 } finally {
   if (browser) await browser.close();
   await new Promise(resolve => server.close(resolve));
@@ -167,6 +221,8 @@ const summary = { passed: true, generatedSourceSeconds: 4, frozenRenderedSeconds
   beyondEndRejected: true, missingTimingNotice: true, missingTimingReviewRejected: true,
   originalReviewReplayed: true, projectHistoryUnchangedOnRefusal: true,
   browserPointReferenceAvailable: true, browserRangeWithheldWhenUnknown: true,
+  timedFeedbackWithheldWhenTimingUnknown: true, decisionAvailableWithoutTiming: true,
+  secureDraftIdentityFallback: true,
   sourceAndArtifactUnchanged: true };
 fs.writeFileSync(path.join(root, 'summary.json'), JSON.stringify(summary, null, 2) + '\n');
 console.log('Review duration regression passed:', path.join(root, 'summary.json'));

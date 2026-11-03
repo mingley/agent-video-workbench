@@ -5,7 +5,7 @@ stdio. It owns immutable originals, editable projects, revision history,
 analysis, persistent jobs and verified delivery. The agent chooses content and
 uses its host's file tools to deliver results.
 
-**Main builds 0.4.0: source-matched cuts and HDR preservation.** Start with
+**0.4.0 builds: source-matched cuts and HDR preservation.** Start with
 [`assemble` and edit preflight](docs/natural-edit.md) to retain original framing,
 color and timing without automatic captions or crop. Plain 10-bit PQ/HLG cuts
 export a verified HEVC master and a separate SDR review video. High-quality
@@ -19,10 +19,12 @@ creator feedback across retained, moved or removed source intervals. Review
 pages can copy the exact render and playback time back to the agent.
 Check a creator's delivery brief against verified render bytes and draft
 chapters from selected markers; both keep the frozen revision visible.
+Use the [creator-agent toolkit](docs/creator-agent-toolkit.md) for grounded
+highlight proposals, model-visible media, reviewed captions and feedback,
+reframing, and checked batch delivery.
 Build with latest stable Rust: `cargo build --release --locked`.
 
-**Published 0.3.1: Linux x86_64 and ARM64, October 3, 2026.** This older binary
-does not include the new preserving mode. Import local or
+The older **0.3.1** Linux binary does not include the new preserving mode. It can import local or
 resumable HTTPS originals, convert PQ/HLG HDR to Rec.709 SDR, inspect source
 frames/PTS/scenes/silence, transcribe locally, and compose captioned shorts.
 Revise with selective source restoration, saved profiles/templates, B-roll,
@@ -36,11 +38,14 @@ Start with [installation and MCP connection](docs/deployment.md), then run
 [the captioned SDR walkthrough](docs/first-edit.md). The
 [agent workflow](AGENT_GUIDE.md) covers subsequent edits and recovery. Download checksum-verified binaries from
 [releases](https://github.com/mingley/agent-video-workbench/releases).
-From a repository checkout, the native binary installer needs no Rust compiler,
-Node, GUI or root (see deployment for installation without a checkout):
+From a repository checkout, choose a published version listed on the releases
+page. The native binary installer needs no Rust compiler, Node, GUI or root
+(see deployment for installation without a checkout). If 0.4.0 is not yet
+listed, build current source to use its features:
 
 ```sh
-scripts/install-release.sh /path/to/new-bin 0.3.1
+AVW_VERSION=0.4.0 # replace with a version listed on the releases page
+scripts/install-release.sh /path/to/new-bin "$AVW_VERSION"
 scripts/setup-media.sh /path/to/tools
 /path/to/new-bin/avw --ffmpeg /path/to/tools/ffmpeg8/linux/ffmpeg \
   --ffprobe /path/to/tools/ffmpeg8/linux/ffprobe doctor
@@ -73,6 +78,7 @@ qualification; the tool reports unsupported rendering paths explicitly.
 | [Natural edit](docs/natural-edit.md) | Source-matched HDR/SDR baseline, preflight and review |
 | [Edit planning](docs/edit-planning.md) | Briefs, source context, speech handles and durable cut decisions |
 | [Creator workflows](docs/creator-workflows.md) | Find, edit, compare, deliver and revise content with an agent |
+| [Creator-agent toolkit](docs/creator-agent-toolkit.md) | Source evidence, agent media, review, word alignment and batch delivery |
 | [Delivery checks and chapters](docs/creator-delivery-checks.md) | Check a creator's constraints and prepare reviewed chapter drafts |
 | [Compare edits](docs/compare-edits.md) | Compare frozen source ranges and review unsupported cases |
 | [Transcript search](docs/transcript-search.md) | Bounded phrase search across source cues and playable context |

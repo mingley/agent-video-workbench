@@ -1,11 +1,12 @@
 # Install and connect an agent
 
-The published 0.3.1 binary and 0.4.0 source build are local single-user Linux CLI
-and MCP stdio servers. Only 0.4.0 includes source-preserving HDR cuts and verified
-SDR preview retrieval; build main with latest stable Rust using `cargo build
+The 0.4.0 build is a local single-user Linux CLI and MCP stdio server. It
+includes source-preserving HDR cuts and verified SDR preview retrieval; use a
+matching [published release](https://github.com/mingley/agent-video-workbench/releases)
+when available, or build main with latest stable Rust using `cargo build
 --release --locked` to try [natural edits](natural-edit.md) and
-[source-context planning](edit-planning.md). The published
-installer below still downloads 0.3.1. The service persists
+[source-context planning](edit-planning.md). The older published 0.3.1 binary
+does not include these capabilities. The service persists
 projects, originals, revisions, analysis, jobs and verified exports. The agent
 provides editorial decisions and uses its host's file tools for delivery.
 
@@ -17,10 +18,10 @@ x86_64/ARM64 CI qualifies each archive through installed-binary workflows.
 Use Ubuntu 24.04 or newer/glibc-compatible Linux; Debian 13 x86_64 is also tested.
 The binary dynamically needs libc, libm and libgcc_s. Mac/Windows are not supported.
 
-From the checkout, `scripts/install-release.sh NEW_BIN_DIRECTORY 0.3.1`
-downloads the matching archive, verifies its checksum and installs without root.
+From the checkout, `scripts/install-release.sh NEW_BIN_DIRECTORY VERSION`
+downloads a version listed on the releases page, verifies its checksum and installs without root.
 Without a checkout, download `install-release.sh` and `setup-media.sh` from the
-[0.3.1 release](https://github.com/mingley/agent-video-workbench/releases/tag/v0.3.1).
+chosen release page.
 Run them with Bash and the same directory/version arguments; the release
 installer needs curl, SHA-256 utilities and tar. For offline installation, transfer the archive and SHA256SUMS, verify the
 matching checksum, extract, then run `avw/install.sh NEW_BIN_DIRECTORY`.
@@ -37,7 +38,13 @@ not bundled with the application.
 ```sh
 /path/to/avw --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe doctor
 /path/to/avw capabilities
+/path/to/avw host-readiness /path/to/existing-workspace
 ```
+
+`host-readiness` checks workspace create/write/sync/remove, available space and
+the same media doctor. Its model image/audio consumption, persistence, locking
+and account compatibility fields stay unknown until tested in the chosen host.
+With `--workspace ROOT`, its workspace must be inside that authorized root.
 
 On 0.4.0, `doctor` also reports `sourcePreservingHdr.ready` after a real 10-bit
 HEVC/PQ encode, tag check, decode and SDR preview transform. Check that result
@@ -63,10 +70,14 @@ must exist. The MCP client launches:
   mcp --root /path/to/workspace
 ```
 
-The server exposes one typed `avw` tool and `avw://guide`. Stdout is JSON-RPC;
+The server exposes the typed `avw` tool, opt-in `avw-media` content blocks and
+`avw://guide`. Stdout is JSON-RPC;
 diagnostics use stderr. Every path, including imports, providers' result
 artifacts, backups and delivery destinations, is scoped to the root. This is
-trusted local filesystem access; it is not an Internet listener.
+trusted local filesystem access; it is not an Internet listener. Managed
+inspection and analysis paths reject existing symlinks and the project database
+uses SQLite's no-follow flag. These checks are not an OS sandbox against
+concurrent path replacement, hard links, bind mounts or SQLite sidecars.
 
 Suggested agent trial:
 

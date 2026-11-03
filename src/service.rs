@@ -51,6 +51,9 @@ const EDITS: &[&str] = &[
 )]
 pub enum Request {
     Doctor {},
+    HostReadiness {
+        workspace: PathBuf,
+    },
     Capabilities {},
     Schema {},
     AgentGuide {},
@@ -144,6 +147,107 @@ pub enum Request {
         project: PathBuf,
         baseline_job: String,
         candidate_job: String,
+    },
+    SourceEvidence {
+        project: PathBuf,
+        expected_revision: u64,
+        query: crate::discovery::EvidenceQuery,
+    },
+    PrepareHighlights {
+        project: PathBuf,
+        expected_revision: u64,
+        brief: crate::discovery::HighlightBrief,
+    },
+    ProviderSearch {
+        project: PathBuf,
+        expected_revision: u64,
+        search: crate::discovery::ProviderSearch,
+    },
+    ProviderSearchResults {
+        project: PathBuf,
+        expected_revision: u64,
+        job_id: String,
+        output_prefix: String,
+    },
+    SuggestReframe {
+        project: PathBuf,
+        expected_revision: u64,
+        observations: crate::smart_reframe::ReframeRequest,
+    },
+    AudioCleanup {
+        project: PathBuf,
+        expected_revision: u64,
+        key: String,
+        edit: crate::audio_cleanup::CleanupEdit,
+        #[serde(default)]
+        dry_run: bool,
+    },
+    ReviewImport {
+        project: PathBuf,
+        expected_revision: u64,
+        key: String,
+        draft: crate::review_import::ReviewDraft,
+        #[serde(default)]
+        dry_run: bool,
+    },
+    PreviewWordAlignment {
+        project: PathBuf,
+        expected_revision: u64,
+        proposal: crate::word_alignment::AlignmentProposal,
+    },
+    AcceptWordAlignment {
+        project: PathBuf,
+        expected_revision: u64,
+        key: String,
+        proposal: crate::word_alignment::AlignmentProposal,
+        review: crate::word_alignment::AlignmentReview,
+        #[serde(default)]
+        dry_run: bool,
+    },
+    WordAlignment {
+        project: PathBuf,
+        asset_id: String,
+        #[serde(default)]
+        expected_revision: Option<u64>,
+        #[serde(default)]
+        offset: u32,
+        #[serde(default = "limit")]
+        limit: u32,
+    },
+    TranslationContext {
+        project: PathBuf,
+        sequence: String,
+        expected_revision: u64,
+        #[serde(default)]
+        offset: u32,
+        #[serde(default = "limit")]
+        limit: u32,
+    },
+    PlanTranslation {
+        project: PathBuf,
+        expected_revision: u64,
+        key: String,
+        proposal: crate::translation::TranslationProposal,
+    },
+    BatchDeliveryCheck {
+        project: PathBuf,
+        id: String,
+        brief: crate::delivery_batch::BatchBrief,
+    },
+    BatchDelivery {
+        project: PathBuf,
+        id: String,
+        destination: PathBuf,
+        brief: crate::delivery_batch::BatchBrief,
+    },
+    ThumbnailCandidates {
+        project: PathBuf,
+        id: String,
+        destination: PathBuf,
+        selection: crate::thumbnails::ThumbnailRequest,
+    },
+    AgentMedia {
+        media: crate::mcp::MediaRequest,
     },
     ChapterDraft {
         project: PathBuf,
@@ -597,6 +701,60 @@ impl Service {
                 brief.validate()?;
                 crate::delivery_check::check(&self.path(&project)?, &id, &brief, &self.backend)
             }
+            Request::BatchDeliveryCheck { project, id, brief } => {
+                brief.validate()?;
+                crate::delivery_batch::check(&self.path(&project)?, &id, &brief, &self.backend)
+            }
+            Request::BatchDelivery {
+                project,
+                id,
+                destination,
+                brief,
+            } => {
+                brief.validate()?;
+                crate::delivery_batch::package(
+                    &self.path(&project)?,
+                    &id,
+                    &self.path(&destination)?,
+                    &brief,
+                    &self.backend,
+                )
+            }
+            Request::ThumbnailCandidates {
+                project,
+                id,
+                destination,
+                selection,
+            } => {
+                selection.validate()?;
+                crate::thumbnails::create(
+                    &self.path(&project)?,
+                    &id,
+                    &self.path(&destination)?,
+                    &selection,
+                    &self.backend,
+                )
+            }
+            Request::AgentMedia { media } => {
+                let (metadata, content) = crate::mcp::media_request(self, media, "2025-11-25")?;
+                Ok(json!({"metadata":metadata,"content":content}))
+            }
+            Request::ReviewImport {
+                project,
+                expected_revision,
+                key,
+                draft,
+                dry_run,
+            } => {
+                draft.validate()?;
+                crate::review_import::import(
+                    &self.path(&project)?,
+                    &draft,
+                    expected_revision,
+                    &key,
+                    dry_run,
+                )
+            }
             Request::ChapterDraft {
                 project,
                 id,
@@ -653,10 +811,13 @@ impl Service {
             ),
             Request::Schema {} => Ok(serde_json::to_value(schemars::schema_for!(Request))?),
             Request::Capabilities {} => Ok(
-                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["chapter-draft","delivery-check","plan-edit","apply-edit-plan","assemble","edit-preflight","compare-outputs","maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"Composed SDR H.264/AAC; source-preserving Rec.709 or 10-bit PQ/HLG HEVC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"assemble color:preserve retains PQ/HLG in 10-bit HEVC; composed outputs tone map to Rec.709; Dolby Vision compatible base layer only","recommendedWorkflow":["inspect","assemble","plan-edit","apply-edit-plan","edit-preflight","render-start","artifact","compare-outputs","chapter-draft","delivery-check","delivery"],"asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"analysisProviderConfigured":self.provider.is_some(),"renderAnimation":"opacity; linear/step position and constant-viewport crop; other channels refused", "downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
+                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["host-readiness","agent-media","source-evidence","prepare-highlights","provider-search","provider-search-results","suggest-reframe","audio-cleanup","review-import","preview-word-alignment","accept-word-alignment","word-alignment","translation-context","plan-translation","batch-delivery-check","batch-delivery","thumbnail-candidates","chapter-draft","delivery-check","plan-edit","apply-edit-plan","assemble","edit-preflight","compare-outputs","maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"Composed SDR H.264/AAC; source-preserving Rec.709 or 10-bit PQ/HLG HEVC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"assemble color:preserve retains PQ/HLG in 10-bit HEVC; composed outputs tone map to Rec.709; Dolby Vision compatible base layer only","recommendedWorkflow":["inspect","assemble","plan-edit","apply-edit-plan","edit-preflight","render-start","artifact","compare-outputs","chapter-draft","delivery-check","delivery"],"asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"analysisProviderConfigured":self.provider.is_some(),"renderAnimation":"opacity; linear/step position and constant-viewport crop; other channels refused", "downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
             ),
             Request::AgentGuide {} => Ok(json!({"guide":include_str!("../AGENT_GUIDE.md")})),
             Request::Doctor {} => doctor(&self.backend),
+            Request::HostReadiness { workspace } => {
+                crate::host_readiness::check(self, &self.path(&workspace)?)
+            }
             Request::Describe { capability } => {
                 if !EDITS.contains(&capability.as_str()) {
                     return Err(Error::Invalid(
@@ -807,6 +968,154 @@ impl Service {
                 &baseline_job,
                 &candidate_job,
             ),
+            Request::SourceEvidence {
+                project,
+                expected_revision,
+                query,
+            } => {
+                let root = self.path(&project)?;
+                let snapshot = Store::open(&root)?.project()?;
+                crate::discovery::evidence(
+                    &snapshot,
+                    &project,
+                    &self.backend,
+                    expected_revision,
+                    &query,
+                )
+            }
+            Request::PrepareHighlights {
+                project,
+                expected_revision,
+                brief,
+            } => {
+                let root = self.path(&project)?;
+                let snapshot = Store::open(&root)?.project()?;
+                crate::discovery::prepare(
+                    &snapshot,
+                    &project,
+                    &self.backend,
+                    expected_revision,
+                    &brief,
+                )
+            }
+            Request::ProviderSearch {
+                project,
+                expected_revision,
+                search,
+            } => {
+                let root = self.path(&project)?;
+                let snapshot = Store::open(&root)?.project()?;
+                crate::discovery::provider_search_request(
+                    &snapshot,
+                    &project,
+                    &self.backend,
+                    self.provider.as_ref(),
+                    expected_revision,
+                    &search,
+                )
+            }
+            Request::ProviderSearchResults {
+                project,
+                expected_revision,
+                job_id,
+                output_prefix,
+            } => {
+                let root = self.path(&project)?;
+                let snapshot = Store::open(&root)?.project()?;
+                crate::discovery::provider_search_results(
+                    &root,
+                    &snapshot,
+                    &project,
+                    &self.backend,
+                    expected_revision,
+                    &job_id,
+                    &output_prefix,
+                )
+            }
+            Request::SuggestReframe {
+                project,
+                expected_revision,
+                observations,
+            } => {
+                let root = self.path(&project)?;
+                let snapshot = Store::open(&root)?.project()?;
+                crate::smart_reframe::propose(&root, &snapshot, expected_revision, &observations)
+            }
+            Request::AudioCleanup {
+                project,
+                expected_revision,
+                key,
+                edit,
+                dry_run,
+            } => Ok(serde_json::to_value(crate::audio_cleanup::edit(
+                &self.path(&project)?,
+                &edit,
+                expected_revision,
+                &key,
+                dry_run,
+            )?)?),
+            Request::PreviewWordAlignment {
+                project,
+                expected_revision,
+                proposal,
+            } => {
+                let root = self.path(&project)?;
+                let snapshot = Store::open(&root)?.project()?;
+                crate::word_alignment::preview(&root, &snapshot, &proposal, expected_revision)
+            }
+            Request::AcceptWordAlignment {
+                project,
+                expected_revision,
+                key,
+                proposal,
+                review,
+                dry_run,
+            } => Ok(serde_json::to_value(
+                Store::open(&self.path(&project)?)?.accept_word_alignment(
+                    &proposal,
+                    &review,
+                    expected_revision,
+                    &key,
+                    dry_run,
+                )?,
+            )?),
+            Request::WordAlignment {
+                project,
+                asset_id,
+                expected_revision,
+                offset,
+                limit,
+            } => {
+                let root = self.path(&project)?;
+                let snapshot = Store::open(&root)?.project()?;
+                crate::word_alignment::get(
+                    &root,
+                    &snapshot,
+                    &asset_id,
+                    expected_revision,
+                    offset,
+                    limit,
+                )
+            }
+            Request::TranslationContext {
+                project,
+                sequence,
+                expected_revision,
+                offset,
+                limit,
+            } => {
+                let snapshot = Store::open(&self.path(&project)?)?.project()?;
+                crate::translation::context(&snapshot, &sequence, expected_revision, offset, limit)
+            }
+            Request::PlanTranslation {
+                project,
+                expected_revision,
+                key,
+                proposal,
+            } => {
+                let root = self.path(&project)?;
+                crate::translation::plan(&root, &project, &proposal, expected_revision, &key)
+            }
             Request::PlanEdit {
                 project,
                 plan,
@@ -1158,7 +1467,7 @@ fn check_limit(limit: u32) -> Result<()> {
     Ok(())
 }
 
-fn preview_job_key(
+pub(crate) fn preview_job_key(
     backend: &FfmpegBackend,
     task: crate::analysis::Task,
     revision: u64,

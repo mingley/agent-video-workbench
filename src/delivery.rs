@@ -81,6 +81,22 @@ fn editing_notes(manifest: &Value) -> String {
 // The reference can be selected and copied. User-supplied titles are read
 // from textContent and never interpreted as markup.
 const REVIEW_SCRIPT: &str = r#"<script>
+// Generate one durable identity for each page-local draft.  Never fall back
+// to time or Math.random: the importer uses this ID to make retries safe.
+function newReviewDraftId() {
+  try {
+    if (!globalThis.crypto) return null;
+    if (typeof globalThis.crypto.randomUUID === 'function') {
+      try { return globalThis.crypto.randomUUID(); } catch (_) { /* Try getRandomValues. */ }
+    }
+    if (typeof globalThis.crypto.getRandomValues !== 'function') return null;
+    const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    const hex = [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+  } catch (_) { return null; }
+}
 for (const section of document.querySelectorAll('[data-review-job]')) {
   const video = section.querySelector('video');
   const fieldset = section.querySelector('[data-feedback-reference]');
@@ -93,6 +109,8 @@ for (const section of document.querySelectorAll('[data-review-job]')) {
   const reviewLimitMs = Number(section.dataset.reviewLimitMs);
   const rangeTimingKnown = section.dataset.reviewLimitMs !== ''
     && Number.isSafeInteger(reviewLimitMs) && reviewLimitMs > 0;
+  const composer = section.querySelector('[data-feedback-draft]');
+  const draftNotice = section.querySelector('[data-feedback-draft-unavailable]');
   let rangeStart = null;
   let rangeEnd = null;
   const formatTime = ms => {
@@ -177,6 +195,169 @@ for (const section of document.querySelectorAll('[data-review-job]')) {
       rangeStatus.textContent = 'Range reference selected. Copy it with your usual keyboard shortcut.';
     }
   });
+  // Notes are local until explicitly copied or downloaded.  Text is always
+  // written through textContent/value and never interpreted as HTML.
+  const draftId = newReviewDraftId();
+  const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  if (uuidV4.test(draftId || '') && typeof TextEncoder === 'function'
+      && /^[0-9a-f]{64}$/.test(section.dataset.reviewSha256 || '')
+      && section.dataset.reviewProject && Number.isSafeInteger(Number(section.dataset.reviewRevision))) {
+    const draft = { schemaVersion: 1, projectId: section.dataset.reviewProject,
+      jobId: section.dataset.reviewJob, artifactRevision: Number(section.dataset.reviewRevision),
+      artifactSha256: section.dataset.reviewSha256, draftId, items: [] };
+    let nextId = 1;
+    const actor = composer.querySelector('[data-draft-actor]');
+    const comment = composer.querySelector('[data-draft-text]');
+    const list = composer.querySelector('[data-draft-list]');
+    const serialized = composer.querySelector('[data-draft-json]');
+    const draftStatus = composer.querySelector('[role=status]');
+    const copy = composer.querySelector('[data-draft-copy]');
+    const download = composer.querySelector('[data-draft-download]');
+    const pointButton = composer.querySelector('[data-draft-add-point]');
+    const rangeButton = composer.querySelector('[data-draft-add-range]');
+    const choice = composer.querySelector('[data-draft-decision-choice]');
+    const decisionLabel = composer.querySelector('[data-draft-decision]');
+    const clearDecision = composer.querySelector('[data-draft-clear-decision]');
+    pointButton.disabled = !rangeTimingKnown;
+    rangeButton.disabled = !rangeTimingKnown;
+    const utf8 = new TextEncoder();
+    const hasDraftContent = () => draft.items.length > 0 || draft.decision !== undefined;
+    const validActor = () => {
+      if (actor.value.trim() && utf8.encode(actor.value).length <= 200) return true;
+      draftStatus.textContent = 'Enter a name of at most 200 UTF-8 bytes.';
+      actor.focus();
+      return false;
+    };
+    const updateDraft = () => {
+      list.replaceChildren();
+      for (const note of draft.items) {
+        const entry = document.createElement('li');
+        const label = document.createElement('span');
+        label.textContent = `${formatTime(note.atMs)}–${formatTime(note.endMs)} · ${note.actor}: ${note.text} `;
+        entry.append(label);
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = 'Remove';
+        remove.setAttribute('aria-label', `Remove feedback ${note.id}`);
+        remove.addEventListener('click', () => {
+          draft.items = draft.items.filter(item => item.id !== note.id);
+          updateDraft();
+          draftStatus.textContent = 'Feedback removed from this page-local draft.';
+        });
+        entry.append(remove);
+        list.append(entry);
+      }
+      decisionLabel.textContent = draft.decision
+        ? `Draft decision: ${draft.decision.status === 'approved' ? 'Approved' : 'Changes requested'} by ${draft.decision.actor}`
+        : 'Draft decision: None';
+      clearDecision.disabled = !draft.decision;
+      serialized.value = hasDraftContent() ? JSON.stringify(draft, null, 2) : '';
+      copy.disabled = !hasDraftContent();
+      download.disabled = !hasDraftContent();
+    };
+    const addNote = (at, end) => {
+      if (draft.items.length >= 100) {
+        draftStatus.textContent = 'A draft can contain at most 100 feedback notes.';
+      } else if (!validActor()) {
+        return;
+      } else if (!comment.value.trim() || utf8.encode(comment.value).length > 4000) {
+        draftStatus.textContent = 'Enter feedback of at most 4000 UTF-8 bytes.';
+        comment.focus();
+      } else if (!Number.isSafeInteger(at) || !Number.isSafeInteger(end)
+                 || at < 0 || at >= end || end > reviewLimitMs) {
+        draftStatus.textContent = 'Choose a valid time or marked range within this output.';
+      } else {
+        draft.items.push({ id: `note-${nextId++}`, atMs: at, endMs: end,
+          actor: actor.value, text: comment.value });
+        comment.value = '';
+        updateDraft();
+        draftStatus.textContent = 'Feedback added. Copy or download the draft before leaving this page.';
+      }
+    };
+    pointButton.addEventListener('click', () => {
+      if (!rangeTimingKnown) return;
+      video.pause();
+      const ms = position();
+      if (ms === null || ms >= reviewLimitMs) {
+        draftStatus.textContent = 'Load the video and choose a time before the output ends.';
+        return;
+      }
+      // A point is represented as a one-millisecond half-open interval.
+      addNote(ms, ms + 1);
+    });
+    rangeButton.addEventListener('click', () => {
+      if (!rangeTimingKnown) return;
+      if (rangeStart === null || rangeEnd === null) {
+        draftStatus.textContent = 'Mark a range above before adding range feedback.';
+        return;
+      }
+      addNote(rangeStart, rangeEnd);
+    });
+    composer.querySelector('[data-draft-set-decision]').addEventListener('click', () => {
+      if (!['approved', 'changes-requested'].includes(choice.value)) {
+        draftStatus.textContent = 'Choose a version decision before setting it.';
+        choice.focus();
+      } else if (validActor()) {
+        draft.decision = { status: choice.value, actor: actor.value };
+        updateDraft();
+        draftStatus.textContent = 'Decision added to this local draft. Copy or download it to share.';
+      }
+    });
+    clearDecision.addEventListener('click', () => {
+      delete draft.decision;
+      choice.value = '';
+      updateDraft();
+      draftStatus.textContent = 'Decision removed from this local draft.';
+    });
+    composer.querySelector('[data-draft-new]').addEventListener('click', () => {
+      if ((hasDraftContent() || comment.value.trim()) && !globalThis.confirm('Start a new draft? Copy or download this draft first; its unsaved content will be cleared.')) return;
+      const nextDraftId = newReviewDraftId();
+      if (!uuidV4.test(nextDraftId || '') || nextDraftId === draft.draftId) {
+        draftStatus.textContent = 'Secure draft creation is unavailable in this browser.';
+        return;
+      }
+      draft.draftId = nextDraftId;
+      draft.items = [];
+      delete draft.decision;
+      nextId = 1;
+      choice.value = '';
+      comment.value = '';
+      updateDraft();
+      draftStatus.textContent = 'New draft started for this version.';
+    });
+    copy.addEventListener('click', async () => {
+      if (!hasDraftContent()) return;
+      try {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard unavailable');
+        await navigator.clipboard.writeText(serialized.value);
+        draftStatus.textContent = 'Feedback draft copied.';
+      } catch (_) {
+        serialized.focus();
+        serialized.select();
+        draftStatus.textContent = 'Feedback draft selected. Copy it with your usual keyboard shortcut.';
+      }
+    });
+    download.addEventListener('click', () => {
+      if (!hasDraftContent()) return;
+      try {
+        const url = URL.createObjectURL(new Blob([serialized.value + '\n'], {type: 'application/json'}));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `feedback-${section.dataset.reviewJob}.json`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        draftStatus.textContent = 'Feedback draft download started.';
+      } catch (_) {
+        serialized.focus();
+        serialized.select();
+        draftStatus.textContent = 'Download unavailable. Copy the selected feedback draft instead.';
+      }
+    });
+    updateDraft();
+    composer.hidden = false;
+  } else {
+    draftNotice.hidden = false;
+  }
   video.addEventListener('timeupdate', update);
   video.addEventListener('seeked', update);
   fieldset.querySelector('button').addEventListener('click', async () => {
@@ -196,6 +377,83 @@ for (const section of document.querySelectorAll('[data-review-job]')) {
   updateRange();
   fieldset.hidden = false;
   if (rangeTimingKnown) rangeField.hidden = false;
+}
+
+// Compare actual packaged review videos; all creator-supplied names remain
+// literal text. Players are independent and do not imply equivalent media.
+const compareSections = [...document.querySelectorAll('[data-review-job]')];
+if (compareSections.length >= 2) {
+  const panel = document.createElement('details');
+  panel.dataset.reviewCompare = '';
+  const summary = document.createElement('summary');
+  summary.textContent = 'Compare two versions';
+  panel.append(summary);
+  const guidance = document.createElement('p');
+  guidance.textContent = 'Choose two versions and use each player to review it. The players are independent; compare the picture, sound and timing yourself.';
+  panel.append(guidance);
+  const grid = document.createElement('div');
+  grid.dataset.compareGrid = '';
+  panel.append(grid);
+  const players = [];
+  for (const [side, initial] of [['a', 0], ['b', 1]]) {
+    const sideLabel = `Version ${side.toUpperCase()}`;
+    const container = document.createElement('div');
+    container.dataset.compareSide = side;
+    const label = document.createElement('label');
+    label.htmlFor = `review-compare-${side}`;
+    label.textContent = sideLabel;
+    container.append(label);
+    const select = document.createElement('select');
+    select.id = label.htmlFor;
+    select.dataset.compareSelect = side;
+    for (const [index, section] of compareSections.entries()) {
+      const option = document.createElement('option');
+      option.value = String(index);
+      option.textContent = section.querySelector('h2').textContent;
+      select.append(option);
+    }
+    select.value = String(initial);
+    container.append(select);
+    const identity = document.createElement('p');
+    identity.dataset.compareIdentity = side;
+    container.append(identity);
+    grid.append(container);
+    const player = { side, select, identity, container, video: null };
+    const changeVersion = () => {
+      const selected = compareSections[Number(select.value)];
+      if (!selected) return;
+      const source = selected.querySelector('video').getAttribute('src');
+      const role = source.endsWith('/review-sdr.mp4') ? 'SDR review preview' : 'Master';
+      identity.textContent = `Render job ID: ${selected.dataset.reviewJob} · Revision: ${selected.dataset.reviewRevision} · ${role}`;
+      if (player.video) {
+        player.video.pause();
+        player.video.setAttribute('aria-label', `${sideLabel} player: ${selected.querySelector('h2').textContent}`);
+        player.video.setAttribute('src', source);
+        player.video.load();
+      }
+    };
+    select.addEventListener('change', changeVersion);
+    player.changeVersion = changeVersion;
+    players.push(player);
+    changeVersion();
+  }
+  panel.addEventListener('toggle', () => {
+    if (panel.open) {
+      for (const player of players) {
+        if (!player.video) {
+          player.video = document.createElement('video');
+          player.video.controls = true;
+          player.video.preload = 'metadata';
+          player.video.dataset.compareVideo = player.side;
+          player.container.append(player.video);
+          player.changeVersion();
+        }
+      }
+    } else {
+      for (const player of players) if (player.video) player.video.pause();
+    }
+  });
+  compareSections[0].before(panel);
 }
 </script>"#;
 
@@ -393,6 +651,10 @@ pub fn package(root: &Path, id: &str, destination: &Path) -> Result<Value> {
          a,h2,p,li{overflow-wrap:anywhere}\
          fieldset{box-sizing:border-box;max-width:36rem;margin:1rem 0}\
          textarea{box-sizing:border-box;width:100%;resize:vertical;font:inherit}\
+         input,select{box-sizing:border-box;max-width:100%;font:inherit}\
+         [data-compare-grid]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}\
+         [data-compare-grid] select,[data-compare-grid] video{display:block;width:100%;max-width:100%}\
+         @media(max-width:640px){[data-compare-grid]{grid-template-columns:1fr}}\
          button{min-height:2.75rem} [role=status]{min-height:1.5em}\
          </style><body><main><h1>Video review</h1>",
     );
@@ -496,7 +758,16 @@ pub fn package(root: &Path, id: &str, destination: &Path) -> Result<Value> {
             .unwrap_or_default();
         let title = &sequence.name;
         let notes = editing_notes(&manifest);
-        html.push_str(&format!("<section data-review-job='{id}' data-review-revision='{revision}' data-review-limit-ms='{review_limit_ms}'><h2 id='title-{id}'>{title}</h2><video controls width=360 aria-labelledby='title-{id}' src='{id}/{preview}'></video>{label}{notes}<fieldset data-feedback-reference hidden><legend>Share feedback at this moment</legend><p>Pause at the moment you want to discuss, then copy this reference for your agent.</p><p>Playback time: <span data-feedback-time></span></p><label for='feedback-{id}'>Feedback reference</label><textarea id='feedback-{id}' rows=6 readonly></textarea><button type=button>Copy feedback reference</button><p role=status aria-live=polite></p></fieldset>{range_notice}<details data-feedback-range hidden><summary>Share feedback for a range</summary><fieldset><legend>Mark a range</legend><p>Pause at the beginning and set the start, then seek to the end and set it.</p><p>Start: <span data-range-start>Not set</span><br>End: <span data-range-end>Not set</span></p><button type=button data-range-mark-start>Set range start</button> <button type=button data-range-mark-end>Set range end</button> <button type=button data-range-clear>Clear range</button><p><label for='range-{id}'>Range reference</label></p><textarea id='range-{id}' rows=6 readonly></textarea><button type=button data-range-copy disabled>Copy range reference</button><p role=status aria-live=polite></p></fieldset></details><noscript><p>For feedback, include render job ID {id}, rendered revision {revision}, and the playback time.{no_script_range}</p></noscript><p><a href='{id}/video.mp4'>Master</a> · <a href='{id}/captions.vtt'>Captions</a> · <a href='{id}/manifest.json'>Manifest</a></p></section>",title=html_text(title),revision=item.revision));
+        let project_id = html_text(&frozen.project_id.to_string());
+        let artifact_sha = html_text(
+            manifest["verification"]["sha256"]
+                .as_str()
+                .ok_or_else(|| Error::Invalid("delivery master hash missing".into()))?,
+        );
+        let draft_controls = format!(
+            "<p data-feedback-draft-unavailable hidden>Feedback drafting is unavailable for this review. Copy a playback reference instead.</p><details data-feedback-draft hidden><summary>Review this version</summary><fieldset><legend>Review draft</legend><p>Optionally set a version decision or add timed feedback. A playback point is recorded as a one-millisecond interval.</p><p><label for='draft-actor-{id}'>Your name</label><br><input id='draft-actor-{id}' data-draft-actor value='Creator' maxlength=200></p><p><label for='draft-decision-{id}'>Version decision</label><br><select id='draft-decision-{id}' data-draft-decision-choice><option value=''>Choose a decision</option><option value='approved'>Approve this version</option><option value='changes-requested'>Request changes</option></select></p><button type=button data-draft-set-decision>Set version decision</button> <button type=button data-draft-clear-decision disabled>Clear decision</button><p data-draft-decision>Draft decision: None</p><p>Pause at a moment, or mark a range above, to add timed feedback.</p><p><label for='draft-text-{id}'>Feedback</label><textarea id='draft-text-{id}' data-draft-text rows=3 maxlength=4000></textarea></p><button type=button data-draft-add-point>Add feedback at playback time</button> <button type=button data-draft-add-range>Add feedback for marked range</button><p>This draft stays on this page until you copy or download it; nothing is sent automatically. To change an already imported decision, start a new draft.</p><ol data-draft-list aria-label='Feedback in this draft'></ol><p><label for='draft-json-{id}'>Feedback draft for your agent</label></p><textarea id='draft-json-{id}' data-draft-json rows=8 readonly></textarea><button type=button data-draft-copy disabled>Copy feedback draft</button> <button type=button data-draft-download disabled>Download feedback draft</button> <button type=button data-draft-new>Start new draft</button><p role=status aria-live=polite></p></fieldset></details>"
+        );
+        html.push_str(&format!("<section data-review-job='{id}' data-review-revision='{revision}' data-review-limit-ms='{review_limit_ms}' data-review-project='{project_id}' data-review-sha256='{artifact_sha}'><h2 id='title-{id}'>{title}</h2><video controls width=360 aria-labelledby='title-{id}' src='{id}/{preview}'></video>{label}{notes}<fieldset data-feedback-reference hidden><legend>Share feedback at this moment</legend><p>Pause at the moment you want to discuss, then copy this reference for your agent.</p><p>Playback time: <span data-feedback-time></span></p><label for='feedback-{id}'>Feedback reference</label><textarea id='feedback-{id}' rows=6 readonly></textarea><button type=button>Copy feedback reference</button><p role=status aria-live=polite></p></fieldset>{range_notice}<details data-feedback-range hidden><summary>Share feedback for a range</summary><fieldset><legend>Mark a range</legend><p>Pause at the beginning and set the start, then seek to the end and set it.</p><p>Start: <span data-range-start>Not set</span><br>End: <span data-range-end>Not set</span></p><button type=button data-range-mark-start>Set range start</button> <button type=button data-range-mark-end>Set range end</button> <button type=button data-range-clear>Clear range</button><p><label for='range-{id}'>Range reference</label></p><textarea id='range-{id}' rows=6 readonly></textarea><button type=button data-range-copy disabled>Copy range reference</button><p role=status aria-live=polite></p></fieldset></details>{draft_controls}<noscript><p>For feedback, include render job ID {id}, rendered revision {revision}, and the playback time.{no_script_range}</p></noscript><p><a href='{id}/video.mp4'>Master</a> · <a href='{id}/captions.vtt'>Captions</a> · <a href='{id}/manifest.json'>Manifest</a></p></section>",title=html_text(title),revision=item.revision));
         items.push(json!({"jobId":id,"state":"succeeded","revision":item.revision,"sequenceId":manifest["sequenceId"],"files":files,"review":"pending","editPlan":manifest["editPreflight"]["editPlan"]}));
     }
     html.push_str("</main>");

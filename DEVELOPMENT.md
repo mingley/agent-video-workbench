@@ -190,6 +190,26 @@ python3 evaluation/caption_sidecar_smoke.py --avw "$PWD/target/release/avw" \
   --output /path/to/new-sidecar-run
 node evaluation/review_duration_smoke.mjs "$PWD/target/release/avw" \
   /path/to/ffmpeg /path/to/ffprobe /path/to/chromium /path/to/new-review-duration-run
+for task_smoke in mcp_media discovery provider_search thumbnail host_readiness; do
+  node "evaluation/${task_smoke}_smoke.mjs" "$PWD/target/release/avw" \
+    /path/to/ffmpeg /path/to/ffprobe "/path/to/new-${task_smoke}-run" \
+    "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+done
+for task_smoke in word_alignment translation delivery_batch; do
+  node "evaluation/${task_smoke}_smoke.mjs" "$PWD/target/release/avw" \
+    /path/to/ffmpeg /path/to/ffprobe /path/to/font.ttf \
+    "/path/to/new-${task_smoke}-run" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
+done
+python3 evaluation/subject_reframe_smoke.py --avw "$PWD/target/release/avw" \
+  --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe --output /path/to/new-reframe-run
+python3 evaluation/audio_cleanup_smoke.py --avw "$PWD/target/release/avw" \
+  --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe --output /path/to/new-cleanup-run
+node evaluation/review_compare_smoke.mjs "$PWD/target/release/avw" \
+  /path/to/ffmpeg /path/to/ffprobe /path/to/chromium /path/to/new-review-comparison-run \
+  "$PWD/evaluation/node_modules/playwright"
+node evaluation/review_import_smoke.mjs "$PWD/target/release/avw" \
+  /path/to/new-agent-run/project /path/to/new-browser-run/feedback-draft.json \
+  "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk" /path/to/new-review-import-run
 ```
 
 These generated-media checks exercise Unicode cue joins, selected-marker
@@ -220,9 +240,9 @@ version, full source commit, successful native qualification run and notes under
 `docs/releases`. The publication workflow verifies both native jobs, required
 functional summaries and archive/binary/source identities. For 0.3.1 this is
 12 summaries on x86_64 and 11 on ARM64; the browser check is explicitly skipped
-on ARM64. The 0.4.0 pipeline requires 16 summaries on x86_64 and 14 on ARM64,
-including color/memory, preservation and its SDK workflow; both browser suites
-run only on x86_64. Local ASR and one-hour measurements remain separate. It uploads the exact
+on ARM64. The 0.4.0 pipeline requires 35 summaries on x86_64 and 30 on ARM64,
+including color/memory, preservation and newer creator-agent workflows; browser
+suites run only on x86_64. Local ASR and one-hour measurements remain separate. It uploads the exact
 qualified assets through Actions, verifies existing asset bytes on retry, and
 refuses to replace different assets or a different target. A published release
 is immutable in this workflow. Run the public installer and official MCP trial

@@ -32,6 +32,15 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    Poll and retrieve its verified artifact. Generate and submit scoped preview
    requests on the same service configuration; their reserved keys bind project,
    source and media backend.
+   `source-evidence` pages source windows and transcript excerpts for external
+   reasoning. `prepare-highlights` validates attributed candidates and returns
+   previews and planning requests; it does not select stories. An explicitly
+   configured `moment-search-v1` provider can be queued with `provider-search`
+   and its verified suggestions read with `provider-search-results`. The
+   provider receives the original source path; follow the operator's data policy.
+   MCP `avw-media` can return bounded verified frames, sheets or proxy audio as
+   content blocks; the host must support consuming them. See the
+   [creator-agent toolkit](docs/creator-agent-toolkit.md).
 3. Optionally queue `transcribe-start` when local Whisper is configured. Review
    machine text before `transcript-import`. Cues contain ID, startMs, endMs and
    literal text, plus assetId/language/provider. `transcript-search` can optionally
@@ -42,6 +51,11 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    outputs. New analysis is archived without replacing corrections. Choose a
    version explicitly with `transcript-select`; unchanged cue IDs/timing preserve
    corrections. Changed alignment requires explicit review and recomposition.
+   `preview-word-alignment` and `accept-word-alignment` validate and retain
+   supplied word timing and reviewer provenance without rewriting text.
+   `translation-context` and `plan-translation` prepare an explicitly supplied
+   translation variant with atomic provenance; neither operation translates or
+   establishes speech, language, font or shaping accuracy.
 4. Begin with `assemble`: outputId/name and explicit cuts with IDs, assetId,
    startMs/endMs. Keep a continuous baseline and original reaction pauses before
    proposing tighter cuts. Defaults match source dimensions/rate, preserve its
@@ -100,6 +114,9 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    avoid mixing the same dialogue twice. Exact source protection still applies.
 7. Audio clips/buses expose gain, EQ, compression, limiting and fades. The
    `audio-duck` studio action names dialogue/music item IDs and sidechain settings.
+   `audio-cleanup` can explicitly set or remove bounded spectral noise reduction
+   on a composed audio item. Listen for artifacts and check A/V sync: a generated
+   fixture measured about 20 ms of added onset delay. This is not voice isolation.
    Optional profile loudness/true-peak targets trigger measured two-pass processing
    and QC. `grade` adds reversible SDR brightness/exposure/contrast/saturation.
    PQ/HLG inputs receive a recorded per-source tone map before SDR compositing.
@@ -110,6 +127,9 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    geometry is linear/step position and constant-size crop pans, normal blend,
    without simultaneous transitions. Unsupported channels/effect animation,
    easing, viewport resizing and basic white-balance parameters refuse delivery.
+   `suggest-reframe` also creates a reviewable crop proposal from externally
+   observed subject boxes. It does not perform detection or verify unsampled
+   frames; check the full output and overlay visibility before accepting it.
 9. `render-start` freezes a sequence at expectedRevision and returns a durable job.
    Priority is -100..100; larger values run first, with stable ties. `batch-start`
    freezes 1..32 distinct sequences in one transaction. Poll `job-status` or
@@ -119,12 +139,16 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
     verifies its hash too. Each render has matching SRT/VTT, cover, indexed sheet
     and manifest. `delivery` packages a succeeded render or batch into a new
     directory with verified copied files, manifest and local HTML review page.
+    Its legacy manifests include full frozen project snapshots and current
+    review history; inspect them before sharing. Prefer the new checked
+    `batch-delivery` package when a reduced sharing manifest is appropriate.
     HDR/10-bit and lossless masters have a separately verified SDR review video.
     Use `artifact` with preview:true to retrieve it; otherwise retrieve the master.
     A normal SDR master is also its preview. The HTML plays the SDR preview and
-    links to the master. Its feedback controls copy the render ID, revision and
-    either a playback time or a marked start/end range for the creator to share.
-    Marking a range does not itself save a review. Preview color is not an HDR
+    links to the master. Its offline composer exports frozen-identity notes and
+    explicit version decisions; `review-import` validates and saves them atomically.
+    Multi-output pages offer independent A/B players. Marking a range does not
+    itself save a review. Preview color is not an HDR
     appearance reference.
     `compare-outputs` takes two completed queued job IDs and reports retained,
     added, omitted and uniquely reordered source ranges for plain-cut assemblies.
@@ -135,6 +159,9 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
     prepares public chapter text only from explicitly selected markers and
     caller-supplied titles. Neither operation uploads or establishes acceptance;
     see [delivery checks and chapters](docs/creator-delivery-checks.md).
+    `thumbnail-candidates` extracts creator-selected frames from a verified SDR
+    review video; `batch-delivery` packages per-output briefs, results and
+    caller-authored metadata while retaining successful siblings.
     The delivery manifest records failed batch outputs and unresolved feedback;
     the HTML presents succeeded videos. Use host file tools
     to return the bundle or MP4. Technical QC cannot approve content or appearance.

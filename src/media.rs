@@ -39,6 +39,30 @@ pub fn hash_file_controlled(
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+/// Reject existing symbolic links in project-owned directory slots before
+/// opening their contents. This is a static path check, not a defense against
+/// a concurrent process replacing directories after validation.
+pub(crate) fn project_directory(root: &Path, name: &str) -> Result<PathBuf> {
+    debug_assert!(matches!(name, "originals" | "analysis" | "cache"));
+    let path = root.canonicalize()?.join(name);
+    if !std::fs::symlink_metadata(&path)?.file_type().is_dir() {
+        return Err(Error::Invalid(format!(
+            "project {name} must be a real directory"
+        )));
+    }
+    Ok(path)
+}
+
+/// Check a cached or managed file without following a symlink at its leaf.
+pub(crate) fn regular_file(path: &Path, description: &str) -> Result<()> {
+    if !std::fs::symlink_metadata(path)?.file_type().is_file() {
+        return Err(Error::Invalid(format!(
+            "{description} must be a regular file"
+        )));
+    }
+    Ok(())
+}
+
 /// Originals are addressed by bytes, never by a caller-controlled destination.
 pub fn import(
     root: &Path,
@@ -247,19 +271,15 @@ pub(crate) fn verify_asset_controlled(
     if expected.len() != 64 || !expected.bytes().all(|c| c.is_ascii_hexdigit()) {
         return Err(Error::Invalid("invalid asset content identity".into()));
     }
-    let target = root.join(&asset.uri);
-    if !std::fs::symlink_metadata(&target)?.file_type().is_file() {
-        return Err(Error::Invalid(
-            "managed originals must be regular files".into(),
-        ));
-    }
     if asset.uri != format!("originals/{expected}") {
         return Err(Error::Invalid(format!(
             "asset {} is not a managed original",
             asset.id
         )));
     }
-    if hash_file_controlled(&root.join(&asset.uri), control)? != expected {
+    let target = project_directory(root, "originals")?.join(expected);
+    regular_file(&target, "managed original")?;
+    if hash_file_controlled(&target, control)? != expected {
         return Err(Error::Invalid(format!("asset {} bytes changed", asset.id)));
     }
     Ok(())
@@ -312,6 +332,8 @@ pub(crate) fn render_attempt(
     // Catch it before the potentially expensive encode, while preserving the
     // frozen input and any previously published artifact.
     crate::delivery::sidecars(project.require_sequence(sequence)?)?;
+    let assembled = crate::assembly::policy(project.require_sequence(sequence)?)?.is_some();
+    crate::audio_cleanup::validate_scope(project, sequence, assembled)?;
     for asset in &project.assets {
         verify_asset_controlled(root, asset, control)?;
     }
@@ -322,7 +344,6 @@ pub(crate) fn render_attempt(
     std::fs::create_dir(&directory)?;
     let staged = directory.join("unverified.mp4");
     crate::animation::validate(project, sequence)?;
-    let assembled = crate::assembly::policy(project.require_sequence(sequence)?)?.is_some();
     let contract = crate::preserve::output(project, sequence)?;
     let preflight = crate::assembly::preflight(project, sequence)?;
     let info = crate::process::run(
@@ -335,11 +356,12 @@ pub(crate) fn render_attempt(
         .next()
         .unwrap_or("unknown")
         .to_owned();
-    let (mut plan, seeks, color_decisions) = if assembled {
+    let (mut plan, seeks, color_decisions, cleanup) = if assembled {
         (
             crate::preserve::plan(project, root, sequence, &staged, backend, toolchain)?,
             std::collections::BTreeMap::new(),
             preflight["sources"].clone(),
+            Vec::new(),
         )
     } else {
         let preset = agentcut_render::preset::require("h264-mp4")?;
@@ -363,9 +385,13 @@ pub(crate) fn render_attempt(
         let mut plan = agentcut_render::compile::compile(&ir, backend.ffmpeg_path(), &toolchain)?;
         let decisions = crate::color::adapt(&mut plan, &instanced)?;
         crate::audio::adapt_fades(&mut plan, &ir)?;
+        let cleanup = crate::audio_cleanup::adapt(&mut plan, &ir, project, sequence)?;
+        if cleanup.iter().any(|item| item["status"] == "applied") {
+            crate::audio_cleanup::require_filter(backend, control)?;
+        }
         crate::audio::adapt(&mut plan, &ir, project.require_sequence(sequence)?)?;
         crate::animation::adapt(&mut plan, &ir, &prepared)?;
-        (plan, seeks, decisions)
+        (plan, seeks, decisions, cleanup)
     };
     if plan.duration_seconds > 3600.0 {
         return Err(Error::Invalid(
@@ -511,7 +537,7 @@ pub(crate) fn render_attempt(
         delivery["files"].as_array_mut().ok_or_else(|| Error::Invalid("delivery files missing".into()))?.push(json!({"path":"review-sdr.mp4","sha256":verification["sha256"],"mimeType":"video/mp4","verification":verification,"role":"SDR review preview; master remains source-preserving"}));
     }
     let sheet = contact_sheet(&review_path, &directory, backend, plan.frame_count, control)?;
-    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":snapshot,"inputSeeksSeconds":seeks,"colorDecisions":color_decisions,"audioQc":audio_qc,"delivery":delivery,"outputColor":contract,"editPreflight":preflight,"resourcePolicy":{"childAddressSpaceBytes":4294967296_u64,"childFileBytes":34359738368_u64,"threads":2,"decoderThreadsPerInput":1,"encodeDeadlineSeconds":28800}});
+    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":snapshot,"inputSeeksSeconds":seeks,"colorDecisions":color_decisions,"audioQc":audio_qc,"audioCleanup":cleanup,"delivery":delivery,"outputColor":contract,"editPreflight":preflight,"resourcePolicy":{"childAddressSpaceBytes":4294967296_u64,"childFileBytes":34359738368_u64,"threads":2,"decoderThreadsPerInput":1,"encodeDeadlineSeconds":28800}});
     let mut manifest_file = File::create(directory.join("manifest.json"))?;
     manifest_file.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
     manifest_file.sync_all()?;

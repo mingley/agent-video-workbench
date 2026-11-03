@@ -1,5 +1,120 @@
 {
   "$defs": {
+    "AlignedWord": {
+      "additionalProperties": false,
+      "description": "A text span and its proposed half-open source-time interval.\nText offsets are UTF-8 bytes into the selected, corrected cue text.",
+      "properties": {
+        "confidence": {
+          "default": null,
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "cueId": {
+          "type": "string"
+        },
+        "endMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "speaker": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "startMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        },
+        "textEndByte": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "textStartByte": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "cueId",
+        "text",
+        "textStartByte",
+        "textEndByte",
+        "startMs",
+        "endMs"
+      ],
+      "type": "object"
+    },
+    "AlignmentProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "assetId": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "providerVersion": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sourceSha256": {
+          "type": "string"
+        },
+        "transcriptSha256": {
+          "type": "string"
+        },
+        "words": {
+          "items": {
+            "$ref": "#/$defs/AlignedWord"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "assetId",
+        "sourceSha256",
+        "transcriptSha256",
+        "provider",
+        "providerVersion",
+        "words"
+      ],
+      "type": "object"
+    },
+    "AlignmentReview": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "type": "string"
+        },
+        "reviewer": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reviewer",
+        "note"
+      ],
+      "type": "object"
+    },
     "Assemble": {
       "additionalProperties": false,
       "properties": {
@@ -51,6 +166,27 @@
       ],
       "type": "object"
     },
+    "BatchBrief": {
+      "additionalProperties": false,
+      "properties": {
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/OutputBrief"
+          },
+          "type": "array"
+        },
+        "schemaVersion": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "outputs"
+      ],
+      "type": "object"
+    },
     "Brief": {
       "additionalProperties": false,
       "properties": {
@@ -88,6 +224,83 @@
       ],
       "type": "object"
     },
+    "Candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "assetId": {
+          "type": "string"
+        },
+        "confidence": {
+          "default": null,
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "endMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "outputId": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "sourceSha256": {
+          "type": "string"
+        },
+        "startMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "outputId",
+        "assetId",
+        "sourceSha256",
+        "startMs",
+        "endMs",
+        "title",
+        "reason",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "CaptionTranslation": {
+      "additionalProperties": false,
+      "properties": {
+        "captionId": {
+          "type": "string"
+        },
+        "sourceTextSha256": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "captionId",
+        "sourceTextSha256",
+        "text"
+      ],
+      "type": "object"
+    },
     "ChapterSelection": {
       "additionalProperties": false,
       "properties": {
@@ -103,6 +316,56 @@
         "title"
       ],
       "type": "object"
+    },
+    "CleanupEdit": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "set",
+              "type": "string"
+            },
+            "itemId": {
+              "type": "string"
+            },
+            "sequence": {
+              "type": "string"
+            },
+            "settings": {
+              "$ref": "#/$defs/Settings"
+            }
+          },
+          "required": [
+            "action",
+            "sequence",
+            "itemId",
+            "settings"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "remove",
+              "type": "string"
+            },
+            "itemId": {
+              "type": "string"
+            },
+            "sequence": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "sequence",
+            "itemId"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "Color": {
       "enum": [
@@ -155,6 +418,30 @@
         "fontAssetId",
         "cuts"
       ],
+      "type": "object"
+    },
+    "ContentMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
       "type": "object"
     },
     "Cue": {
@@ -594,6 +881,16 @@
               "minimum": 0,
               "type": "integer"
             },
+            "translationProvenance": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TranslationProvenance"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "width": {
               "format": "uint32",
               "minimum": 0,
@@ -880,6 +1177,97 @@
       ],
       "type": "object"
     },
+    "Evidence": {
+      "description": "Distinguish text verified against the active transcript from an agent's own\ninterpretation of video or audio, which AVW cannot independently verify.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "cueId": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "transcript-cue",
+              "type": "string"
+            },
+            "transcriptSha256": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "transcriptSha256",
+            "cueId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "observation",
+              "type": "string"
+            },
+            "modality": {
+              "$ref": "#/$defs/Modality"
+            }
+          },
+          "required": [
+            "kind",
+            "modality",
+            "description"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "EvidenceQuery": {
+      "additionalProperties": false,
+      "description": "A source-time range divided into pages for an external agent to inspect.",
+      "properties": {
+        "assetId": {
+          "type": "string"
+        },
+        "endMs": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "limit": {
+          "default": 5,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "startMs": {
+          "default": 0,
+          "format": "int64",
+          "type": "integer"
+        },
+        "windowMs": {
+          "default": 30000,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "assetId"
+      ],
+      "type": "object"
+    },
     "FrameRate": {
       "additionalProperties": false,
       "properties": {
@@ -900,6 +1288,40 @@
       ],
       "type": "object"
     },
+    "HighlightBrief": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/Candidate"
+          },
+          "type": "array"
+        },
+        "contextMs": {
+          "default": 1000,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "targetDurationMs": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "objective",
+        "candidates"
+      ],
+      "type": "object"
+    },
     "Kind": {
       "enum": [
         "metadata",
@@ -908,6 +1330,124 @@
         "scenes"
       ],
       "type": "string"
+    },
+    "MediaRequest": {
+      "description": "Transport convenience for media which the existing service has inspected\nor verified. The caller cannot supply an arbitrary file path.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "assetId": {
+              "type": "string"
+            },
+            "atMs": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "kind": {
+              "const": "frame",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project",
+            "assetId",
+            "atMs"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "jobId": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "contact-sheet",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project",
+            "jobId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "durationMs": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "jobId": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "audio-proxy",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "startMs": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "project",
+            "jobId",
+            "startMs",
+            "durationMs"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Modality": {
+      "enum": [
+        "video",
+        "audio"
+      ],
+      "type": "string"
+    },
+    "OutputBrief": {
+      "additionalProperties": false,
+      "properties": {
+        "brief": {
+          "$ref": "#/$defs/DeliveryBrief"
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sequenceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sequenceId",
+        "brief"
+      ],
+      "type": "object"
     },
     "Pacing": {
       "enum": [
@@ -1048,12 +1588,116 @@
       ],
       "type": "object"
     },
+    "ProviderSearch": {
+      "additionalProperties": false,
+      "description": "Search a source using an explicitly configured external provider. The\nprovider receives the original source path under the existing contract.",
+      "properties": {
+        "assetId": {
+          "type": "string"
+        },
+        "endMs": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "maxResults": {
+          "default": 5,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "modality": {
+          "$ref": "#/$defs/SearchModality",
+          "default": "multimodal"
+        },
+        "query": {
+          "type": "string"
+        },
+        "sourceSha256": {
+          "type": "string"
+        },
+        "startMs": {
+          "default": 0,
+          "format": "int64",
+          "type": "integer"
+        },
+        "targetDurationMs": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "assetId",
+        "sourceSha256",
+        "query"
+      ],
+      "type": "object"
+    },
     "Quality": {
       "enum": [
         "high",
         "lossless"
       ],
       "type": "string"
+    },
+    "ReframeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "itemId": {
+          "type": "string"
+        },
+        "maxGapMs": {
+          "default": 2000,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "minConfidence": {
+          "default": 0.5,
+          "format": "double",
+          "type": "number"
+        },
+        "observer": {
+          "description": "Identity supplied by the observer; it is not independently authenticated.",
+          "type": "string"
+        },
+        "safeInset": {
+          "default": 0.0,
+          "description": "Fraction of each output edge to keep clear around observed subjects.",
+          "format": "double",
+          "type": "number"
+        },
+        "samples": {
+          "items": {
+            "$ref": "#/$defs/SubjectSample"
+          },
+          "type": "array"
+        },
+        "schemaVersion": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sourceSha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "itemId",
+        "sourceSha256",
+        "observer",
+        "samples"
+      ],
+      "type": "object"
     },
     "Region": {
       "additionalProperties": false,
@@ -1099,6 +1743,112 @@
       ],
       "type": "object"
     },
+    "ReviewDecisionStatus": {
+      "enum": [
+        "approved",
+        "changes-requested"
+      ],
+      "type": "string"
+    },
+    "ReviewDraft": {
+      "additionalProperties": false,
+      "properties": {
+        "artifactRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "artifactSha256": {
+          "type": "string"
+        },
+        "decision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewDraftDecision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "draftId": {
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ReviewDraftItem"
+          },
+          "type": "array"
+        },
+        "jobId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "draftId",
+        "projectId",
+        "jobId",
+        "artifactRevision",
+        "artifactSha256",
+        "items"
+      ],
+      "type": "object"
+    },
+    "ReviewDraftDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ReviewDecisionStatus"
+        }
+      },
+      "required": [
+        "status",
+        "actor"
+      ],
+      "type": "object"
+    },
+    "ReviewDraftItem": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "atMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "endMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "atMs",
+        "endMs",
+        "actor",
+        "text"
+      ],
+      "type": "object"
+    },
     "ReviewState": {
       "enum": [
         "open",
@@ -1116,6 +1866,36 @@
         "reordered-source"
       ],
       "type": "string"
+    },
+    "SearchModality": {
+      "enum": [
+        "speech",
+        "visual",
+        "multimodal"
+      ],
+      "type": "string"
+    },
+    "Settings": {
+      "additionalProperties": false,
+      "properties": {
+        "noiseFloorDb": {
+          "format": "int8",
+          "maximum": 127,
+          "minimum": -128,
+          "type": "integer"
+        },
+        "noiseReductionDb": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "noiseReductionDb",
+        "noiseFloorDb"
+      ],
+      "type": "object"
     },
     "Sidecar": {
       "enum": [
@@ -1163,6 +1943,32 @@
         "id",
         "minDurationMs",
         "maxDurationMs"
+      ],
+      "type": "object"
+    },
+    "SubjectSample": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "format": "double",
+          "type": "number"
+        },
+        "regions": {
+          "description": "Boxes are normalized to the upright source after sample-aspect correction.",
+          "items": {
+            "$ref": "#/$defs/Region"
+          },
+          "type": "array"
+        },
+        "sourceMs": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sourceMs",
+        "regions",
+        "confidence"
       ],
       "type": "object"
     },
@@ -1356,6 +2162,28 @@
       ],
       "type": "object"
     },
+    "ThumbnailRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "atMs": {
+          "items": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "schemaVersion": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "atMs"
+      ],
+      "type": "object"
+    },
     "Transcript": {
       "additionalProperties": false,
       "properties": {
@@ -1382,6 +2210,88 @@
         "cues"
       ],
       "type": "object"
+    },
+    "TranslationProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "outputId": {
+          "type": "string"
+        },
+        "outputName": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "providerVersion": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sequence": {
+          "type": "string"
+        },
+        "sequenceSha256": {
+          "type": "string"
+        },
+        "sourceRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "targetLanguage": {
+          "type": "string"
+        },
+        "translations": {
+          "items": {
+            "$ref": "#/$defs/CaptionTranslation"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "projectId",
+        "sourceRevision",
+        "sequence",
+        "sequenceSha256",
+        "outputId",
+        "outputName",
+        "targetLanguage",
+        "provider",
+        "providerVersion",
+        "translations"
+      ],
+      "type": "object"
+    },
+    "TranslationProvenance": {
+      "additionalProperties": false,
+      "description": "Optional, attributable input for a variant operation. The digest binds the\nentire explicit proposal; it is not evidence of translation quality.",
+      "properties": {
+        "proposal": {
+          "$ref": "#/$defs/TranslationProposal"
+        },
+        "proposalSha256": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "proposalSha256",
+        "proposal"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1396,6 +2306,23 @@
       },
       "required": [
         "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "host-readiness",
+          "type": "string"
+        },
+        "workspace": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "workspace"
       ],
       "type": "object"
     },
@@ -1876,6 +2803,493 @@
         "project",
         "baselineJob",
         "candidateJob"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "source-evidence",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project": {
+          "type": "string"
+        },
+        "query": {
+          "$ref": "#/$defs/EvidenceQuery"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "expectedRevision",
+        "query"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "brief": {
+          "$ref": "#/$defs/HighlightBrief"
+        },
+        "command": {
+          "const": "prepare-highlights",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "expectedRevision",
+        "brief"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "provider-search",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project": {
+          "type": "string"
+        },
+        "search": {
+          "$ref": "#/$defs/ProviderSearch"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "expectedRevision",
+        "search"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "provider-search-results",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "jobId": {
+          "type": "string"
+        },
+        "outputPrefix": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "expectedRevision",
+        "jobId",
+        "outputPrefix"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "suggest-reframe",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "observations": {
+          "$ref": "#/$defs/ReframeRequest"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "expectedRevision",
+        "observations"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "audio-cleanup",
+          "type": "string"
+        },
+        "dryRun": {
+          "default": false,
+          "type": "boolean"
+        },
+        "edit": {
+          "$ref": "#/$defs/CleanupEdit"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "expectedRevision",
+        "key",
+        "edit"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "review-import",
+          "type": "string"
+        },
+        "draft": {
+          "$ref": "#/$defs/ReviewDraft"
+        },
+        "dryRun": {
+          "default": false,
+          "type": "boolean"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "expectedRevision",
+        "key",
+        "draft"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "preview-word-alignment",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project": {
+          "type": "string"
+        },
+        "proposal": {
+          "$ref": "#/$defs/AlignmentProposal"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "expectedRevision",
+        "proposal"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "accept-word-alignment",
+          "type": "string"
+        },
+        "dryRun": {
+          "default": false,
+          "type": "boolean"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "proposal": {
+          "$ref": "#/$defs/AlignmentProposal"
+        },
+        "review": {
+          "$ref": "#/$defs/AlignmentReview"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "expectedRevision",
+        "key",
+        "proposal",
+        "review"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "assetId": {
+          "type": "string"
+        },
+        "command": {
+          "const": "word-alignment",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "limit": {
+          "default": 50,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "assetId"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "translation-context",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "limit": {
+          "default": 50,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "sequence",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "plan-translation",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "proposal": {
+          "$ref": "#/$defs/TranslationProposal"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "expectedRevision",
+        "key",
+        "proposal"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "brief": {
+          "$ref": "#/$defs/BatchBrief"
+        },
+        "command": {
+          "const": "batch-delivery-check",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "id",
+        "brief"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "brief": {
+          "$ref": "#/$defs/BatchBrief"
+        },
+        "command": {
+          "const": "batch-delivery",
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "id",
+        "destination",
+        "brief"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "thumbnail-candidates",
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "selection": {
+          "$ref": "#/$defs/ThumbnailRequest"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "id",
+        "destination",
+        "selection"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "agent-media",
+          "type": "string"
+        },
+        "media": {
+          "$ref": "#/$defs/MediaRequest"
+        }
+      },
+      "required": [
+        "command",
+        "media"
       ],
       "type": "object"
     },
