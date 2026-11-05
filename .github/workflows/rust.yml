@@ -34,6 +34,7 @@ jobs:
           set -euo pipefail
           media="$RUNNER_TEMP/tools/ffmpeg8/linux"
           python3 evaluation/application_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/application"
+          python3 evaluation/source_views_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/source-views"
           python3 evaluation/job_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --project "$RUNNER_TEMP/application/backup" --output "$RUNNER_TEMP/jobs"
           python3 evaluation/media_matrix.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/matrix"
           python3 evaluation/combined_media_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/combined"
@@ -58,6 +59,7 @@ jobs:
           npm ci --ignore-scripts --prefix evaluation
           "$RUNNER_TEMP/release/avw/install.sh" "$RUNNER_TEMP/bin"
           media="$RUNNER_TEMP/tools/ffmpeg8/linux"
+          node evaluation/source_views_mcp_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" "$RUNNER_TEMP/source-views" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
           node evaluation/agent_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf "$RUNNER_TEMP/agent" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
           node evaluation/preserve_agent_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" "$RUNNER_TEMP/source-preserve/pq.mp4" "$RUNNER_TEMP/preserve-agent" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
           node evaluation/compare_smoke.mjs "$RUNNER_TEMP/bin/avw" "$media/ffmpeg" "$media/ffprobe" "$RUNNER_TEMP/compare" "$PWD/evaluation/node_modules/@modelcontextprotocol/sdk"
@@ -88,6 +90,7 @@ jobs:
             ${{ runner.temp }}/release/*.tar.gz
             ${{ runner.temp }}/release/SHA256SUMS
             ${{ runner.temp }}/application/summary.json
+            ${{ runner.temp }}/source-views/summary.json
             ${{ runner.temp }}/jobs/summary.json
             ${{ runner.temp }}/matrix/summary.json
             ${{ runner.temp }}/combined/summary.json

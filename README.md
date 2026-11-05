@@ -5,6 +5,12 @@ stdio. It owns immutable originals, editable projects, revision history,
 analysis, persistent jobs and verified delivery. The agent chooses content and
 uses its host's file tools to deliver results.
 
+**0.5.0 adds [source storyboards and budget-aware previews](docs/source-views.md).**
+Browse cached thumbnail pages with observed timestamps and transcript context,
+then request small clips with measured duration/byte caps and original-frame
+mapping. Sparse coverage and unsupported clocks are explicit. The agent selects
+content; AVW preserves originals and executes validated operations.
+
 **0.4.0 builds: source-matched cuts and HDR preservation.** Start with
 [`assemble` and edit preflight](docs/natural-edit.md) to retain original framing,
 color and timing without automatic captions or crop. Plain 10-bit PQ/HLG cuts
@@ -45,7 +51,7 @@ page. The native binary installer needs no Rust compiler, Node, GUI or root
 (see deployment for installation without a checkout):
 
 ```sh
-AVW_VERSION=0.4.0
+AVW_VERSION=0.5.0
 scripts/install-release.sh /path/to/new-bin "$AVW_VERSION"
 scripts/setup-media.sh /path/to/tools
 /path/to/new-bin/avw --ffmpeg /path/to/tools/ffmpeg8/linux/ffmpeg \
@@ -79,6 +85,7 @@ qualification; the tool reports unsupported rendering paths explicitly.
 
 | Document | Purpose |
 | --- | --- |
+| [Source views](docs/source-views.md) | Cached source pages, observed timestamps and constrained previews |
 | [First edit](docs/first-edit.md) | Tested import-to-delivery CLI/MCP walkthrough |
 | [Natural edit](docs/natural-edit.md) | Source-matched HDR/SDR baseline, preflight and review |
 | [Edit planning](docs/edit-planning.md) | Briefs, source context, speech handles and durable cut decisions |

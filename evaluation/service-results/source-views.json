@@ -1,0 +1,273 @@
+{
+  "passed": true,
+  "version": "0.5.0",
+  "localValidation": {
+    "rustTests": 180,
+    "strictClippy": true,
+    "releaseBuild": true,
+    "generatedSchema": true,
+    "publisherGateTests": 6,
+    "mediaAndMcp": {
+      "passed": true,
+      "storyboardTotalSamples": 3,
+      "pagination": true,
+      "observedFrameTimes": true,
+      "cacheHit": true,
+      "storyboardColdSeconds": 0.4273226290024468,
+      "storyboardWarmSeconds": 0.1212522040004842,
+      "previewSeconds": 0.9356658859978779,
+      "previewBytes": 1242586,
+      "previewFrames": 300,
+      "hardCaps": true,
+      "adaptiveEncoding": true,
+      "actualDurationFailureRejected": true,
+      "transcriptContextInvalidation": true,
+      "cliAlias": true,
+      "impossibleBudgetRejected": true,
+      "originalUnchanged": true,
+      "nonzeroOriginVfrMapping": true,
+      "hdrSdrPreview": true,
+      "rotationAppliedOnce": true,
+      "delayedAudioOnsetSeconds": 0.75,
+      "lightBurstOnsetSeconds": 0.5,
+      "measuredAvOffsetSeconds": 0.25,
+      "tamperRejected": true,
+      "sourceTamperRejectedOnCacheHit": true,
+      "videoTamperRejected": true,
+      "revision": 5,
+      "limitations": [
+        "Generated local SDR; no semantic model or host-specific media acceptance",
+        "Storyboard is sparse; no claim to capture every important event"
+      ],
+      "officialMcpSdk": true,
+      "cliMcpReplayEquivalent": true,
+      "boundedPreviewAudioTransport": true
+    }
+  },
+  "benchmark": {
+    "passed": true,
+    "sourceSeconds": 120,
+    "sourceBytes": 102651966,
+    "sourceSha256": "9f14924354604f277aed271e3d3bff3b5a33f37203f0a7f37ea4f0b0f8a8979c",
+    "previewSeconds": 10,
+    "previewFps": 30,
+    "previewFrames": 300,
+    "storyboardSamples": 12,
+    "sampleEveryMs": 10000,
+    "repeatedSeconds": {
+      "storyboardCold": [
+        2.6318971979999333,
+        2.6171463360005873,
+        2.522047474005376
+      ],
+      "storyboardWarm": [
+        0.21563812800013693,
+        0.20520978000422474,
+        0.19922366699756822
+      ],
+      "previewCold": [
+        2.5245639069980825,
+        2.517779108005925,
+        2.622261939002783
+      ],
+      "previewWarm": [
+        0.1999293859989848,
+        0.20563469699845882,
+        0.20694134700170252
+      ]
+    },
+    "medianSeconds": {
+      "storyboardCold": 2.6171463360005873,
+      "storyboardWarm": 0.20520978000422474,
+      "previewCold": 2.5245639069980825,
+      "previewWarm": 0.20563469699845882
+    },
+    "measurements": [
+      {
+        "kind": "storyboard",
+        "phase": "Cold",
+        "seconds": 2.6318971979999333,
+        "bytes": 146015,
+        "cacheHit": false,
+        "encodingAttempts": null
+      },
+      {
+        "kind": "storyboard",
+        "phase": "Warm",
+        "seconds": 0.21563812800013693,
+        "bytes": 146015,
+        "cacheHit": true,
+        "encodingAttempts": null
+      },
+      {
+        "kind": "preview",
+        "phase": "Cold",
+        "seconds": 2.5245639069980825,
+        "bytes": 885088,
+        "cacheHit": false,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "kind": "preview",
+        "phase": "Warm",
+        "seconds": 0.1999293859989848,
+        "bytes": 885088,
+        "cacheHit": true,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "kind": "storyboard",
+        "phase": "Cold",
+        "seconds": 2.6171463360005873,
+        "bytes": 146015,
+        "cacheHit": false,
+        "encodingAttempts": null
+      },
+      {
+        "kind": "storyboard",
+        "phase": "Warm",
+        "seconds": 0.20520978000422474,
+        "bytes": 146015,
+        "cacheHit": true,
+        "encodingAttempts": null
+      },
+      {
+        "kind": "preview",
+        "phase": "Cold",
+        "seconds": 2.517779108005925,
+        "bytes": 885088,
+        "cacheHit": false,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "kind": "preview",
+        "phase": "Warm",
+        "seconds": 0.20563469699845882,
+        "bytes": 885088,
+        "cacheHit": true,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "kind": "storyboard",
+        "phase": "Cold",
+        "seconds": 2.522047474005376,
+        "bytes": 146015,
+        "cacheHit": false,
+        "encodingAttempts": null
+      },
+      {
+        "kind": "storyboard",
+        "phase": "Warm",
+        "seconds": 0.19922366699756822,
+        "bytes": 146015,
+        "cacheHit": true,
+        "encodingAttempts": null
+      },
+      {
+        "kind": "preview",
+        "phase": "Cold",
+        "seconds": 2.622261939002783,
+        "bytes": 885088,
+        "cacheHit": false,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "kind": "preview",
+        "phase": "Warm",
+        "seconds": 0.20694134700170252,
+        "bytes": 885088,
+        "cacheHit": true,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      }
+    ],
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "cpuModel": "AMD EPYC 9V74 80-Core Processor",
+    "cpuQuota": "400000 100000",
+    "memoryLimitBytes": "17179869184",
+    "binarySha256": "768cd43597eea607831416d44e7d0ea74fa911f3fadf78d7eb15c8ca3ba1ff15",
+    "limits": [
+      "Generated SDR; warm OS filesystem cache; no concurrent build/render",
+      "Cold means uncached analysis recipe, not cold disk. Source import/generation excluded; queue, worker, source/attachment integrity and artifact lookup included.",
+      "No semantic model/ASR or host-specific media acceptance tested; camera/4K performance is not inferred",
+      "Three budget variants force uncached work; quality/dimensions and all source frames are preserved within each recipe"
+    ]
+  }
+}

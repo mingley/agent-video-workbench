@@ -224,6 +224,52 @@
       ],
       "type": "object"
     },
+    "BudgetPreview": {
+      "additionalProperties": false,
+      "properties": {
+        "assetId": {
+          "type": "string"
+        },
+        "endMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxBytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxDurationMs": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "startMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "assetId",
+        "startMs",
+        "endMs",
+        "maxDurationMs",
+        "maxBytes",
+        "width",
+        "height"
+      ],
+      "type": "object"
+    },
     "Candidate": {
       "additionalProperties": false,
       "properties": {
@@ -1384,6 +1430,27 @@
         {
           "additionalProperties": false,
           "properties": {
+            "jobId": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "storyboard",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project",
+            "jobId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "durationMs": {
               "format": "uint32",
               "minimum": 0,
@@ -1946,6 +2013,61 @@
       ],
       "type": "object"
     },
+    "Storyboard": {
+      "additionalProperties": false,
+      "properties": {
+        "assetId": {
+          "type": "string"
+        },
+        "endMs": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "limit": {
+          "default": 12,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxBytes": {
+          "default": 1048576,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sampleEveryMs": {
+          "default": 10000,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "startMs": {
+          "default": 0,
+          "format": "int64",
+          "type": "integer"
+        },
+        "tileWidth": {
+          "default": 256,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "assetId"
+      ],
+      "type": "object"
+    },
     "SubjectSample": {
       "additionalProperties": false,
       "properties": {
@@ -1974,6 +2096,117 @@
     },
     "Task": {
       "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "assetId": {
+              "type": "string"
+            },
+            "endMs": {
+              "default": null,
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "storyboard",
+              "type": "string"
+            },
+            "limit": {
+              "default": 12,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxBytes": {
+              "default": 1048576,
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "default": 0,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sampleEveryMs": {
+              "default": 10000,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "startMs": {
+              "default": 0,
+              "format": "int64",
+              "type": "integer"
+            },
+            "tileWidth": {
+              "default": 256,
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "assetId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "assetId": {
+              "type": "string"
+            },
+            "endMs": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "height": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "budget-preview",
+              "type": "string"
+            },
+            "maxBytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxDurationMs": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "startMs": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "width": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "assetId",
+            "startMs",
+            "endMs",
+            "maxDurationMs",
+            "maxBytes",
+            "width",
+            "height"
+          ],
+          "type": "object"
+        },
         {
           "additionalProperties": false,
           "properties": {
@@ -3781,6 +4014,86 @@
         "command",
         "project",
         "destination"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "source-storyboard",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key": {
+          "type": "string"
+        },
+        "noLaunch": {
+          "default": false,
+          "type": "boolean"
+        },
+        "priority": {
+          "default": 0,
+          "format": "int32",
+          "type": "integer"
+        },
+        "project": {
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/Storyboard"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "request",
+        "expectedRevision",
+        "key"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "budget-preview",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key": {
+          "type": "string"
+        },
+        "noLaunch": {
+          "default": false,
+          "type": "boolean"
+        },
+        "priority": {
+          "default": 0,
+          "format": "int32",
+          "type": "integer"
+        },
+        "project": {
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/BudgetPreview"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "request",
+        "expectedRevision",
+        "key"
       ],
       "type": "object"
     },
