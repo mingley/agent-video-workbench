@@ -143,3 +143,8 @@ Generated-media checks establish tested cases, not arbitrary camera/host support
 
 [Implementation evidence and benchmark](implementation-status.md#source-browsing-and-constrained-review-media-050)
 records generated-media checks and their limits.
+
+The 0.5.1 source improves execution latency; see
+[the repeated comparison](source-view-performance.md) for measurements, the
+storyboard memory tradeoff and qualification scope. Impossible byte-budget
+errors include the smallest measured attempt so callers can revise the budget.

@@ -1,5 +1,25 @@
 # Implementation and qualification
 
+## Source-view latency improvements on 0.5.1 source
+
+The runner wakes on child exit instead of waiting for a polling interval.
+Storyboards compose up to four accurately sought inputs per row; coded frames
+larger than 1920×1080 retain sequential decoding. Preview output timestamps and
+full audio/video validation share one decode. Byte-budget errors report the
+smallest measured encoding attempt. Original integrity checks, request types,
+duration/byte caps and native frame mappings retain their semantics.
+
+Five interleaved generated 120-second 720p/30fps runs measured median storyboard
+time of 2.312s → 0.902s and ten-second/300-frame preview time of 2.315s → 1.940s.
+Cached recipes fell from about 0.19s to 0.10s. Decoded pixels/audio/timestamps
+match for every measured recipe. Storyboard peak single-process memory rose
+from about 33MiB to 105MiB on that fixture. The local suite passes 183 Rust tests,
+strict lint/format/schema/build checks, extended source-view and official MCP
+checks, application exports and worker recovery/cancellation. Native ARM64 and
+release publication require their separate qualification. See
+[research and scope](source-view-performance.md) and
+[the reproducible evidence](../evaluation/service-results/source-view-performance.json).
+
 ## Source browsing and constrained review media (0.5.0)
 
 `source-storyboard` builds cached pages of uniformly sampled source frames with

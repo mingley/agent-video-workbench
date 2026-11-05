@@ -1,4 +1,4 @@
-# Develop Agent Video Workbench 0.4.0
+# Develop Agent Video Workbench 0.5.1
 
 The Rust application provides durable local projects, a typed CLI/JSON API,
 MCP stdio, source inspection, optional local transcription, captioned named
@@ -40,6 +40,12 @@ or browser evaluations. A commit message containing `[skip ci]` avoids launching
 the two native GitHub Actions jobs for that push. Omit the marker when native CI
 is needed for a specific qualification or release, and record its actual result;
 local checks do not establish ARM64 or release qualification.
+
+Internal PRs reuse their source branch's push qualification; fork PRs still run
+native qualification in this repository. Verify a successful push run on the
+exact internal PR head before merging. A release-request-only push skips the
+Rust build and invokes the existing qualified-artifact publisher. Do not add
+`[skip ci]` to that publication commit: it would also skip the publisher.
 
 ## Media and agent checks
 
@@ -234,6 +240,16 @@ executables and do not supply a semantic model. Local model/hour checks remain
 separate from native CI; do not claim arbitrary camera/language/host support.
 
 ## Publish qualified artifacts
+
+For source-view changes, run `evaluation/source_views_smoke.py` with the same
+`--avw`, `--ffmpeg`, `--ffprobe` and fresh `--output` arguments as above. Then run
+`evaluation/source_views_mcp_smoke.mjs` with the binary, media paths, that existing
+output root and the official SDK directory. The media check validates cells and
+clocks against independent decodes, bounded source decoder concurrency and one
+preview output-validation decode. Use `evaluation/source_views_performance.py`
+for an interleaved baseline/candidate comparison; follow its help and
+[the measurement scope](docs/source-view-performance.md). Benchmark without a
+concurrent build or render.
 
 Update `.github/release-request.json` only for an intended release, binding its
 version, full source commit, successful native qualification run and notes under

@@ -200,7 +200,7 @@ pub fn run(
     )?;
     let mut identity = json!({"source":asset.fingerprint.sha256,"input":input,"tool":String::from_utf8_lossy(&tool.stdout),"adapterVersion":2});
     if matches!(input.task, Task::Storyboard(_) | Task::BudgetPreview(_)) {
-        identity["sourceMetadata"] = json!({"metadata":asset.metadata,"probe":asset.extensions.get(crate::color::PROBE),"viewAdapterVersion":4});
+        identity["sourceMetadata"] = json!({"metadata":asset.metadata,"probe":asset.extensions.get(crate::color::PROBE),"viewAdapterVersion":5});
     }
     if let Task::Storyboard(q) = &input.task {
         identity["transcripts"] = json!(
