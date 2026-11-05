@@ -23,6 +23,19 @@ excerpts. Native qualification/publication uses 36 x86_64 and 31 ARM64 summaries
 including these new workflows; exact source/run records are bound by the release
 request and published native manifests. Local results alone are not ARM64 proof.
 
+[Native qualification](https://github.com/mingley/agent-video-workbench/actions/runs/42055909251)
+passed on source commit `d025611bd3db56209c03c5d70d2e472ffc600809` for both
+architectures: 180 Rust tests passed on each, with two existing opt-in tests
+ignored by the ordinary suite. All 36 x86_64 and 31 ARM64 functional summaries
+passed, including installed CLI/MCP workflows and x86_64 browser checks.
+The [0.5.0 release](https://github.com/mingley/agent-video-workbench/releases/tag/v0.5.0)
+publishes those exact archives. Its public installer verified the x86_64 binary
+against the native manifest; fresh generated source-view and official MCP SDK
+checks passed against that downloaded binary. ARM64 was tested in native CI,
+not installed on the local x86_64 host. See the
+[release evidence](../evaluation/service-results/release-0.5.0.json) for identities,
+checksums and limits.
+
 On the generated 120-second 720p/30fps source, three uncached/warm recipe runs
 measured the following medians, including queue/worker/integrity/artifact lookup
 and excluding initial source generation/import. See [the reproducible record](../evaluation/service-results/source-views.json)
@@ -48,7 +61,7 @@ frame metadata for very short exports. It also retains the earlier CLI result-fi
 extraction, new-project creator metadata and clarified setup/defaults.
 [The measured report](performance-feedback.md) records the before/after timings,
 identical decoded pixels/audio, longer-than-ten-second reproduction, local tests
-and remaining platform/media limitations. This is not a new published release.
+and remaining platform/media limitations. These changes are included in 0.5.0.
 
 ## Creator-agent toolkit on current source
 

@@ -242,7 +242,9 @@ functional summaries and archive/binary/source identities. For 0.3.1 this is
 12 summaries on x86_64 and 11 on ARM64; the browser check is explicitly skipped
 on ARM64. The 0.4.0 pipeline requires 35 summaries on x86_64 and 30 on ARM64,
 including color/memory, preservation and newer creator-agent workflows; browser
-suites run only on x86_64. Local ASR and one-hour measurements remain separate. It uploads the exact
+suites run only on x86_64. The 0.5.0 pipeline adds source-view CLI/MCP checks,
+requiring 36 summaries on x86_64 and 31 on ARM64. Local ASR and one-hour
+measurements remain separate. It uploads the exact
 qualified assets through Actions, verifies existing asset bytes on retry, and
 refuses to replace different assets or a different target. A published release
 is immutable in this workflow. Run the public installer and official MCP trial

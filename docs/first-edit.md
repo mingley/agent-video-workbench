@@ -1,11 +1,11 @@
 # Make and deliver your first edit
 
-This walkthrough targets **0.4.0** and creates two independent,
+This walkthrough targets **0.5.0** and creates two independent,
 captioned five-second outputs. The same JSON requests work in the MCP `avw`
 tool. Start with [installation](deployment.md); no speech model is required.
 Use a checkout for the request example files below; the installed binary needs
-no build. The automated ID extraction below uses the updated source CLI;
-explicit `jq` alternatives are provided for the published 0.4.0 binary.
+no build. The automated ID extraction below uses the 0.5.0 CLI;
+explicit `jq` alternatives are provided for the older 0.4.0 binary.
 You can also download the three JSON examples and substitute their
 local paths in the request commands.
 
@@ -95,7 +95,7 @@ avw worker "$avw_workspace/project"
 ```
 
 The variable captures the batch ID without copying it by hand. `--result-pointer`
-is available in the updated source build; for the published 0.4.0 binary, capture
+is available in 0.5.0; for the older 0.4.0 binary, capture
 the normal JSON response instead (enable Bash `pipefail` to retain command errors):
 
 ```bash

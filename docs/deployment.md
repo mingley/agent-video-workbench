@@ -1,12 +1,12 @@
 # Install and connect an agent
 
-The 0.4.0 build is a local single-user Linux CLI and MCP stdio server. It
-includes source-preserving HDR cuts and verified SDR preview retrieval; use the
-matching [published release](https://github.com/mingley/agent-video-workbench/releases/tag/v0.4.0)
-or build main with latest stable Rust using `cargo build
---release --locked` to try [natural edits](natural-edit.md) and
-[source-context planning](edit-planning.md). The older published 0.3.1 binary
-does not include these capabilities. The service persists
+The 0.5.0 build is a local single-user Linux CLI and MCP stdio server. It
+includes source-preserving HDR cuts, verified SDR previews, cached source
+storyboards and budget-aware review clips. Use the
+[published release](https://github.com/mingley/agent-video-workbench/releases/tag/v0.5.0)
+or build main with latest stable Rust using `cargo build --release --locked`.
+Start with [natural edits](natural-edit.md), [source-context planning](edit-planning.md)
+or [source browsing](source-views.md). The service persists
 projects, originals, revisions, analysis, jobs and verified exports. The agent
 provides editorial decisions and uses its host's file tools for delivery.
 
@@ -46,7 +46,7 @@ the same media doctor. Its model image/audio consumption, persistence, locking
 and account compatibility fields stay unknown until tested in the chosen host.
 With `--workspace ROOT`, its workspace must be inside that authorized root.
 
-On 0.4.0, `doctor` also reports `sourcePreservingHdr.ready` after a real 10-bit
+On 0.4.0 and later, `doctor` also reports `sourcePreservingHdr.ready` after a real 10-bit
 HEVC/PQ encode, tag check, decode and SDR preview transform. Check that result
 for HDR preservation; ordinary SDR readiness does not establish HEVC support.
 `doctor` checks required HDR/audio/caption filters and performs a real H.264/AAC

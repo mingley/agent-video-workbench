@@ -11,7 +11,7 @@ then request small clips with measured duration/byte caps and original-frame
 mapping. Sparse coverage and unsupported clocks are explicit. The agent selects
 content; AVW preserves originals and executes validated operations.
 
-**0.4.0 builds: source-matched cuts and HDR preservation.** Start with
+**0.4.0 and later: source-matched cuts and HDR preservation.** Start with
 [`assemble` and edit preflight](docs/natural-edit.md) to retain original framing,
 color and timing without automatic captions or crop. Plain 10-bit PQ/HLG cuts
 export a verified HEVC master and a separate SDR review video. High-quality
@@ -42,7 +42,7 @@ contact sheets and a local HTML review bundle. Catalog, retention, verified
 backup/restore, relinking and supported-cut OpenTimelineIO interchange are included.
 
 Start with [installation and MCP connection](docs/deployment.md), then run
-[the preserving workflow](docs/natural-edit.md) on 0.4.0 or
+[the preserving workflow](docs/natural-edit.md) on 0.4.0 or later, or
 [the captioned SDR walkthrough](docs/first-edit.md). The
 [agent workflow](AGENT_GUIDE.md) covers subsequent edits and recovery. Download checksum-verified binaries from
 [releases](https://github.com/mingley/agent-video-workbench/releases).

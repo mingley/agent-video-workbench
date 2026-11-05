@@ -1,0 +1,117 @@
+{
+  "version": "0.5.0",
+  "date": "2026-11-05",
+  "sourceCommit": "d025611bd3db56209c03c5d70d2e472ffc600809",
+  "mergeCommit": "a0ab89d9298e5fadd0b072d2d14f3f9050fde2fa",
+  "qualification": {
+    "runId": 42055909251,
+    "url": "https://github.com/mingley/agent-video-workbench/actions/runs/42055909251",
+    "event": "workflow_dispatch",
+    "passed": true,
+    "x86_64": {
+      "rustTestsPassed": 180,
+      "ordinarySuiteIgnored": 2,
+      "functionalSummariesPassed": 36,
+      "browserChecks": true
+    },
+    "aarch64": {
+      "rustTestsPassed": 180,
+      "ordinarySuiteIgnored": 2,
+      "functionalSummariesPassed": 31,
+      "browserChecks": false
+    }
+  },
+  "publication": {
+    "runId": 42057589402,
+    "url": "https://github.com/mingley/agent-video-workbench/actions/runs/42057589402",
+    "passed": true,
+    "requestCommit": "0af6123a7a3c507d22b0874617fb295ab163b573",
+    "qualifiedArchivesReused": true
+  },
+  "release": {
+    "tag": "v0.5.0",
+    "url": "https://github.com/mingley/agent-video-workbench/releases/tag/v0.5.0",
+    "publishedAssetCount": 7,
+    "nativeManifests": [
+      {
+        "version": "avw 0.5.0",
+        "commit": "d025611bd3db56209c03c5d70d2e472ffc600809",
+        "rust": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
+        "externalRuntime": [
+          "FFmpeg/ffprobe 8",
+          "licensed TTF font"
+        ],
+        "optionalRuntime": [
+          "whisper.cpp v1.9.4 and checksum-verified English model"
+        ],
+        "arch": "x86_64",
+        "binarySha256": "56ee1d567666d439ed2bff85840dc0fe36566ee99203f4acb5e9596a94f0fb51",
+        "archiveSha256": "def287fa7304bedb7784c37ad96f9d7a3411b9ce9cd321d58af788ae1524e7c8"
+      },
+      {
+        "version": "avw 0.5.0",
+        "commit": "d025611bd3db56209c03c5d70d2e472ffc600809",
+        "rust": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "platform": "Linux-7.0.0-1017-azure-aarch64-with-glibc2.39",
+        "externalRuntime": [
+          "FFmpeg/ffprobe 8",
+          "licensed TTF font"
+        ],
+        "optionalRuntime": [
+          "whisper.cpp v1.9.4 and checksum-verified English model"
+        ],
+        "arch": "aarch64",
+        "binarySha256": "0828c69f4aadf59648ea1055a0dcce4d7284420426c86a6e8e1b214457c7ef55",
+        "archiveSha256": "c0c790ac3f0a22f94fd838c3f3913dc0107706cd07cf42d2e5ffae0565e8ee7d"
+      }
+    ]
+  },
+  "publicInstaller": {
+    "passed": true,
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "version": "avw 0.5.0",
+    "binarySha256": "56ee1d567666d439ed2bff85840dc0fe36566ee99203f4acb5e9596a94f0fb51",
+    "publishedNativeManifestMatch": true,
+    "sourceViewAcceptance": {
+      "passed": true,
+      "storyboardTotalSamples": 3,
+      "pagination": true,
+      "observedFrameTimes": true,
+      "cacheHit": true,
+      "storyboardColdSeconds": 0.42617768299533054,
+      "storyboardWarmSeconds": 0.11652077100006863,
+      "previewSeconds": 0.9305340470018564,
+      "previewBytes": 1242586,
+      "previewFrames": 300,
+      "hardCaps": true,
+      "adaptiveEncoding": true,
+      "actualDurationFailureRejected": true,
+      "transcriptContextInvalidation": true,
+      "cliAlias": true,
+      "impossibleBudgetRejected": true,
+      "originalUnchanged": true,
+      "nonzeroOriginVfrMapping": true,
+      "hdrSdrPreview": true,
+      "rotationAppliedOnce": true,
+      "delayedAudioOnsetSeconds": 0.75,
+      "lightBurstOnsetSeconds": 0.5,
+      "measuredAvOffsetSeconds": 0.25,
+      "tamperRejected": true,
+      "sourceTamperRejectedOnCacheHit": true,
+      "videoTamperRejected": true,
+      "limitations": [
+        "Generated local SDR; no semantic model or host-specific media acceptance",
+        "Storyboard is sparse; no claim to capture every important event"
+      ],
+      "officialMcpSdk": true,
+      "cliMcpReplayEquivalent": true,
+      "boundedPreviewAudioTransport": true
+    }
+  },
+  "limits": [
+    "ARM64 passed native CI; no ARM64 binary was installed on the local x86_64 host.",
+    "Generated media and the official MCP SDK were tested; real camera footage, semantic-model quality, physical display appearance and account-specific hosted media acceptance remain separate.",
+    "Storyboards are sparse navigation evidence and can miss brief events or fine details."
+  ]
+}
