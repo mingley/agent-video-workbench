@@ -2,8 +2,10 @@
 
 ## Export verification and first-edit feedback
 
-Current source removes a redundant export decode and adds CLI result-field
-extraction, correct new-project creator metadata and clarified setup/defaults.
+Current source shares the verification decode with contact-sheet generation,
+reports stage timings, rejects invalid imports before staging, and fixes sampled
+frame metadata for very short exports. It also retains the earlier CLI result-field
+extraction, new-project creator metadata and clarified setup/defaults.
 [The measured report](performance-feedback.md) records the before/after timings,
 identical decoded pixels/audio, longer-than-ten-second reproduction, local tests
 and remaining platform/media limitations. This is not a new published release.

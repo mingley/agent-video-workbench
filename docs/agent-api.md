@@ -53,6 +53,17 @@ also checks IDs, time arithmetic, source hashes, policy and current revision.
 The [older protocol examples](../examples/protocol/README.md) illustrate a
 design draft and are not current wire responses.
 
+## Render timing diagnostics
+
+New render manifests expose `timingsSeconds`: `verifyOriginals`, `plan`, `encode`,
+`audioFinish`, `verifyMaster`, `reviewPreview`, `delivery` and `totalBeforePublish`.
+Read the manifest returned by `artifact` to locate expensive stages. SDR master
+verification includes contact-sheet sampling; when a separate SDR review exists,
+its sampling is included in `reviewPreview`. Every validation decode still runs
+to EOF. `totalBeforePublish` excludes final manifest writes, file/directory sync
+and publication, and therefore differs from end-to-end command latency. Older
+manifests lack these optional measurements.
+
 ## Revisions and safe retries
 
 Creator editing mutations require `expectedRevision` and `key`. Raw `apply`

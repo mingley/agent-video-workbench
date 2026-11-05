@@ -17,6 +17,8 @@ p = argparse.ArgumentParser(description=__doc__)
 for arg in ('before', 'after', 'ffmpeg', 'ffprobe', 'output'):
     p.add_argument('--' + arg, required=True)
 p.add_argument('--repeats', type=int, default=3)
+p.add_argument('--review-sheet', action='store_true',
+               help='Compare prior single-decode + separate sheet against a combined decode/sheet')
 a = p.parse_args()
 assert a.repeats > 0
 root = Path(a.output).resolve()
@@ -51,7 +53,9 @@ run([a.ffmpeg, '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=1280x720:r=30:d=6
      '-color_range', 'tv', '-c:a', 'aac', '-shortest', source])
 source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
 results = {label: [] for label in ('before', 'after')}
+stage_times = {label: [] for label in results}
 paths = {}
+sheets = {}
 for label in results:
     call(label, 'create', name='Feedback performance fixture')
     call(label, 'import', source=str(source), id='source', expectedRevision=0, key='import-source')
@@ -65,6 +69,13 @@ for iteration in range(a.repeats):
         artifact, elapsed = call(label, 'render', sequence='long')
         manifest = json.loads(Path(artifact['manifest']).read_text())
         assert manifest['verification']['expectedFrames'] == 900
+        assert manifest['contactSheet']['outputFrames'] == [0, 225, 450, 675]
+        sheets[label] = Path(artifact['manifest']).with_name('sheet.png')
+        if 'timingsSeconds' in manifest:
+            stages = manifest['timingsSeconds']
+            assert all(isinstance(v, (int, float)) and v >= 0 for v in stages.values()), stages
+            assert sum(v for k, v in stages.items() if k != 'totalBeforePublish') <= stages['totalBeforePublish'] + 0.001
+            stage_times[label].append(stages)
         results[label].append(elapsed)
         paths[label] = artifact['path']
         print(label, iteration, round(elapsed, 3), flush=True)
@@ -79,6 +90,8 @@ for label, path in paths.items():
                       '-f', 'hash', '-hash', 'sha256', '-'])
         hashes[label][kind] = raw.decode().strip()
 assert hashes['before'] == hashes['after'], hashes
+sheet_hashes = {k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in sheets.items()}
+assert sheet_hashes['before'] == sheet_hashes['after'], sheet_hashes
 assert hashlib.sha256(source.read_bytes()).hexdigest() == source_hash
 # Isolate the two original verification subprocesses from the single-decode
 # replacement on the same rendered file. Hashing/contract checks are unchanged
@@ -90,21 +103,33 @@ for iteration in range(a.repeats):
         if label == 'after':
             decode += ['-map', '0:v:0', '-map', '0:a?', '-fps_mode', 'passthrough',
                        '-nostats', '-stats_period', '3600', '-progress', 'pipe:1']
-        decoded, decode_seconds = run([*decode, '-f', 'null', '-'])
+        decode += ['-f', 'null', '-']
+        filt = "select='not(mod(n,225))',scale=180:320:force_original_aspect_ratio=decrease,pad=180:320:(ow-iw)/2:(oh-ih)/2,tile=4x1"
+        if a.review_sheet and label == 'after':
+            decode += ['-map', '0:v:0', '-vf', filt, '-frames:v', '1', '-an', '-threads', '1',
+                       root / ('combined-' + str(iteration) + '.png')]
+        decoded, decode_seconds = run(decode)
         probe = [a.ffprobe, '-v', 'error']
-        if label == 'before':
+        if label == 'before' and not a.review_sheet:
             probe += ['-count_frames']
         metadata, probe_seconds = run([*probe, '-threads', '1', '-show_streams',
                                        '-show_format', '-of', 'json', paths['after']])
-        if label == 'before':
+        if label == 'before' and not a.review_sheet:
             video = next(v for v in json.loads(metadata)['streams'] if v['codec_type'] == 'video')
             assert video['nb_read_frames'] == '900'
-        else:
+        elif label == 'after':
             progress = dict(line.split('=', 1) for line in decoded.decode().splitlines() if '=' in line)
             assert progress['progress'] == 'end' and int(progress['frame']) == 900
+        if a.review_sheet and label == 'before':
+            _, sheet_seconds = run([a.ffmpeg, '-v', 'error', '-threads', '1', '-i', paths['after'],
+                                    '-vf', filt, '-frames:v', '1',
+                                    root / ('separate-' + str(iteration) + '.png')])
+            decode_seconds += sheet_seconds
         verification[label].append(decode_seconds + probe_seconds)
 summary = dict(passed=True, sourceSeconds=60, outputSeconds=30, outputFrames=900,
                canvas='1280x720', fps=30, repeatedSeconds=results,
+               comparison='combined review sheet' if a.review_sheet else 'single verification decode',
+               stageTimesSeconds=stage_times, sheetHashes=sheet_hashes,
                verificationSubprocessSeconds=verification,
                verificationMedianSeconds={k: statistics.median(v) for k, v in verification.items()},
                medianSeconds={k: statistics.median(v) for k, v in results.items()},
