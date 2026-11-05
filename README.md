@@ -57,7 +57,7 @@ page. The native binary installer needs no Rust compiler, Node, GUI or root
 (see deployment for installation without a checkout):
 
 ```sh
-AVW_VERSION=0.5.0
+AVW_VERSION=0.5.1
 scripts/install-release.sh /path/to/new-bin "$AVW_VERSION"
 scripts/setup-media.sh /path/to/tools
 /path/to/new-bin/avw --ffmpeg /path/to/tools/ffmpeg8/linux/ffmpeg \

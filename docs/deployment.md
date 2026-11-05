@@ -1,9 +1,9 @@
 # Install and connect an agent
 
-The 0.5.0 build is a local single-user Linux CLI and MCP stdio server. It
+The 0.5.1 build is a local single-user Linux CLI and MCP stdio server. It
 includes source-preserving HDR cuts, verified SDR previews, cached source
 storyboards and budget-aware review clips. Use the
-[published release](https://github.com/mingley/agent-video-workbench/releases/tag/v0.5.0)
+[published release](https://github.com/mingley/agent-video-workbench/releases/tag/v0.5.1)
 or build main with latest stable Rust using `cargo build --release --locked`.
 Start with [natural edits](natural-edit.md), [source-context planning](edit-planning.md)
 or [source browsing](source-views.md). The service persists

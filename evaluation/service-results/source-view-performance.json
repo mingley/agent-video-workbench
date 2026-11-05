@@ -783,7 +783,13 @@
     "cpuModel": "AMD EPYC 9V74 80-Core Processor"
   },
   "nativeQualification": {
-    "status": "not-yet-run",
+    "status": "success",
+    "runId": 42129417656,
+    "sourceCommit": "63984ef925dfda60e1f051da4dfcec7fc7ce0623",
+    "rustTestsPerArchitecture": 183,
+    "ordinarySuiteIgnoredPerArchitecture": 2,
+    "x86_64FunctionalSummaries": 36,
+    "aarch64FunctionalSummaries": 31,
     "releasePublished": false
   },
   "researchSources": [

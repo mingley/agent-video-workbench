@@ -46,6 +46,8 @@ native qualification in this repository. Verify a successful push run on the
 exact internal PR head before merging. A release-request-only push skips the
 Rust build and invokes the existing qualified-artifact publisher. Do not add
 `[skip ci]` to that publication commit: it would also skip the publisher.
+Ensure the tested source branch contains the current target revision. If the
+target moved, update and test the branch before merging.
 
 ## Media and agent checks
 

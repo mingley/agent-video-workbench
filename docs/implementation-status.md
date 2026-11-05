@@ -20,6 +20,12 @@ release publication require their separate qualification. See
 [research and scope](source-view-performance.md) and
 [the reproducible evidence](../evaluation/service-results/source-view-performance.json).
 
+[Native qualification](https://github.com/mingley/agent-video-workbench/actions/runs/42129417656)
+passed Linux x86_64 and ARM64 on source commit
+`63984ef925dfda60e1f051da4dfcec7fc7ce0623`: 183 Rust tests per architecture,
+all installed CLI/MCP and media workflows, and x86_64 browser checks. The
+duplicate internal PR run was skipped; one push run qualified both archives.
+
 ## Source browsing and constrained review media (0.5.0)
 
 `source-storyboard` builds cached pages of uniformly sampled source frames with
