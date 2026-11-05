@@ -1,5 +1,13 @@
 # Implementation and qualification
 
+## Export verification and first-edit feedback
+
+Current source removes a redundant export decode and adds CLI result-field
+extraction, correct new-project creator metadata and clarified setup/defaults.
+[The measured report](performance-feedback.md) records the before/after timings,
+identical decoded pixels/audio, longer-than-ten-second reproduction, local tests
+and remaining platform/media limitations. This is not a new published release.
+
 ## Creator-agent toolkit on current source
 
 The current source adds bounded source-evidence pages, proposals for highlight

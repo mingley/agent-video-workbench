@@ -558,20 +558,38 @@ pub(crate) fn verify(
     sequence: &str,
     control: &mut dyn crate::process::Control,
 ) -> Result<Value> {
-    crate::process::run(
+    // Count the frames in the same strict decode that checks video and audio.
+    // Passthrough forbids timestamp-driven duplication/drop; container nb_frames
+    // alone is not evidence of a complete decode. Keep progress output bounded.
+    let decoded = crate::process::run(
         Command::new(backend.ffmpeg_path())
             .args(["-v", "error", "-xerror", "-threads", "1", "-i"])
             .arg(path)
-            .args(["-f", "null", "-"]),
+            .args([
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a?",
+                "-fps_mode",
+                "passthrough",
+                "-nostats",
+                "-stats_period",
+                "3600",
+                "-progress",
+                "pipe:1",
+                "-f",
+                "null",
+                "-",
+            ]),
         std::time::Duration::from_secs(4 * 3600),
         control,
     )?;
+    let decoded_frames = decoded_frame_count(&decoded.stdout)?;
     let probe = crate::process::run(
         Command::new(backend.ffprobe_path())
             .args([
                 "-v",
                 "error",
-                "-count_frames",
                 "-threads",
                 "1",
                 "-show_streams",
@@ -584,6 +602,12 @@ pub(crate) fn verify(
         control,
     )?;
     let mut metadata: Value = serde_json::from_slice(&probe.stdout)?;
+    let video = metadata["streams"]
+        .as_array_mut()
+        .and_then(|streams| streams.iter_mut().find(|s| s["codec_type"] == "video"))
+        .ok_or_else(|| Error::Invalid("no video".into()))?;
+    // Preserve the manifest field consumed by review/delivery timing checks.
+    video["nb_read_frames"] = json!(decoded_frames.to_string());
     let contract = crate::preserve::output(project, sequence)?;
     if contract.hdr {
         crate::preserve::capture_metadata(backend, path, &mut metadata, control)?;
@@ -653,8 +677,26 @@ pub(crate) fn verify(
         }
     }
     Ok(
-        json!({"decoded":true,"expectedFrames":frames,"sha256":hash_file_controlled(path, control)?,"probe":metadata}),
+        json!({"decoded":true,"frameCountMethod":"ffmpeg-passthrough-decode-progress","expectedFrames":frames,"sha256":hash_file_controlled(path, control)?,"probe":metadata}),
     )
+}
+
+fn decoded_frame_count(progress: &[u8]) -> Result<i64> {
+    let text = std::str::from_utf8(progress)
+        .map_err(|_| Error::Invalid("invalid decode progress".into()))?;
+    let mut frames = None;
+    let mut complete = false;
+    for line in text.lines() {
+        if let Some(value) = line.strip_prefix("frame=") {
+            frames = value.trim().parse::<i64>().ok().filter(|n| *n >= 0);
+        }
+        if let Some(value) = line.strip_prefix("progress=") {
+            complete = value == "end";
+        }
+    }
+    frames
+        .filter(|_| complete)
+        .ok_or_else(|| Error::Invalid("decode did not report a final frame count".into()))
 }
 
 pub fn backend(ffmpeg: PathBuf, ffprobe: PathBuf) -> FfmpegBackend {
@@ -972,11 +1014,85 @@ fn seek_project(
 #[cfg(test)]
 mod render_input_tests {
     use super::*;
+    #[test]
+    fn decode_count_requires_complete_valid_progress() {
+        assert_eq!(
+            decoded_frame_count(b"frame=1\nprogress=continue\nframe=900\nprogress=end\n").unwrap(),
+            900
+        );
+        for invalid in [
+            b"frame=900\nprogress=continue\n".as_slice(),
+            b"progress=end\n",
+            b"frame=-1\nprogress=end\n",
+            b"frame=bad\nprogress=end\n",
+        ] {
+            assert!(decoded_frame_count(invalid).is_err());
+        }
+    }
     use agentcut_core::{
         Asset, AssetKind, AudioMetadata, BlendMode, ClipData, Fingerprint, ItemPayload,
         MediaMetadata, RationalRate, Sequence, SequenceRefData, TimeRange, TimelineItem, Track,
         TrackType, Transform2d,
     };
+
+    #[test]
+    #[ignore = "requires AVW_TEST_FFMPEG and AVW_TEST_FFPROBE"]
+    fn single_decode_verifies_real_media_and_rejects_damage() {
+        let backend = backend(
+            std::env::var("AVW_TEST_FFMPEG")
+                .expect("test FFmpeg path")
+                .into(),
+            std::env::var("AVW_TEST_FFPROBE")
+                .expect("test ffprobe path")
+                .into(),
+        );
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("source.mp4");
+        let status = Command::new(backend.ffmpeg_path())
+            .args([
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=s=64x64:r=30000/1001",
+                "-frames:v",
+                "360",
+                "-c:v",
+                "libx264",
+                "-threads",
+                "1",
+                "-x264-params",
+                "colorprim=bt709:transfer=bt709:colormatrix=bt709",
+                "-pix_fmt",
+                "yuv420p",
+                "-color_range",
+                "tv",
+                "-movflags",
+                "+faststart",
+            ])
+            .arg(&path)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let project = Project::new(
+            "decode",
+            64,
+            64,
+            RationalRate {
+                numerator: 30000,
+                denominator: 1001,
+            },
+        );
+        let mut control = crate::process::Uncontrolled;
+        let verified = verify(&path, &backend, 360, &project, "seq_main", &mut control).unwrap();
+        assert_eq!(verified["probe"]["streams"][0]["nb_read_frames"], "360");
+        assert!(verify(&path, &backend, 359, &project, "seq_main", &mut control).is_err());
+        let bytes = std::fs::read(&path).unwrap();
+        // Keep the faststart header but truncate the actual encoded frames.
+        std::fs::write(&path, &bytes[..bytes.len() / 2]).unwrap();
+        assert!(verify(&path, &backend, 360, &project, "seq_main", &mut control).is_err());
+    }
 
     #[test]
     fn disabled_solos_are_cleared_for_nested_render_preparation_only() {

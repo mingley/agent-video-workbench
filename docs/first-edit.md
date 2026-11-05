@@ -1,17 +1,21 @@
 # Make and deliver your first edit
 
-This walkthrough uses the published **0.3.1** CLI to create two independent,
+This walkthrough targets **0.4.0** and creates two independent,
 captioned five-second outputs. The same JSON requests work in the MCP `avw`
 tool. Start with [installation](deployment.md); no speech model is required.
 Use a checkout for the request example files below; the installed binary needs
-no build. You can also download the three JSON examples and substitute their
+no build. The automated ID extraction below uses the updated source CLI;
+explicit `jq` alternatives are provided for the published 0.4.0 binary.
+You can also download the three JSON examples and substitute their
 local paths in the request commands.
 
 ## Prepare a fresh workspace
 
 Choose a recording at least ten seconds long and a licensed TTF font containing
 the characters you will caption. The example keeps source intervals `[0, 2)`
-and `[7, 10)` seconds. Replace the sample text with reviewed text from your
+and `[7, 10)` seconds. These are example cuts, not an input-duration limit.
+Longer originals are accepted; each rendered output is limited to one hour.
+Replace the sample text with reviewed text from your
 recording. Copy inputs into a persistent workspace outside the repository.
 
 Run the following in one Bash session, replacing the absolute paths:
@@ -46,6 +50,11 @@ revision **2**. The revision numbers below apply to this fresh project only.
 For an existing project, read `resume` and rebuild requests from its current
 revision and IDs. Asset and output IDs must be distinct.
 
+Use a descriptive **8–200 ASCII character** `--key` (for example,
+`first-source-import`). Operation batches require at least eight bytes; some
+workflow operations also enforce the 200-byte maximum. Reuse the exact key only
+when retrying the same request. A new edit needs a new key.
+
 ## Import reviewed captions and compose
 
 The [current request examples](../examples/requests/README.md) are complete
@@ -63,7 +72,10 @@ These mutations advance the project to revisions **3**, **4** and **5**.
 `short` is 360×640; `square` is 360×360. Both retain the same five seconds of
 source footage and source-linked captions, at 30 fps. The small canvas makes
 the trial quick; `compose` defaults to 1080×1920 when dimensions are omitted.
-The square variant copies revision 4 and can be edited independently.
+The empty `seq_main` created by `create` is separately 360×640. `compose` creates
+a new named sequence and does not inherit that canvas. `assemble` instead uses
+source geometry unless explicitly overridden. These defaults do not resize the
+original media. The square variant copies revision 4 and can be edited independently.
 
 Caption cues and cuts use half-open source intervals in milliseconds. A cue
 intersecting a cut is shortened to that retained interval; review its wording
@@ -77,33 +89,46 @@ zero. Internal times are rational; output timing follows the
 Queue a batch at revision 5 without launching a detached process:
 
 ```bash
-avw batch-start project --sequences short,square \
-  --expected-revision 5 --key first-delivery-batch --no-launch
+avw_batch_id=$(avw --result-pointer /id batch-start project --sequences short,square \
+  --expected-revision 5 --key first-delivery-batch --no-launch) || exit 1
 avw worker "$avw_workspace/project"
 ```
 
-Save the first command's `result.id`: this is the batch ID. The worker uses an
+The variable captures the batch ID without copying it by hand. `--result-pointer`
+is available in the updated source build; for the published 0.4.0 binary, capture
+the normal JSON response instead (enable Bash `pipefail` to retain command errors):
+
+```bash
+set -o pipefail
+avw_batch_id=$(avw batch-start project --sequences short,square \
+  --expected-revision 5 --key first-delivery-batch --no-launch | jq -er '.result.id') || exit 1
+```
+
+The worker uses an
 **absolute project path** and drains the queue before exiting by default.
 It uses the backend frozen into each job. Queuing/rendering leaves the editing
 revision at 5. On a long-running host, supervised workers can instead use
 `--idle-seconds 60`; see [restart behavior](deployment.md#persistence-maintenance-and-rollback).
 
-Replace the placeholder below with the returned batch ID:
+Inspect the captured batch:
 
 ```bash
-avw_batch_id=REPLACE_WITH_BATCH_ID
 avw batch-status project "$avw_batch_id"
 ```
 
 Require `result.complete: true`, `result.succeeded: 2`, and both child jobs in
-`result.items` to have `state: "succeeded"`. Save a child's `id` and retrieve
+`result.items` to have `state: "succeeded"`. Extract a child's `id` and retrieve
 its verified artifact and contact sheet:
 
 ```bash
-avw_child_id=REPLACE_WITH_CHILD_ID
+avw_child_id=$(avw --result-pointer /items/0/id batch-status project "$avw_batch_id") || exit 1
 avw artifact project "$avw_child_id"
 avw artifact project "$avw_child_id" --sheet
 ```
+
+For the published binary, use
+`avw_child_id=$(avw batch-status project "$avw_batch_id" | jq -er '.result.items[0].id') || exit 1`
+instead of `--result-pointer`.
 
 Check `result.verified`, `result.revision`, `result.sha256` and `result.path`.
 Each MP4 should contain 150 decoded video frames. The manifest records technical
@@ -146,3 +171,18 @@ session with `agent-guide`, `capabilities` and `resume`.
 See the [interface reference](agent-api.md) for response fields, retries and
 conflicts, and the [agent guide](../AGENT_GUIDE.md) for selective restoration,
 profiles, protection, analysis and feedback.
+
+## Scripting and project identity
+
+The updated source CLI accepts `--result-pointer /id` (a JSON Pointer relative
+to `result`): strings print unquoted; numbers, arrays and objects print as JSON.
+Errors keep the normal envelope and nonzero exit status. A missing field after a
+successful operation returns `E_RESULT_POINTER` with the complete result; the
+operation has already succeeded, so do not retry it with a new key. This option
+is CLI presentation only; MCP retains its structured response.
+
+New projects identify `agent-video-workbench` and its build version in
+`createdBy`. Historical snapshots retain their original metadata. The
+`agentcut-project` schema identifier intentionally remains: it describes the
+upstream project format that AVW extends, not the application version. Renaming
+it would misrepresent compatibility without a schema migration.

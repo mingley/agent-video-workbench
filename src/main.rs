@@ -34,6 +34,10 @@ struct Cli {
     download_loopback_http: bool,
     #[arg(long, global = true)]
     analysis_provider: Option<PathBuf>,
+    /// Print one result field using a JSON Pointer (strings are unquoted).
+    /// Errors retain the normal JSON envelope. Not available for MCP stdio.
+    #[arg(long, global = true)]
+    result_pointer: Option<String>,
     #[command(subcommand)]
     command: Action,
 }
@@ -92,6 +96,7 @@ enum Action {
         sequences: Vec<String>,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
         #[arg(long)]
@@ -114,6 +119,7 @@ enum Action {
         request: PathBuf,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
         #[arg(long)]
@@ -215,6 +221,7 @@ enum Action {
         project: PathBuf,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
         #[arg(long)]
@@ -226,6 +233,7 @@ enum Action {
         project: PathBuf,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
         #[arg(long)]
@@ -244,6 +252,7 @@ enum Action {
         project: PathBuf,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
         #[arg(long)]
@@ -279,6 +288,7 @@ enum Action {
         project: PathBuf,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
         #[arg(long)]
@@ -306,6 +316,7 @@ enum Action {
         request: PathBuf,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
         #[arg(long)]
@@ -329,6 +340,7 @@ enum Action {
         request: PathBuf,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
         #[arg(long)]
@@ -342,6 +354,7 @@ enum Action {
         request: PathBuf,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
         #[arg(long)]
@@ -353,6 +366,7 @@ enum Action {
         asset_id: String,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
         #[arg(long)]
@@ -364,6 +378,7 @@ enum Action {
         request: PathBuf,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
     },
@@ -420,6 +435,7 @@ enum Action {
         sequence: String,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
         #[arg(long)]
@@ -456,6 +472,7 @@ enum Action {
         id: String,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
     },
@@ -465,6 +482,7 @@ enum Action {
         request: PathBuf,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
     },
@@ -479,6 +497,7 @@ enum Action {
         id: String,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
     },
@@ -511,6 +530,7 @@ enum Action {
         revision: u64,
         #[arg(long)]
         expected_revision: u64,
+        /// Idempotency key: use 8–200 ASCII characters; reuse only for the same request.
         #[arg(long)]
         key: String,
     },
@@ -826,6 +846,20 @@ fn main() {
             return;
         }
     };
+    let pointer = cli.result_pointer.clone();
+    if pointer.as_ref().is_some_and(|p| {
+        (!p.is_empty() && !p.starts_with('/'))
+            || p.split('~')
+                .skip(1)
+                .any(|escape| !escape.starts_with(['0', '1']))
+            || matches!(cli.command, Action::Mcp { .. })
+    }) {
+        println!(
+            "{}",
+            json!({"ok":false,"apiVersion":"1","error":{"code":"E_ARGUMENT","message":"--result-pointer requires a JSON Pointer (empty or beginning with /) and is unavailable for MCP stdio"}})
+        );
+        std::process::exit(2);
+    }
     if let Action::Mcp { root } = &cli.command {
         let result = (|| {
             std::fs::create_dir_all(root)?;
@@ -857,7 +891,23 @@ fn main() {
         return;
     }
     let result = agent_video_workbench::service::envelope(execute(cli));
-    println!("{result}");
+    if result["ok"] == true
+        && let Some(pointer) = pointer
+    {
+        match result["result"].pointer(&pointer) {
+            Some(Value::String(value)) => println!("{value}"),
+            Some(value) => println!("{value}"),
+            None => {
+                println!(
+                    "{}",
+                    json!({"ok":false,"apiVersion":"1","error":{"code":"E_RESULT_POINTER","message":"Operation succeeded but result field is absent; do not retry a mutation with a new key","pointer":pointer},"result":result["result"]})
+                );
+                std::process::exit(1);
+            }
+        }
+    } else {
+        println!("{result}");
+    }
     if result["ok"] == false {
         std::process::exit(1);
     }

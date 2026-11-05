@@ -70,6 +70,10 @@ impl Store {
         );
         let project = Project {
             name: name.into(),
+            created_by: Some(agentcut_core::CreatedBy {
+                application: "agent-video-workbench".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+            }),
             ..project
         };
         tx.execute(

@@ -36,6 +36,16 @@ have a smaller error object. Help/version output is text. MCP stdout carries
 JSON-RPC; inspect the tool's response content and error indication, not only
 transport success. Job creation acknowledges a queue entry, not a final file.
 
+Updated source builds add CLI-only `--result-pointer POINTER`, relative to the
+successful `result` object. For example, `--result-pointer /id batch-start ...`
+prints the batch ID without quotes, and `/items/0/id` selects a child ID from
+`batch-status`. Non-string values remain JSON. Errors retain envelopes and
+nonzero exit status. Invalid pointer syntax is rejected before execution; a
+missing field returns `E_RESULT_POINTER` **after** the operation has succeeded,
+including its full result. Do not retry that mutation with a new key. This
+presentation option is not supported on MCP stdio and does not change the
+service schema. Published 0.4.0 predates the option; use a JSON parser there.
+
 Service envelopes reject unknown fields; the parser also rejects duplicate
 object keys and integers outside
 the exact JSON range. Schema validation checks structure; application validation

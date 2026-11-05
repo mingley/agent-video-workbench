@@ -11,8 +11,8 @@ MCP configuration and restart behavior. The qualified scope is in
 
 Use latest stable Rust (`rustup update stable`); the manifest currently requires
 Rust 1.99+. The stable toolchain file includes rustfmt and Clippy. A C compiler
-builds bundled SQLite. Runtime needs FFmpeg/ffprobe 8 with libx264, AAC and
-caption filters; source-preserving 10-bit/HDR output also needs libx265. Captions
+builds bundled SQLite. The qualified runtime is FFmpeg/ffprobe 8.0.1 with libx264, AAC and
+caption filters (`doctor` tests capabilities rather than enforcing version 8); source-preserving 10-bit/HDR output also needs libx265. Captions
 need an imported, licensed TTF font. Linux x86_64/ARM64 on persistent
 local block storage is the qualified route. No GUI, GPU, Node or model service
 is needed to run the binary.
