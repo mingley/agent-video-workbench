@@ -180,6 +180,32 @@ enum Action {
         #[arg(long)]
         request: PathBuf,
     },
+    SourceStoryboard {
+        project: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        no_launch: bool,
+        #[arg(long, default_value_t = 0)]
+        priority: i32,
+    },
+    BudgetPreview {
+        project: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        no_launch: bool,
+        #[arg(long, default_value_t = 0)]
+        priority: i32,
+    },
     SourceEvidence {
         project: PathBuf,
         #[arg(long)]
@@ -647,6 +673,36 @@ fn execute(cli: Cli) -> Result<Value> {
         },
         Action::AgentMedia { request } => Request::AgentMedia {
             media: agent_video_workbench::json::read(&request)?,
+        },
+        Action::SourceStoryboard {
+            project,
+            request,
+            expected_revision,
+            key,
+            no_launch,
+            priority,
+        } => Request::SourceStoryboard {
+            project,
+            request: agent_video_workbench::json::read(&request)?,
+            expected_revision,
+            key,
+            no_launch,
+            priority,
+        },
+        Action::BudgetPreview {
+            project,
+            request,
+            expected_revision,
+            key,
+            no_launch,
+            priority,
+        } => Request::BudgetPreview {
+            project,
+            request: agent_video_workbench::json::read(&request)?,
+            expected_revision,
+            key,
+            no_launch,
+            priority,
         },
         Action::SourceEvidence {
             project,

@@ -1,5 +1,45 @@
 # Implementation and qualification
 
+## Source browsing and constrained review media (0.5.0)
+
+`source-storyboard` builds cached pages of uniformly sampled source frames with
+observed PTS/time bases, rational source positions, tile coordinates, sparse
+coverage limits and bounded active-transcript context. A reported audio-only
+tail does not create phantom video samples. `budget-preview` measures actual
+output duration and bytes, fully decodes the artifact, preserves source frame
+order including VFR, and pairs original/proxy PTS. Unsatisfied budgets or
+ambiguous mappings fail without a successful artifact. Up to three disclosed
+resolution/CRF attempts fit byte caps; no temporal downsampling or silent trim
+is used. Source originals and editing history remain authoritative.
+
+Local Linux x86_64 checks passed 180 Rust tests, strict Clippy, formatting, the
+release build, generated-schema and six publisher-gate tests. Generated media
+exercised pagination, cache reuse/invalidation, frozen transcript context,
+actual timestamps, B-frame boundaries, nonzero source origin, VFR, a measured
+250ms audio/light offset, HDR-to-SDR conversion, rotation, impossible size and
+actual-duration refusals, and source/attachment tamper rejection. Official MCP
+SDK checks exercised PNG delivery, preview jobs, CLI replay equivalence and WAV
+excerpts. Native qualification/publication uses 36 x86_64 and 31 ARM64 summaries,
+including these new workflows; exact source/run records are bound by the release
+request and published native manifests. Local results alone are not ARM64 proof.
+
+On the generated 120-second 720p/30fps source, three uncached/warm recipe runs
+measured the following medians, including queue/worker/integrity/artifact lookup
+and excluding initial source generation/import. See [the reproducible record](../evaluation/service-results/source-views.json)
+and `evaluation/source_views_benchmark.py` for exact samples and hardware.
+
+| Operation | Uncached recipe | Cached recipe |
+| --- | ---: | ---: |
+| Twelve-frame source storyboard | 2.62s | 0.21s |
+| Ten-second, 300-frame bounded preview | 2.52s | 0.21s |
+
+The filesystem was warm, on an AMD EPYC 9V74 host with a four-CPU quota and
+16GiB container limit. These synthetic CPU figures do not establish real-camera,
+4K, model/ASR, hosted agent or physical-device performance. Sparse samples can
+miss brief events; model-dependent content understanding remains external.
+See [source views](source-views.md) for API usage, budgets, mappings and limits.
+
+
 ## Export verification and first-edit feedback
 
 Current source shares the verification decode with contact-sheet generation,

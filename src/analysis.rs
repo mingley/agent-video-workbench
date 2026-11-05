@@ -25,6 +25,8 @@ use std::{
     deny_unknown_fields
 )]
 pub enum Task {
+    Storyboard(crate::source_views::Storyboard),
+    BudgetPreview(crate::source_views::BudgetPreview),
     FrameIndex {
         asset_id: String,
         start_ms: i64,
@@ -55,6 +57,8 @@ pub enum Task {
 impl Task {
     pub fn asset_id(&self) -> &str {
         match self {
+            Self::Storyboard(q) => &q.asset_id,
+            Self::BudgetPreview(q) => &q.asset_id,
             Self::FrameIndex { asset_id, .. }
             | Self::Proxy { asset_id, .. }
             | Self::Track { asset_id, .. }
@@ -81,6 +85,8 @@ fn invalid(message: &str) -> Error {
 pub fn validate(input: &Input, project: &Project) -> Result<()> {
     let asset = project.require_asset(input.task.asset_id())?;
     match &input.task {
+        Task::Storyboard(q) => crate::source_views::validate_storyboard(q, project)?,
+        Task::BudgetPreview(q) => crate::source_views::validate_preview(q, project)?,
         Task::FrameIndex {
             start_ms, end_ms, ..
         }
@@ -192,12 +198,19 @@ pub fn run(
         Duration::from_secs(10),
         &mut control,
     )?;
-    let key = format!(
-        "{:x}",
-        Sha256::digest(serde_json::to_vec(
-            &json!({"source":asset.fingerprint.sha256,"input":input,"tool":String::from_utf8_lossy(&tool.stdout),"adapterVersion":2})
-        )?)
-    );
+    let mut identity = json!({"source":asset.fingerprint.sha256,"input":input,"tool":String::from_utf8_lossy(&tool.stdout),"adapterVersion":2});
+    if matches!(input.task, Task::Storyboard(_) | Task::BudgetPreview(_)) {
+        identity["sourceMetadata"] = json!({"metadata":asset.metadata,"probe":asset.extensions.get(crate::color::PROBE),"viewAdapterVersion":4});
+    }
+    if let Task::Storyboard(q) = &input.task {
+        identity["transcripts"] = json!(
+            crate::workflow::transcripts(project)?
+                .into_iter()
+                .filter(|t| t.asset_id == q.asset_id)
+                .collect::<Vec<_>>()
+        );
+    }
+    let key = format!("{:x}", Sha256::digest(serde_json::to_vec(&identity)?));
     let final_dir = analysis_dir.join(&key);
     let manifest_path = final_dir.join("manifest.json");
     let cached = match std::fs::symlink_metadata(&final_dir) {
@@ -245,6 +258,31 @@ pub fn run(
         let source = root.join(&asset.uri);
         let mut files = Vec::new();
         let data = match &input.task {
+            Task::Storyboard(q) => {
+                let (data, attachments) = crate::source_views::storyboard(
+                    q,
+                    project,
+                    asset,
+                    &source,
+                    &scratch,
+                    backend,
+                    &mut control,
+                )?;
+                files.extend(attachments);
+                data
+            }
+            Task::BudgetPreview(q) => {
+                let (data, attachments) = crate::source_views::preview(
+                    q,
+                    asset,
+                    &source,
+                    &scratch,
+                    backend,
+                    &mut control,
+                )?;
+                files.extend(attachments);
+                data
+            }
             Task::FrameIndex {
                 start_ms, end_ms, ..
             } => {

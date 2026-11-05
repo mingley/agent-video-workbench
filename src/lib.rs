@@ -26,6 +26,7 @@ pub mod process;
 pub mod review_import;
 pub mod service;
 pub mod smart_reframe;
+pub mod source_views;
 pub mod storage;
 pub mod store;
 pub mod studio;

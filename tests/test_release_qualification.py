@@ -27,7 +27,8 @@ class QualificationTests(unittest.TestCase):
         workflow = (root / '.github/workflows/rust.yml').read_text()
         self.assertIn('workflow_dispatch', workflow)
         uploaded = set(re.findall(r'runner\.temp \}\}/([^/]+)/summary\.json', workflow))
-        self.assertEqual(uploaded, PUBLISH.required_summaries('v0.4.0', 'x86_64'))
+        version = tomllib.loads((root / 'Cargo.toml').read_text())['package']['version']
+        self.assertEqual(uploaded, PUBLISH.required_summaries('v' + version, 'x86_64'))
         for script in re.findall(r'(?:python3|node) (evaluation/[^\s]+)', workflow):
             self.assertTrue((root / script).is_file(), f'missing workflow smoke {script}')
 
@@ -50,6 +51,12 @@ class QualificationTests(unittest.TestCase):
         for tag, arch in [('v0.4', 'x86_64'), ('0.4.0', 'x86_64'), ('v0.4.0', 'other')]:
             with self.assertRaises(ValueError):
                 PUBLISH.required_summaries(tag, arch)
+
+    def test_source_views_are_required_for_new_release_without_changing_old_matrix(self):
+        self.assertEqual(len(PUBLISH.required_summaries('v0.5.0', 'x86_64')), 36)
+        self.assertEqual(len(PUBLISH.required_summaries('v0.5.0', 'aarch64')), 31)
+        self.assertIn('source-views', PUBLISH.required_summaries('v0.5.0', 'aarch64'))
+        self.assertNotIn('source-views', PUBLISH.required_summaries('v0.4.0', 'aarch64'))
 
     def test_missing_failed_malformed_and_unexpected_summaries_cannot_pass(self):
         required = PUBLISH.required_summaries('v0.4.0', 'x86_64')

@@ -32,6 +32,8 @@ def required_summaries(tag, arch):
                          'delivery-batch'})
         if arch == 'x86_64':
             required.update({'preserve-browser', 'review-duration', 'review-compare', 'review-import'})
+    if tuple(map(int, tag[1:].split('.'))) >= (0, 5, 0):
+        required.add('source-views')
     return required
 
 

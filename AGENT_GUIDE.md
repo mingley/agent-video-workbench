@@ -211,3 +211,18 @@ qualification is separate. Profile 5, unqualified wide-color transforms, HDR
 compositing/grading/captions/transitions, complex script shaping and other platforms are outside this release's
 support matrix. Source coverage is a temporal guarantee; inspect crops,
 occlusion, speech, captions and actual appearance before approving a result.
+
+## Browse large sources within media budgets (0.5.0)
+
+Use `source-storyboard` jobs for cached pages of sampled frames and active
+transcript excerpts; continue with `nextOffset`. Pair the verified PNG with
+observed source PTS/time bases, tile coordinates and coverage metadata. MCP
+`avw-media` kind `storyboard` returns both. Sparse sampling can miss important
+content; request denser frames or a `budget-preview` window before choosing cuts.
+
+`budget-preview` accepts source start/end, `maxDurationMs`, `maxBytes`, `width`
+and `height`. Its verified attachment reports measured limits, encoding attempts
+and original/proxy frame mappings. Impossible budgets and ambiguous clocks fail.
+Use original asset IDs/source coordinates for edits; previews are SDR review
+derivatives. Respect the host's supported input types and limits. See
+[the source-view guide](docs/source-views.md).

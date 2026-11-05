@@ -37,6 +37,10 @@ pub enum MediaRequest {
         project: PathBuf,
         job_id: String,
     },
+    Storyboard {
+        project: PathBuf,
+        job_id: String,
+    },
     AudioProxy {
         project: PathBuf,
         job_id: String,
@@ -231,6 +235,48 @@ pub fn media_request(
             );
             Ok((metadata, content))
         }
+        MediaRequest::Storyboard { project, job_id } => {
+            let artifact = proxy_artifact(service, &project, &job_id)?;
+            if artifact["verified"] != true || artifact["mimeType"] != "application/json" {
+                return Err(invalid("storyboard requires a verified analysis job"));
+            }
+            let path = scoped_file(
+                service,
+                Path::new(
+                    artifact["path"]
+                        .as_str()
+                        .ok_or_else(|| invalid("storyboard report unavailable"))?,
+                ),
+            )?;
+            let report: Value = crate::json::read(&path)?;
+            if crate::media::hash_file(&path)? != artifact["sha256"]
+                || report["task"]["kind"] != "storyboard"
+            {
+                return Err(invalid("analysis job is not an intact storyboard"));
+            }
+            let file = artifact["attachments"]
+                .as_array()
+                .and_then(|a| {
+                    a.iter().find(|f| {
+                        Path::new(f["path"].as_str().unwrap_or(""))
+                            .file_name()
+                            .is_some_and(|n| n == "storyboard.png")
+                    })
+                })
+                .ok_or_else(|| invalid("storyboard image attachment unavailable"))?;
+            let mut image_report = file.clone();
+            image_report["mimeType"] = json!("image/png");
+            let (mut metadata, content) = image_content(service, &image_report)?;
+            metadata["revision"] = artifact["revision"].clone();
+            metadata["guidance"] = json!(
+                "Frozen sparse SDR source navigation image; pair tile timestamps with the image and inspect original media for details or HDR appearance."
+            );
+            metadata["kind"] = json!("storyboard");
+            metadata["jobId"] = json!(job_id);
+            metadata["sourceSha256"] = report["sourceSha256"].clone();
+            metadata["storyboard"] = report["data"].clone();
+            Ok((metadata, content))
+        }
         MediaRequest::AudioProxy {
             project,
             job_id,
@@ -274,14 +320,15 @@ pub fn media_request(
                 return Err(invalid("analysis report changed after verification"));
             }
             let task: crate::analysis::Task = serde_json::from_value(report["task"].clone())?;
-            let crate::analysis::Task::Proxy {
-                asset_id,
-                start_ms: source_start,
-                end_ms: source_end,
-                ..
-            } = task
-            else {
-                return Err(invalid("audio requires a source-proxy analysis job"));
+            let (asset_id, source_start, source_end) = match task {
+                crate::analysis::Task::Proxy {
+                    asset_id,
+                    start_ms,
+                    end_ms,
+                    ..
+                } => (asset_id, start_ms, end_ms),
+                crate::analysis::Task::BudgetPreview(q) => (q.asset_id, q.start_ms, q.end_ms),
+                _ => return Err(invalid("audio requires a source-proxy analysis job")),
             };
             if source_start < 0
                 || source_end <= source_start
@@ -431,7 +478,7 @@ pub fn serve(service: &Service, reader: &mut impl BufRead, writer: &mut impl Wri
                 "tools/list" => Some(reply(
                     id.as_ref().unwrap_or(&null),
                     json!({"tools":[{"name":"avw","description":"Persistent video editing, source inspection, transcripts, revision history, background render jobs and verified artifacts. Call agent-guide for the complete workflow.","inputSchema":tool_schema()},
-                    {"name":"avw-media","description":"Opt in to receive a verified source frame or contact sheet as PNG, or a short audio excerpt from a verified source-proxy job as WAV. Host image/audio support is not guaranteed. Requests use project/asset/job IDs, never arbitrary paths.","inputSchema":media_tool_schema()}]}),
+                    {"name":"avw-media","description":"Opt in to receive a verified source frame, source storyboard or contact sheet as PNG, or a short audio excerpt from a verified source-proxy job as WAV. Host image/audio support is not guaranteed. Requests use project/asset/job IDs, never arbitrary paths.","inputSchema":media_tool_schema()}]}),
                 )),
                 "tools/call" => {
                     let arguments = serde_json::to_vec(&message["params"]["arguments"])?;
