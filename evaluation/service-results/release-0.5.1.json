@@ -1,0 +1,128 @@
+{
+  "version": "0.5.1",
+  "date": "2026-11-05",
+  "sourceCommit": "63984ef925dfda60e1f051da4dfcec7fc7ce0623",
+  "mergeCommit": "31eca24f3c80235959a35ec207bf9f4bf5f23f3b",
+  "qualification": {
+    "runId": 42129417656,
+    "url": "https://github.com/mingley/agent-video-workbench/actions/runs/42129417656",
+    "event": "push",
+    "passed": true,
+    "nativePasses": 1,
+    "duplicateInternalPrRunSkipped": true,
+    "x86_64": {
+      "rustTestsPassed": 183,
+      "ordinarySuiteIgnored": 2,
+      "functionalSummariesPassed": 36,
+      "browserChecks": true
+    },
+    "aarch64": {
+      "rustTestsPassed": 183,
+      "ordinarySuiteIgnored": 2,
+      "functionalSummariesPassed": 31,
+      "browserChecks": false
+    }
+  },
+  "publication": {
+    "runId": 42130988741,
+    "url": "https://github.com/mingley/agent-video-workbench/actions/runs/42130988741",
+    "passed": true,
+    "requestCommit": "a2d73cf902d43bd18e13ec91b77e87efe41a2324",
+    "qualifiedArchivesReused": true,
+    "additionalNativeBuild": false
+  },
+  "release": {
+    "tag": "v0.5.1",
+    "url": "https://github.com/mingley/agent-video-workbench/releases/tag/v0.5.1",
+    "publishedAssetCount": 7,
+    "nativeManifests": [
+      {
+        "version": "avw 0.5.1",
+        "commit": "63984ef925dfda60e1f051da4dfcec7fc7ce0623",
+        "rust": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
+        "externalRuntime": [
+          "FFmpeg/ffprobe 8",
+          "licensed TTF font"
+        ],
+        "optionalRuntime": [
+          "whisper.cpp v1.9.4 and checksum-verified English model"
+        ],
+        "arch": "x86_64",
+        "binarySha256": "4505197a38fa12d9d3127a178a0def897f11f850c37e1c6ecbd1924099eec39a",
+        "archiveSha256": "817735bcbf2ce87009af96376e651b6031cd72d935f3b26c1773d1ecb13888b2"
+      },
+      {
+        "version": "avw 0.5.1",
+        "commit": "63984ef925dfda60e1f051da4dfcec7fc7ce0623",
+        "rust": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "platform": "Linux-7.0.0-1017-azure-aarch64-with-glibc2.39",
+        "externalRuntime": [
+          "FFmpeg/ffprobe 8",
+          "licensed TTF font"
+        ],
+        "optionalRuntime": [
+          "whisper.cpp v1.9.4 and checksum-verified English model"
+        ],
+        "arch": "aarch64",
+        "binarySha256": "9cd4e8d1839dc6858e315bbfe67b3070e02e367e758441d342304c6d791f10af",
+        "archiveSha256": "271a3d80187b907079e2112d9469be64c0dd239f3300ff09b15516bd5ab55e17"
+      }
+    ]
+  },
+  "publicInstaller": {
+    "passed": true,
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "version": "avw 0.5.1",
+    "binarySha256": "4505197a38fa12d9d3127a178a0def897f11f850c37e1c6ecbd1924099eec39a",
+    "publishedNativeManifestMatch": true,
+    "extendedSourceViewsAndMcp": {
+      "passed": true,
+      "storyboardTotalSamples": 3,
+      "pagination": true,
+      "observedFrameTimes": true,
+      "cacheHit": true,
+      "storyboardColdSeconds": 0.0689391420019092,
+      "storyboardWarmSeconds": 0.0256948020105483,
+      "previewSeconds": 0.554659323010128,
+      "previewBytes": 1242586,
+      "previewFrames": 300,
+      "hardCaps": true,
+      "adaptiveEncoding": true,
+      "actualDurationFailureRejected": true,
+      "transcriptContextInvalidation": true,
+      "cliAlias": true,
+      "impossibleBudgetRejected": true,
+      "originalUnchanged": true,
+      "nonzeroOriginVfrMapping": true,
+      "hdrSdrPreview": true,
+      "rotationAppliedOnce": true,
+      "delayedAudioOnsetSeconds": 0.75,
+      "lightBurstOnsetSeconds": 0.5,
+      "measuredAvOffsetSeconds": 0.25,
+      "tamperRejected": true,
+      "sourceTamperRejectedOnCacheHit": true,
+      "videoTamperRejected": true,
+      "limitations": [
+        "Generated local media; no semantic model or host-specific media acceptance",
+        "Storyboard is sparse; no claim to capture every important event"
+      ],
+      "exactStoryboardCells": true,
+      "raggedAndDensePages": true,
+      "largeFrameSequentialFallback": true,
+      "singlePreviewValidationDecode": true,
+      "measuredImpossibleBudgetHint": true,
+      "videoOnlyPreview": true,
+      "twelveTileImageProcesses": 4,
+      "officialMcpSdk": true,
+      "cliMcpReplayEquivalent": true,
+      "boundedPreviewAudioTransport": true
+    }
+  },
+  "limits": [
+    "Native ARM64 was qualified in CI; the ARM64 binary was not installed on the local x86_64 host.",
+    "Generated media and the official MCP SDK were tested; camera appearance, semantic-model quality, physical displays and account-specific hosted acceptance remain separate.",
+    "The latency measurements use the separate locally built candidate recorded in source-view-performance.json; timing on native CI hardware is not inferred.",
+    "Storyboards are sparse navigation evidence and can miss brief events or fine details."
+  ]
+}

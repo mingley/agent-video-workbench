@@ -1,6 +1,6 @@
 # Implementation and qualification
 
-## Source-view latency improvements on 0.5.1 source
+## Source-view latency improvements (0.5.1)
 
 The runner wakes on child exit instead of waiting for a polling interval.
 Storyboards compose up to four accurately sought inputs per row; coded frames
@@ -25,6 +25,14 @@ passed Linux x86_64 and ARM64 on source commit
 `63984ef925dfda60e1f051da4dfcec7fc7ce0623`: 183 Rust tests per architecture,
 all installed CLI/MCP and media workflows, and x86_64 browser checks. The
 duplicate internal PR run was skipped; one push run qualified both archives.
+The [0.5.1 release](https://github.com/mingley/agent-video-workbench/releases/tag/v0.5.1)
+contains those exact native archives. The public installer verified the x86_64
+binary against its published manifest, and the full extended source-view and
+official MCP checks passed against the downloaded binary. ARM64 was qualified
+in native CI, not installed on the local x86_64 host. The
+[release record](../evaluation/service-results/release-0.5.1.json) binds source,
+CI, archive and installed-binary identities. Publication reused qualified
+archives and did not trigger another native build.
 
 ## Source browsing and constrained review media (0.5.0)
 

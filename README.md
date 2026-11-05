@@ -5,7 +5,7 @@ stdio. It owns immutable originals, editable projects, revision history,
 analysis, persistent jobs and verified delivery. The agent chooses content and
 uses its host's file tools to deliver results.
 
-**0.5.1 source improves browsing latency.** Event-driven subprocess completion,
+**[0.5.1](https://github.com/mingley/agent-video-workbench/releases/tag/v0.5.1) improves browsing latency.** Event-driven subprocess completion,
 bounded storyboard graphs and one-pass preview validation retain decoded media
 and timeline mappings. Five interleaved synthetic runs measured 61% faster
 storyboards and 16% faster previews; see [measurements and limits](docs/source-view-performance.md).
