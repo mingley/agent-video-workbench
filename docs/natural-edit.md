@@ -1,9 +1,9 @@
 # Preserve the recording before styling an edit
 
-This workflow requires **0.4.0 from main**. The published 0.3.1 binary has the
+This workflow requires **0.4.0 or newer**. The published 0.3.1 binary has the
 [captioned SDR workflow](first-edit.md), but does not have `assemble` or
-`edit-preflight`. Build with latest stable Rust using `cargo build --release
---locked`, then use `target/release/avw`. Configure the FFmpeg/ffprobe paths as in
+`edit-preflight`. Install the published 0.4.0 binary, or build with Rust 1.99+
+using `cargo build --release --locked` and use `target/release/avw`. Configure the FFmpeg/ffprobe paths as in
 [deployment](deployment.md). CLI JSON and MCP accept the same requests below.
 
 Start by retaining one continuous take. Compare its framing, pacing, speech and
@@ -14,8 +14,10 @@ for the design decisions behind these defaults.
 
 ## Create a source-matched baseline
 
-Keep the input and project inside your CLI workspace or MCP root. With a tagged
-Rec.709, 10-bit PQ or 10-bit HLG video at least ten seconds long:
+Keep the input and project inside your CLI workspace or MCP root. Use a tagged
+Rec.709, 10-bit PQ or 10-bit HLG video at least ten seconds long.
+The example selects only its first ten seconds; this is not an import limit.
+Choose longer source ranges as needed, up to one hour per output:
 
 ```sh
 avw doctor

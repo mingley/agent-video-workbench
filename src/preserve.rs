@@ -503,7 +503,15 @@ pub fn review_preview(
         .content_duration()?
         .rescale_to(seq.frame_rate, RoundingMode::Nearest)?
         .value;
-    let verification = crate::media::verify(&path, backend, frames, &review, sequence, control)?;
+    let verification = crate::media::verify_with_sheet(
+        &path,
+        backend,
+        frames,
+        &review,
+        sequence,
+        Some(directory),
+        control,
+    )?;
     std::fs::File::open(&path)?.sync_all()?;
     Ok(verification)
 }

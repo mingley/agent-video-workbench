@@ -42,3 +42,25 @@ fn multiline_caption_render_planes_preserve_timing_and_safe_positions() {
     assert!(lines[1].placement.unwrap().y + lines[1].placement.unwrap().scaled_height <= 608.0);
     assert_eq!(project.require_item("cue").unwrap().kind(), "caption");
 }
+
+#[test]
+fn omitted_compose_dimensions_are_independent_of_initial_project_canvas() {
+    let temp = tempfile::tempdir().unwrap();
+    let store =
+        agent_video_workbench::store::Store::create(&temp.path().join("project"), "defaults")
+            .unwrap();
+    let project = store.project().unwrap();
+    assert_eq!(
+        (
+            project.sequences[0].canvas.width,
+            project.sequences[0].canvas.height
+        ),
+        (360, 640)
+    );
+    let compose: agent_video_workbench::workflow::Compose =
+        serde_json::from_value(serde_json::json!({
+            "outputId":"short", "name":"Short", "fontAssetId":"font", "cuts":[]
+        }))
+        .unwrap();
+    assert_eq!((compose.width, compose.height), (1080, 1920));
+}

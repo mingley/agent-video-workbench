@@ -1,0 +1,166 @@
+{
+  "passed": true,
+  "sourceSeconds": 60,
+  "outputSeconds": 30,
+  "outputFrames": 900,
+  "canvas": "1280x720",
+  "fps": 30,
+  "repeatedSeconds": {
+    "before": [
+      15.398941577999949,
+      16.22168413700001,
+      16.228409190000093
+    ],
+    "after": [
+      13.945744742999977,
+      14.721164277000298,
+      14.137449304000256
+    ]
+  },
+  "comparison": "combined review sheet",
+  "stageTimesSeconds": {
+    "before": [],
+    "after": [
+      {
+        "audioFinish": 3.535e-06,
+        "delivery": 0.106424245,
+        "encode": 10.964407338000001,
+        "plan": 0.101329977,
+        "reviewPreview": 2.023e-06,
+        "totalBeforePublish": 13.933944703,
+        "verifyMaster": 2.7194112759999998,
+        "verifyOriginals": 0.042357094
+      },
+      {
+        "audioFinish": 3.265e-06,
+        "delivery": 0.104554819,
+        "encode": 11.83925385,
+        "plan": 0.101243062,
+        "reviewPreview": 3e-08,
+        "totalBeforePublish": 14.708592956,
+        "verifyMaster": 2.625033287,
+        "verifyOriginals": 0.038494489
+      },
+      {
+        "audioFinish": 3.485e-06,
+        "delivery": 0.105744031,
+        "encode": 11.252854922,
+        "plan": 0.102066319,
+        "reviewPreview": 2.424e-06,
+        "totalBeforePublish": 14.123986871,
+        "verifyMaster": 2.617966197,
+        "verifyOriginals": 0.045340108
+      }
+    ]
+  },
+  "sheetHashes": {
+    "before": "ad5f2567f83e4f53ca75aaad0e83b68a14ae70f91ad5efd80530e8cd148bedec",
+    "after": "ad5f2567f83e4f53ca75aaad0e83b68a14ae70f91ad5efd80530e8cd148bedec"
+  },
+  "verificationSubprocessSeconds": {
+    "before": [
+      4.35874055100021,
+      4.376228981999702,
+      4.207319007000024
+    ],
+    "after": [
+      2.350345149000077,
+      2.36826058700035,
+      2.4548162749997573
+    ]
+  },
+  "verificationMedianSeconds": {
+    "before": 4.35874055100021,
+    "after": 2.36826058700035
+  },
+  "medianSeconds": {
+    "before": 16.22168413700001,
+    "after": 14.137449304000256
+  },
+  "decodedHashes": {
+    "before": {
+      "video": "SHA256=5043ce8e4918c4805bde7b862804748ef9ea56ed635dc3bbf6700a85be46bc28",
+      "audio": "SHA256=63accc9671c62174cb98f60d4dd2955ae4e58edcdf57eca89ac843aec0622326"
+    },
+    "after": {
+      "video": "SHA256=5043ce8e4918c4805bde7b862804748ef9ea56ed635dc3bbf6700a85be46bc28",
+      "audio": "SHA256=63accc9671c62174cb98f60d4dd2955ae4e58edcdf57eca89ac843aec0622326"
+    }
+  },
+  "originalUnchanged": true,
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "cpuModel": "AMD EPYC 9V74 80-Core Processor",
+  "cpuQuota": "400000 100000",
+  "memoryLimitBytes": "17179869184",
+  "binaries": {
+    "before": "3e31e4b93cbce6812bd97772edf5f0fcf86b9a6ff83444c75182050764656a51",
+    "after": "b3b659ca177f751dd58a6f3fad74416a1603ea753cebeb2f4efb9f82bdeb5e94"
+  },
+  "ffmpeg": "ffmpeg version n8.0.1-48-g0592be14ff-20260116 Copyright (c) 2000-2025 the FFmpeg developers",
+  "limitations": [
+    "Synthetic SDR testsrc2 plus sine audio; no camera/HDR/4K/ASR claim",
+    "CPU only; shared virtual host, warm filesystem cache; elapsed times vary",
+    "No peak RSS measurement; existing 4GiB child limit retained"
+  ],
+  "medianReductionPercent": 12.84844912154236,
+  "baselineCommit": "9a484d28632905cb9c50f7cc3a60bbe3b20037e8",
+  "measurementScope": "Review-sheet follow-up on the same render implementation; final staged-font-size guard affects imports only.",
+  "validation": {
+    "rustTestsPassed": 176,
+    "explicitMediaTestsPassed": 2,
+    "formatting": true,
+    "strictClippy": true,
+    "releaseBuild": true,
+    "generatedSchema": true,
+    "application": {
+      "passed": true,
+      "draftFrames": 900,
+      "revisedFrames": 930,
+      "sourceUnchanged": true,
+      "undoBytesMatch": true,
+      "corruptOriginalRejected": true,
+      "rotationOrientationVerified": true,
+      "limitations": [
+        "synthetic SDR only; no real iPhone or hosted bot trial"
+      ]
+    },
+    "worker": {
+      "passed": true,
+      "ownerDeathStopsChild": true,
+      "interruptedJobRecovered": true,
+      "retryAttempt": 2,
+      "cancelBounded": true,
+      "previousFinalPreserved": true
+    },
+    "colorMemory": {
+      "passed": true,
+      "maxPatchChannelError": 2.57421875,
+      "colorTolerance8Bit": 3,
+      "hdrPreservationQualified": false,
+      "fullHdHlgFrames": 393,
+      "renderSeconds": 19.424261555999692,
+      "workerAddressSpaceBytes": 4294967296,
+      "sourceUnchanged": true
+    },
+    "preservation": {
+      "passed": true,
+      "native10BitPixelEquality": true,
+      "sdrReviewsVerified": true,
+      "fullHdRepeatedCuts": {
+        "frames": 393,
+        "size": [
+          1080,
+          1920
+        ],
+        "transfer": "arib-std-b67",
+        "sourceUnchanged": true,
+        "lossyIntermediate": false,
+        "workerAddressSpaceBytes": 4294967296
+      },
+      "losslessSdrPixelEquality": true,
+      "previewTamperRejected": true
+    },
+    "binarySha256": "6c95075abd78f46a73a627fd94a62469c646956e85ebd3c2c00b7fed413bec7e",
+    "scope": "Local Linux x86_64. No new CI, ARM64 qualification, merge, release or deployment."
+  }
+}

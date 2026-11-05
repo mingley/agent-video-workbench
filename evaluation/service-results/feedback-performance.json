@@ -1,0 +1,68 @@
+{
+  "passed": true,
+  "sourceSeconds": 60,
+  "outputSeconds": 30,
+  "outputFrames": 900,
+  "canvas": "1280x720",
+  "fps": 30,
+  "repeatedSeconds": {
+    "before": [
+      18.20588653099992,
+      18.635698083999955,
+      17.614788087999955
+    ],
+    "after": [
+      15.598042286999998,
+      16.635324700999945,
+      15.517804092000006
+    ]
+  },
+  "verificationSubprocessSeconds": {
+    "before": [
+      5.34753703399997,
+      5.1446997929999725,
+      5.310437767999929
+    ],
+    "after": [
+      2.662010109999983,
+      2.31511683899987,
+      2.515373177000015
+    ]
+  },
+  "verificationMedianSeconds": {
+    "before": 5.310437767999929,
+    "after": 2.515373177000015
+  },
+  "medianSeconds": {
+    "before": 18.20588653099992,
+    "after": 15.598042286999998
+  },
+  "decodedHashes": {
+    "before": {
+      "video": "SHA256=5043ce8e4918c4805bde7b862804748ef9ea56ed635dc3bbf6700a85be46bc28",
+      "audio": "SHA256=63accc9671c62174cb98f60d4dd2955ae4e58edcdf57eca89ac843aec0622326"
+    },
+    "after": {
+      "video": "SHA256=5043ce8e4918c4805bde7b862804748ef9ea56ed635dc3bbf6700a85be46bc28",
+      "audio": "SHA256=63accc9671c62174cb98f60d4dd2955ae4e58edcdf57eca89ac843aec0622326"
+    }
+  },
+  "originalUnchanged": true,
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "cpuModel": "AMD EPYC 9V74 80-Core Processor",
+  "cpuQuota": "400000 100000",
+  "memoryLimitBytes": "17179869184",
+  "binaries": {
+    "before": "95b33283bc4c7c655a5aed5c1fc5412be4b47596ff3924ca0817b753a2909a73",
+    "after": "3e31e4b93cbce6812bd97772edf5f0fcf86b9a6ff83444c75182050764656a51"
+  },
+  "ffmpeg": "ffmpeg version n8.0.1-48-g0592be14ff-20260116 Copyright (c) 2000-2025 the FFmpeg developers",
+  "limitations": [
+    "Synthetic SDR testsrc2 plus sine audio; no camera/HDR/4K/ASR claim",
+    "CPU only; shared virtual host, warm filesystem cache; elapsed times vary",
+    "No peak RSS measurement; existing 4GiB child limit retained"
+  ],
+  "medianReductionPercent": 14.32418157478591,
+  "baselineCommit": "2248929",
+  "recordedDate": "2026-11-05"
+}

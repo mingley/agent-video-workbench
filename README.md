@@ -22,7 +22,9 @@ chapters from selected markers; both keep the frozen revision visible.
 Use the [creator-agent toolkit](docs/creator-agent-toolkit.md) for grounded
 highlight proposals, model-visible media, reviewed captions and feedback,
 reframing, and checked batch delivery.
-Build with latest stable Rust: `cargo build --release --locked`.
+Build with Rust **1.99 or newer**: `cargo build --release --locked`.
+The checked-in `rust-toolchain.toml` selects stable with rustfmt and Clippy;
+the current validated compiler is 1.99.1. Published binaries need no compiler.
 
 The older **0.3.1** Linux binary does not include the new preserving mode. It can import local or
 resumable HTTPS originals, convert PQ/HLG HDR to Rec.709 SDR, inspect source
@@ -52,8 +54,12 @@ scripts/setup-media.sh /path/to/tools
 /path/to/new-bin/avw agent-guide
 ```
 
-Building uses latest stable Rust, rustfmt and strict Clippy. Runtime uses FFmpeg
-8 with the required caption/HDR/audio filters and libx265 for 10-bit preservation.
+Building uses Rust 1.99+, rustfmt and strict Clippy. FFmpeg **8.0.1 is the
+qualified backend**, with the required caption/HDR/audio filters and libx265 for
+10-bit preservation. `doctor` checks capabilities and small encode/decode trials,
+not a major-version gate: older builds may pass and work for some media without
+being covered by the full qualification matrix. A passing 7.1.5 trial is not a
+claim that every workflow is qualified on FFmpeg 7.
 Captioned compositions require an imported licensed TTF font.
 Optional `scripts/setup-asr.sh PROVIDER_DIRECTORY` prepares pinned whisper.cpp
 and checksum-verified English weights. Other analysis providers use an explicit

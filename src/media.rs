@@ -72,6 +72,16 @@ pub fn import(
     key: &str,
     backend: &FfmpegBackend,
 ) -> Result<Outcome> {
+    // Reject mistakes before staging multi-gigabyte originals or invoking tools.
+    // Imports expand into a core operation batch, which already requires eight
+    // bytes. Do not impose a new maximum on historical import keys.
+    if key.trim().is_empty() || key.len() < 8 {
+        return Err(Error::Invalid(
+            "import idempotency key must contain at least 8 nonblank bytes; use a descriptive --key such as import-source-01".into(),
+        ));
+    }
+    let cache = project_directory(root, "cache")?;
+    let originals = project_directory(root, "originals")?;
     let lock = OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -83,6 +93,18 @@ pub fn import(
     })?;
     let mut store = Store::open(root)?;
     store.recover_imports(root)?;
+    // A committed replay can legitimately name an old revision. Let change()
+    // compare its full request after probing, as before. New stale requests can
+    // fail now; change() still rechecks atomically against concurrent edits.
+    if store.request_outcome(key)?.is_none() {
+        let revision = store.project()?.revision;
+        if revision != expected {
+            return Err(Error::Conflict {
+                expected,
+                current: revision,
+            });
+        }
+    }
     let source_metadata = std::fs::metadata(source)?;
     if !source_metadata.is_file() {
         return Err(Error::Invalid(
@@ -94,9 +116,16 @@ pub fn import(
             "insufficient space to stage the original".into(),
         ));
     }
+    let special = matches!(
+        source.extension().and_then(|v| v.to_str()),
+        Some("ttf" | "otf" | "ttc" | "otc" | "cube" | "3dl")
+    );
+    if special && source_metadata.len() > 32 * 1024 * 1024 {
+        return Err(Error::Invalid("font/LUT exceeds 32 MiB".into()));
+    }
     let mut input = File::open(source)?;
     let import_id = uuid::Uuid::new_v4().to_string();
-    let staged = root.join("cache").join(format!(
+    let staged = cache.join(format!(
         "import-{}.{}",
         import_id,
         source
@@ -131,13 +160,11 @@ pub fn import(
             .as_ref()
             .ok_or_else(|| Error::Invalid("missing content hash".into()))?;
         let relative = format!("originals/{hash}");
-        let destination = root.join(&relative);
+        let destination = originals.join(hash);
         let mut raw_probe = Value::Null;
-        let mut metadata = if matches!(
-            staged.extension().and_then(|v| v.to_str()),
-            Some("ttf" | "otf" | "ttc" | "otc" | "cube" | "3dl")
-        ) {
-            if std::fs::metadata(&staged)?.len() > 32 * 1024 * 1024 {
+        let mut metadata = if special {
+            // Keep the staged-size check too: a source can grow during copy.
+            if fp.size_bytes > 32 * 1024 * 1024 {
                 return Err(Error::Invalid("font/LUT exceeds 32 MiB".into()));
             }
             backend.prober().probe(&staged)?
@@ -201,6 +228,7 @@ pub fn import(
             }
         }
         if destination.exists() {
+            regular_file(&destination, "existing managed original")?;
             if hash_file(&destination)? != *hash {
                 return Err(Error::Invalid("existing original is corrupt".into()));
             }
@@ -323,6 +351,8 @@ pub(crate) fn render_attempt(
     id: &str,
     control: &mut dyn crate::process::Control,
 ) -> Result<Value> {
+    let started = std::time::Instant::now();
+    let mut timings = std::collections::BTreeMap::new();
     control.check()?;
     // Projects authored before the current protection rules may contain a
     // visual solo that hides a protected clip. Revalidate the frozen input,
@@ -337,6 +367,8 @@ pub(crate) fn render_attempt(
     for asset in &project.assets {
         verify_asset_controlled(root, asset, control)?;
     }
+    timings.insert("verifyOriginals", started.elapsed().as_secs_f64());
+    let planning_started = std::time::Instant::now();
     let snapshot = project;
     let resolved = crate::preserve::resolve_metadata(project, root, backend, control)?;
     let project = &resolved;
@@ -483,6 +515,8 @@ pub(crate) fn render_attempt(
         file.write_all(&side.contents)?;
         side_paths.push(side.path.clone());
     }
+    timings.insert("plan", planning_started.elapsed().as_secs_f64());
+    let encode_started = std::time::Instant::now();
     let execution = crate::process::run(
         Command::new(&plan.program).args(&plan.args),
         std::time::Duration::from_secs(8 * 3600),
@@ -494,32 +528,52 @@ pub(crate) fn render_attempt(
     let output = execution?;
     std::fs::write(directory.join("stderr.log"), &output.stderr)?;
     std::fs::rename(&plan.temporary_output, &staged)?;
+    timings.insert("encode", encode_started.elapsed().as_secs_f64());
+    let audio_started = std::time::Instant::now();
     let audio_qc = crate::audio::finish(
         &staged,
         backend,
         project.require_sequence(sequence)?,
         control,
     )?;
+    timings.insert("audioFinish", audio_started.elapsed().as_secs_f64());
     control.stage("verifying")?;
-    let verified = verify(
-        &staged,
-        backend,
-        plan.frame_count,
-        project,
-        sequence,
-        control,
-    )?;
-    let final_path = directory.join("video.mp4");
-    let review = if contract.codec == "hevc"
+    let verification_started = std::time::Instant::now();
+    let needs_review = contract.codec == "hevc"
         || crate::assembly::policy(project.require_sequence(sequence)?)?
-            .is_some_and(|p| p.quality == crate::assembly::Quality::Lossless)
-    {
+            .is_some_and(|p| p.quality == crate::assembly::Quality::Lossless);
+    let verified = if needs_review {
+        verify(
+            &staged,
+            backend,
+            plan.frame_count,
+            project,
+            sequence,
+            control,
+        )?
+    } else {
+        verify_with_sheet(
+            &staged,
+            backend,
+            plan.frame_count,
+            project,
+            sequence,
+            Some(&directory),
+            control,
+        )?
+    };
+    timings.insert("verifyMaster", verification_started.elapsed().as_secs_f64());
+    let final_path = directory.join("video.mp4");
+    let review_started = std::time::Instant::now();
+    let review = if needs_review {
         Some(crate::preserve::review_preview(
             &staged, &directory, project, sequence, backend, control,
         )?)
     } else {
         None
     };
+    timings.insert("reviewPreview", review_started.elapsed().as_secs_f64());
+    let delivery_started = std::time::Instant::now();
     let review_path = if review.is_some() {
         directory.join("review-sdr.mp4")
     } else {
@@ -536,8 +590,10 @@ pub(crate) fn render_attempt(
         delivery["reviewVideo"] = json!("review-sdr.mp4");
         delivery["files"].as_array_mut().ok_or_else(|| Error::Invalid("delivery files missing".into()))?.push(json!({"path":"review-sdr.mp4","sha256":verification["sha256"],"mimeType":"video/mp4","verification":verification,"role":"SDR review preview; master remains source-preserving"}));
     }
-    let sheet = contact_sheet(&review_path, &directory, backend, plan.frame_count, control)?;
-    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":snapshot,"inputSeeksSeconds":seeks,"colorDecisions":color_decisions,"audioQc":audio_qc,"audioCleanup":cleanup,"delivery":delivery,"outputColor":contract,"editPreflight":preflight,"resourcePolicy":{"childAddressSpaceBytes":4294967296_u64,"childFileBytes":34359738368_u64,"threads":2,"decoderThreadsPerInput":1,"encodeDeadlineSeconds":28800}});
+    let sheet = contact_sheet_manifest(&directory, plan.frame_count, control)?;
+    timings.insert("delivery", delivery_started.elapsed().as_secs_f64());
+    timings.insert("totalBeforePublish", started.elapsed().as_secs_f64());
+    let manifest = json!({"artifactId":id,"projectId":project.project_id,"revision":project.revision,"sequenceId":sequence,"planHash":plan.plan_hash,"output":"video.mp4","verification":verified,"contactSheet":sheet,"snapshot":snapshot,"inputSeeksSeconds":seeks,"colorDecisions":color_decisions,"audioQc":audio_qc,"audioCleanup":cleanup,"delivery":delivery,"outputColor":contract,"editPreflight":preflight,"timingsSeconds":timings,"resourcePolicy":{"childAddressSpaceBytes":4294967296_u64,"childFileBytes":34359738368_u64,"threads":2,"decoderThreadsPerInput":1,"encodeDeadlineSeconds":28800}});
     let mut manifest_file = File::create(directory.join("manifest.json"))?;
     manifest_file.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
     manifest_file.sync_all()?;
@@ -558,20 +614,70 @@ pub(crate) fn verify(
     sequence: &str,
     control: &mut dyn crate::process::Control,
 ) -> Result<Value> {
-    crate::process::run(
-        Command::new(backend.ffmpeg_path())
-            .args(["-v", "error", "-xerror", "-threads", "1", "-i"])
-            .arg(path)
-            .args(["-f", "null", "-"]),
+    verify_with_sheet(path, backend, frames, project, sequence, None, control)
+}
+
+pub(crate) fn verify_with_sheet(
+    path: &Path,
+    backend: &FfmpegBackend,
+    frames: i64,
+    project: &Project,
+    sequence: &str,
+    sheet_directory: Option<&Path>,
+    control: &mut dyn crate::process::Control,
+) -> Result<Value> {
+    // Count the frames in the same strict decode that checks video and audio.
+    // Passthrough forbids timestamp-driven duplication/drop; container nb_frames
+    // alone is not evidence of a complete decode. Keep progress output bounded.
+    let mut decode = Command::new(backend.ffmpeg_path());
+    decode
+        .args(["-v", "error", "-xerror", "-threads", "1", "-i"])
+        .arg(path)
+        .args([
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a?",
+            "-fps_mode",
+            "passthrough",
+            "-nostats",
+            "-stats_period",
+            "3600",
+            "-progress",
+            "pipe:1",
+            "-f",
+            "null",
+            "-",
+        ]);
+    if let Some(directory) = sheet_directory {
+        // The null output stays first so progress counts every decoded video
+        // frame. A second output samples the same decoder for the review sheet;
+        // finishing that image must not truncate the full validation decode.
+        decode
+            .args([
+                "-map",
+                "0:v:0",
+                "-vf",
+                &contact_sheet_filter(frames),
+                "-frames:v",
+                "1",
+                "-an",
+                "-threads",
+                "1",
+            ])
+            .arg(directory.join("sheet.png"));
+    }
+    let decoded = crate::process::run(
+        &mut decode,
         std::time::Duration::from_secs(4 * 3600),
         control,
     )?;
+    let decoded_frames = decoded_frame_count(&decoded.stdout)?;
     let probe = crate::process::run(
         Command::new(backend.ffprobe_path())
             .args([
                 "-v",
                 "error",
-                "-count_frames",
                 "-threads",
                 "1",
                 "-show_streams",
@@ -584,6 +690,12 @@ pub(crate) fn verify(
         control,
     )?;
     let mut metadata: Value = serde_json::from_slice(&probe.stdout)?;
+    let video = metadata["streams"]
+        .as_array_mut()
+        .and_then(|streams| streams.iter_mut().find(|s| s["codec_type"] == "video"))
+        .ok_or_else(|| Error::Invalid("no video".into()))?;
+    // Preserve the manifest field consumed by review/delivery timing checks.
+    video["nb_read_frames"] = json!(decoded_frames.to_string());
     let contract = crate::preserve::output(project, sequence)?;
     if contract.hdr {
         crate::preserve::capture_metadata(backend, path, &mut metadata, control)?;
@@ -653,36 +765,52 @@ pub(crate) fn verify(
         }
     }
     Ok(
-        json!({"decoded":true,"expectedFrames":frames,"sha256":hash_file_controlled(path, control)?,"probe":metadata}),
+        json!({"decoded":true,"frameCountMethod":"ffmpeg-passthrough-decode-progress","expectedFrames":frames,"sha256":hash_file_controlled(path, control)?,"probe":metadata}),
     )
+}
+
+fn decoded_frame_count(progress: &[u8]) -> Result<i64> {
+    let text = std::str::from_utf8(progress)
+        .map_err(|_| Error::Invalid("invalid decode progress".into()))?;
+    let mut frames = None;
+    let mut complete = false;
+    for line in text.lines() {
+        if let Some(value) = line.strip_prefix("frame=") {
+            frames = value.trim().parse::<i64>().ok().filter(|n| *n >= 0);
+        }
+        if let Some(value) = line.strip_prefix("progress=") {
+            complete = value == "end";
+        }
+    }
+    frames
+        .filter(|_| complete)
+        .ok_or_else(|| Error::Invalid("decode did not report a final frame count".into()))
 }
 
 pub fn backend(ffmpeg: PathBuf, ffprobe: PathBuf) -> FfmpegBackend {
     FfmpegBackend::new(ffmpeg, ffprobe)
 }
 
-fn contact_sheet(
-    path: &Path,
+fn contact_sheet_filter(frames: i64) -> String {
+    let step = (frames / 4).max(1);
+    format!(
+        "select='not(mod(n,{step}))',scale=180:320:force_original_aspect_ratio=decrease,pad=180:320:(ow-iw)/2:(oh-ih)/2,tile=4x1"
+    )
+}
+
+fn contact_sheet_manifest(
     directory: &Path,
-    backend: &FfmpegBackend,
     frames: i64,
     control: &mut dyn crate::process::Control,
 ) -> Result<Value> {
     let step = (frames / 4).max(1);
-    let filter = format!(
-        "select='not(mod(n,{step}))',scale=180:320:force_original_aspect_ratio=decrease,pad=180:320:(ow-iw)/2:(oh-ih)/2,tile=4x1"
-    );
-    crate::process::run(
-        Command::new(backend.ffmpeg_path())
-            .args(["-v", "error", "-threads", "1", "-i"])
-            .arg(path)
-            .args(["-vf", &filter, "-frames:v", "1"])
-            .arg(directory.join("sheet.png")),
-        std::time::Duration::from_secs(4 * 3600),
-        control,
-    )?;
+    let selected: Vec<_> = (0..4)
+        .map(|n| n * step)
+        .take_while(|&n| n < frames)
+        .collect();
+    File::open(directory.join("sheet.png"))?.sync_all()?;
     Ok(
-        json!({"path":"sheet.png","outputFrames":[0,step,step*2,step*3],"tileWidth":180,"tileHeight":320,"sha256":hash_file_controlled(&directory.join("sheet.png"),control)?}),
+        json!({"path":"sheet.png","outputFrames":selected,"tileWidth":180,"tileHeight":320,"sha256":hash_file_controlled(&directory.join("sheet.png"),control)?}),
     )
 }
 
@@ -972,11 +1100,194 @@ fn seek_project(
 #[cfg(test)]
 mod render_input_tests {
     use super::*;
+    #[test]
+    fn decode_count_requires_complete_valid_progress() {
+        assert_eq!(
+            decoded_frame_count(b"frame=1\nprogress=continue\nframe=900\nprogress=end\n").unwrap(),
+            900
+        );
+        for invalid in [
+            b"frame=900\nprogress=continue\n".as_slice(),
+            b"progress=end\n",
+            b"frame=-1\nprogress=end\n",
+            b"frame=bad\nprogress=end\n",
+        ] {
+            assert!(decoded_frame_count(invalid).is_err());
+        }
+    }
     use agentcut_core::{
         Asset, AssetKind, AudioMetadata, BlendMode, ClipData, Fingerprint, ItemPayload,
         MediaMetadata, RationalRate, Sequence, SequenceRefData, TimeRange, TimelineItem, Track,
         TrackType, Transform2d,
     };
+
+    #[test]
+    #[ignore = "requires AVW_TEST_FFMPEG and AVW_TEST_FFPROBE"]
+    fn single_decode_verifies_real_media_and_rejects_damage() {
+        let backend = backend(
+            std::env::var("AVW_TEST_FFMPEG")
+                .expect("test FFmpeg path")
+                .into(),
+            std::env::var("AVW_TEST_FFPROBE")
+                .expect("test ffprobe path")
+                .into(),
+        );
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("source.mp4");
+        let status = Command::new(backend.ffmpeg_path())
+            .args([
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=s=64x64:r=30000/1001",
+                "-frames:v",
+                "360",
+                "-c:v",
+                "libx264",
+                "-threads",
+                "1",
+                "-x264-params",
+                "colorprim=bt709:transfer=bt709:colormatrix=bt709",
+                "-pix_fmt",
+                "yuv420p",
+                "-color_range",
+                "tv",
+                "-movflags",
+                "+faststart",
+            ])
+            .arg(&path)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let project = Project::new(
+            "decode",
+            64,
+            64,
+            RationalRate {
+                numerator: 30000,
+                denominator: 1001,
+            },
+        );
+        let mut control = crate::process::Uncontrolled;
+        let verified = verify(&path, &backend, 360, &project, "seq_main", &mut control).unwrap();
+        assert_eq!(verified["probe"]["streams"][0]["nb_read_frames"], "360");
+        assert!(verify(&path, &backend, 359, &project, "seq_main", &mut control).is_err());
+        let bytes = std::fs::read(&path).unwrap();
+        // Keep the faststart header but truncate the actual encoded frames.
+        std::fs::write(&path, &bytes[..bytes.len() / 2]).unwrap();
+        assert!(verify(&path, &backend, 360, &project, "seq_main", &mut control).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires AVW_TEST_FFMPEG and AVW_TEST_FFPROBE"]
+    fn combined_decode_keeps_sheet_pixels_and_validates_after_the_last_tile() {
+        let backend = backend(
+            std::env::var("AVW_TEST_FFMPEG")
+                .expect("test FFmpeg path")
+                .into(),
+            std::env::var("AVW_TEST_FFPROBE")
+                .expect("test ffprobe path")
+                .into(),
+        );
+        let temp = tempfile::tempdir().unwrap();
+        let project = Project::new(
+            "sheets",
+            64,
+            64,
+            RationalRate {
+                numerator: 30000,
+                denominator: 1001,
+            },
+        );
+        let mut control = crate::process::Uncontrolled;
+        for frames in [1, 2, 3, 5, 360] {
+            let directory = temp.path().join(frames.to_string());
+            std::fs::create_dir(&directory).unwrap();
+            let path = directory.join("source.mp4");
+            let status = Command::new(backend.ffmpeg_path())
+                .args([
+                    "-v",
+                    "error",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "testsrc2=s=64x64:r=30000/1001",
+                    "-frames:v",
+                    &frames.to_string(),
+                    "-c:v",
+                    "libx264",
+                    "-threads",
+                    "1",
+                    "-x264-params",
+                    "colorprim=bt709:transfer=bt709:colormatrix=bt709",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-color_range",
+                    "tv",
+                    "-movflags",
+                    "+faststart",
+                ])
+                .arg(&path)
+                .status()
+                .unwrap();
+            assert!(status.success());
+            let verification = verify_with_sheet(
+                &path,
+                &backend,
+                frames,
+                &project,
+                "seq_main",
+                Some(&directory),
+                &mut control,
+            )
+            .unwrap();
+            assert_eq!(verification["expectedFrames"], frames);
+            let manifest = contact_sheet_manifest(&directory, frames, &mut control).unwrap();
+            if frames < 4 {
+                assert_eq!(
+                    manifest["outputFrames"],
+                    json!((0..frames).collect::<Vec<_>>())
+                );
+            }
+            // The previous standalone sheet path is an independent pixel
+            // reference. Matching PNG bytes includes scaling/padding/tile order.
+            let legacy = directory.join("legacy.png");
+            let status = Command::new(backend.ffmpeg_path())
+                .args(["-v", "error", "-threads", "1", "-i"])
+                .arg(&path)
+                .args(["-vf", &contact_sheet_filter(frames), "-frames:v", "1"])
+                .arg(&legacy)
+                .status()
+                .unwrap();
+            assert!(status.success());
+            assert_eq!(
+                std::fs::read(directory.join("sheet.png")).unwrap(),
+                std::fs::read(&legacy).unwrap()
+            );
+            if frames == 360 {
+                // The last sampled tile is frame 270. Damage near the end of
+                // the stream must still fail, despite already sampling it.
+                let bytes = std::fs::read(&path).unwrap();
+                std::fs::write(&path, &bytes[..bytes.len() * 95 / 100]).unwrap();
+                let failed = directory.join("failed");
+                std::fs::create_dir(&failed).unwrap();
+                assert!(
+                    verify_with_sheet(
+                        &path,
+                        &backend,
+                        frames,
+                        &project,
+                        "seq_main",
+                        Some(&failed),
+                        &mut control
+                    )
+                    .is_err()
+                );
+            }
+        }
+    }
 
     #[test]
     fn disabled_solos_are_cleared_for_nested_render_preparation_only() {

@@ -200,3 +200,20 @@ fn abandoned_import_recovers_only_its_owned_staged_file() {
     assert!(unrelated.exists());
     assert_eq!(store.project().unwrap().revision, 0);
 }
+
+#[test]
+fn new_project_identifies_workbench_and_retains_upstream_schema() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("project");
+    let store = Store::create(&path, "identity").unwrap();
+    let project = store.project().unwrap();
+    let author = project.created_by.as_ref().unwrap();
+    assert_eq!(author.application, "agent-video-workbench");
+    assert_eq!(author.version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(
+        project.schema_uri.as_deref(),
+        Some("schemas/agentcut-project.schema.json")
+    );
+    drop(store);
+    assert_eq!(Store::open(&path).unwrap().project().unwrap(), project);
+}
