@@ -1,7 +1,13 @@
 name: Rust and agent workflow
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    paths-ignore: [.github/release-request.json]
+  pull_request:
+  workflow_dispatch:
 jobs:
   qualify:
+    # Internal branches already qualify on push. Fork PRs still need parent CI.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     strategy:
       fail-fast: false
       matrix:

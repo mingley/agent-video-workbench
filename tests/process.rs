@@ -32,6 +32,29 @@ fn cancellation_stops_owned_process_group_and_returns_promptly() {
     assert!(matches!(result, Err(Error::Cancelled)));
     assert!(start.elapsed() < Duration::from_secs(3));
 }
+
+#[test]
+fn exited_leader_cannot_leave_descendants_holding_capture_pipes() {
+    let start = Instant::now();
+    let output = process::run(
+        Command::new("sh").args(["-c", "sleep 60 & printf finished"]),
+        Duration::from_secs(10),
+        &mut Uncontrolled,
+    )
+    .unwrap();
+    assert_eq!(output.stdout, b"finished");
+    assert!(start.elapsed() < Duration::from_secs(3));
+}
+
+#[test]
+fn excessive_stdout_is_drained_and_refused() {
+    let result = process::run(
+        Command::new("head").args(["-c", "9437184", "/dev/zero"]),
+        Duration::from_secs(10),
+        &mut Uncontrolled,
+    );
+    assert!(matches!(result, Err(Error::Invalid(message)) if message.contains("8 MiB")));
+}
 #[test]
 fn timeout_and_failure_have_bounded_diagnostics() {
     assert!(matches!(

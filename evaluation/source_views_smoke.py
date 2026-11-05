@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generated source-wide storyboard / precise constrained preview / mapping regression."""
-import argparse, base64, hashlib, json, statistics, subprocess, time
+import argparse, base64, hashlib, json, re, statistics, subprocess, time
 from pathlib import Path
 p=argparse.ArgumentParser(description=__doc__)
 for name in ('avw','ffmpeg','ffprobe','output'): p.add_argument('--'+name,required=True)
@@ -29,6 +29,24 @@ def view(command,request,key,state='succeeded'):
  assert call('status')['revision']==revision
  return report,elapsed,artifact
 
+def assert_story_cells(report, artifact, original, adapter='', autorotate=False):
+ """Compare each cell with an independent single-seek decode, including padding."""
+ data=report['data'];tw,th,columns=data['tileWidth'],data['tileHeight'],data['columns']
+ rows=(len(data['tiles'])+columns-1)//columns;w,h=tw*columns,th*rows
+ sheet=next(f['path'] for f in artifact['attachments'] if Path(f['path']).name=='storyboard.png')
+ rgb=run([a.ffmpeg,'-v','error','-threads','1','-i',sheet,'-pix_fmt','rgb24','-threads','1','-f','rawvideo','-'])
+ assert len(rgb)==w*h*3,(len(rgb),w,h)
+ for tile in data['tiles']:
+  filters=(adapter+',' if adapter else '')+f'scale={tw}:{th}:force_original_aspect_ratio=decrease,pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2,setsar=1'
+  input_args=[a.ffmpeg,'-v','error','-threads','1','-ss',str(tile['requestedSourceTimeMs']/1000)]
+  if not autorotate:input_args+=['-noautorotate']
+  expected=run([*input_args,'-i',original,'-vf',filters,'-frames:v','1','-fps_mode','passthrough','-pix_fmt','rgb24','-threads','1','-f','rawvideo','-'])
+  actual=b''.join(rgb[((tile['row']*th+y)*w+tile['column']*tw)*3:((tile['row']*th+y)*w+(tile['column']+1)*tw)*3] for y in range(th))
+  assert actual==expected,(original,tile)
+ # Cells outside a partial last row must remain black.
+ for cell in range(len(data['tiles']),columns*rows):
+  assert not any(b for y in range(th) for b in rgb[((cell//columns*th+y)*w+cell%columns*tw)*3:((cell//columns*th+y)*w+(cell%columns+1)*tw)*3])
+
 source=root/'source.mp4'
 run([a.ffmpeg,'-v','error','-f','lavfi','-i','testsrc2=s=640x360:r=30:d=30','-f','lavfi','-i','sine=frequency=440:duration=30','-c:v','libx264','-preset','ultrafast','-threads','2','-g','240','-bf','2','-keyint_min','240','-sc_threshold','0','-pix_fmt','yuv420p','-x264-params','colorprim=bt709:transfer=bt709:colormatrix=bt709','-color_range','tv','-c:a','aac','-shortest',source])
 original_sha=hashlib.sha256(source.read_bytes()).hexdigest();call('create',name='Source views regression');call('import',source=str(source),id='source',expectedRevision=0,key='source-import')
@@ -56,13 +74,14 @@ duration_failed,_,_=view('budget-preview',{**preview,'endMs':10299,'maxDurationM
 assert 'duration' in duration_failed['error'],duration_failed
 # Impossible byte cap must not publish a successful or partial artifact.
 failed,_,_=view('budget-preview',{**preview,'maxBytes':16384},'impossible-size',state='failed');assert 'maxBytes' in failed['error'],failed
+hint=re.search(r'smallest observed attempt was (\d+) bytes',failed['error']);assert hint and int(hint[1])>16384,failed
 assert failed['result'] is None
 call('budget-preview',ok=False,request={**preview,'maxDurationMs':9999},expectedRevision=1,key='invalid-duration',noLaunch=True)
 # Sparse VFR, nonzero container origin and deliberately delayed audio.
 vfr=root/'vfr-offset.mp4'
 run([a.ffmpeg,'-v','error','-f','lavfi','-i','testsrc2=s=320x180:r=30:d=8','-f','lavfi','-i',"aevalsrc=0.5*sin(2*PI*1000*t)*between(t\\,1\\,1.1):s=48000:d=8",'-vf',"drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='between(t,1,1.1)',select='not(mod(n,3))+eq(mod(n,30),1)',setpts=PTS+5/TB",'-af','asetpts=PTS+5.25/TB','-fps_mode','vfr','-copyts','-c:v','libx264','-preset','ultrafast','-threads','2','-pix_fmt','yuv420p','-x264-params','colorprim=bt709:transfer=bt709:colormatrix=bt709','-color_range','tv','-c:a','aac',vfr])
 call('import',source=str(vfr),id='vfr',expectedRevision=1,key='vfr-import')
-vr,_,_=view('source-storyboard',{'assetId':'vfr','startMs':550,'endMs':4500,'sampleEveryMs':1000,'limit':4},'vfr-storyboard')
+vr,_,vra=view('source-storyboard',{'assetId':'vfr','startMs':550,'endMs':4500,'sampleEveryMs':1000,'limit':4},'vfr-storyboard')
 assert vr['data']['tiles'][0]['sourceTimeMs']==600,vr['data']
 vp,_,vpa=view('budget-preview',{'assetId':'vfr','startMs':500,'endMs':4500,'maxDurationMs':4500,'maxBytes':1000000,'width':320,'height':180},'vfr-preview')
 assert vp['data']['frameMapping'] and abs(vp['data']['sourceClock']['containerOrigin']['value']*vp['data']['sourceClock']['containerOrigin']['rate']['denominator']/vp['data']['sourceClock']['containerOrigin']['rate']['numerator']-5)<.001,vp['data']
@@ -93,7 +112,7 @@ assert alias['ok'];run([a.avw,'worker',project]);assert call('job-status',id=ali
 hdr=root/'hlg.mp4'
 run([a.ffmpeg,'-v','error','-threads','1','-i',source,'-t','3','-vf','zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited,format=yuv420p10le','-c:v','libx265','-preset','ultrafast','-x265-params','pools=2:frame-threads=1:log-level=error:colorprim=bt2020:transfer=arib-std-b67:colormatrix=bt2020nc','-c:a','copy',hdr])
 call('import',source=str(hdr),id='hlg',expectedRevision=3,key='hlg-view-import')
-hp,_,_=view('source-storyboard',{'assetId':'hlg','sampleEveryMs':1000,'limit':3},'hlg-storyboard')
+hp,_,hpa=view('source-storyboard',{'assetId':'hlg','sampleEveryMs':1000,'limit':3},'hlg-storyboard')
 assert len(hp['data']['tiles'])==3 and hp['data']['nextOffset'] is None,hp['data']
 hr,_,ha=view('budget-preview',{'assetId':'hlg','startMs':300,'endMs':2300,'maxDurationMs':2000,'maxBytes':1000000,'width':320,'height':180},'hlg-budget-preview')
 hclip=next(Path(f['path']) for f in ha['attachments'] if Path(f['path']).name=='proxy.mp4')
@@ -103,6 +122,57 @@ rotated=root/'rotated.mp4';run([a.ffmpeg,'-v','error','-display_rotation','90','
 call('import',source=str(rotated),id='rotated',expectedRevision=4,key='rotate-view-import')
 rot,_,_=view('budget-preview',{'assetId':'rotated','startMs':300,'endMs':2300,'maxDurationMs':2000,'maxBytes':2000000,'width':360,'height':640},'rotated-budget-preview')
 assert rot['data']['width']==360 and rot['data']['height']==640,rot['data']
+# Independently validate sparse-cell placement and actual image content.
+dense,_,da=view('source-storyboard',{'assetId':'source','sampleEveryMs':1000,'limit':24},'dense-storyboard')
+assert len(dense['data']['tiles'])==24 and dense['data']['nextOffset']==24
+assert_story_cells(dense,da,source)
+ragged,_,ra=view('source-storyboard',{'assetId':'source','sampleEveryMs':1000,'offset':3,'limit':6},'ragged-storyboard')
+assert [t['sourceTimeMs'] for t in ragged['data']['tiles']]==list(range(3000,9000,1000))
+assert_story_cells(ragged,ra,source)
+single,_,sa=view('source-storyboard',{'assetId':'source','sampleEveryMs':1000,'offset':29,'limit':24},'single-last-tile')
+assert single['data']['nextOffset'] is None and len(single['data']['tiles'])==1
+assert_story_cells(single,sa,source)
+assert_story_cells(vr,vra,vfr)
+rot_story,_,rsa=view('source-storyboard',{'assetId':'rotated','sampleEveryMs':1000,'limit':3},'rotated-storyboard')
+assert_story_cells(rot_story,rsa,rotated,autorotate=True)
+hdr_filter='zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=mobius:param=0.3:desat=2:peak=10,zscale=t=bt709:m=bt709:r=limited:dither=error_diffusion,format=yuv420p'
+assert_story_cells(hp,hpa,hdr,hdr_filter)
+large=root/'large.mp4'
+run([a.ffmpeg,'-v','error','-f','lavfi','-i','testsrc2=s=3840x2160:r=2:d=6','-c:v','libx264','-preset','ultrafast','-threads','2','-x264-params','colorprim=bt709:transfer=bt709:colormatrix=bt709','-color_range','tv',large])
+call('import',source=str(large),id='large',expectedRevision=5,key='large-view-import')
+large_story,_,lsa=view('source-storyboard',{'assetId':'large','sampleEveryMs':1000,'limit':5},'large-storyboard')
+assert_story_cells(large_story,lsa,large)
+silent_preview,_,_=view('budget-preview',{'assetId':'large','startMs':500,'endMs':2500,'maxDurationMs':2000,'maxBytes':1000000,'width':640,'height':360},'video-only-preview')
+assert silent_preview['data']['verification']['videoFrames']==4,silent_preview['data']
+# Observe the actual backend invocations: output metadata probing must not
+# request frames, and one full audio/video validation decode must remain.
+actual_ffmpeg,actual_ffprobe=a.ffmpeg,a.ffprobe
+for name in ('ffmpeg','ffprobe'):
+ actual=getattr(a,name);wrapper=root/(name+'-observer');log_path=root/(name+'-invocations.jsonl')
+ wrapper.write_text('#!/usr/bin/env python3\nimport json,os,sys\n'+f'with open({str(log_path)!r},"a") as log: log.write(json.dumps(sys.argv[1:])+"\\n")\n'+f'os.execv({actual!r},[{actual!r},*sys.argv[1:]])\n')
+ wrapper.chmod(0o755);setattr(a,name,str(wrapper))
+observed,_,_=view('budget-preview',{**preview,'maxBytes':2000011},'observed-one-decode')
+a.ffmpeg,a.ffprobe=actual_ffmpeg,actual_ffprobe
+probes=[json.loads(l) for l in (root/'ffprobe-invocations.jsonl').read_text().splitlines()]
+assert len(probes)==2 and sum('-show_frames' in p for p in probes)==1,probes
+metadata_probe=next(p for p in probes if '-show_frames' not in p)
+assert 'frame=' not in metadata_probe[metadata_probe.index('-show_entries')+1],metadata_probe
+ffmpeg_calls=[json.loads(l) for l in (root/'ffmpeg-invocations.jsonl').read_text().splitlines()]
+assert sum('framecrc' in p for p in ffmpeg_calls)==1 and not any('null' in p for p in ffmpeg_calls),ffmpeg_calls
+assert observed['data']['verification']['frameCountMethod']=='ffmpeg-framecrc-single-decode'
+before=len(ffmpeg_calls)
+# Observe exactly four image processes for twelve normal-resolution samples.
+a.ffmpeg=str(root/'ffmpeg-observer')
+view('source-storyboard',{'assetId':'source','sampleEveryMs':1000,'limit':12,'maxBytes':1048587},'observed-row-graphs')
+row_calls=[json.loads(l) for l in (root/'ffmpeg-invocations.jsonl').read_text().splitlines()][before:]
+assert sum('-filter_complex' in p for p in row_calls)==4,row_calls
+assert all(p.count('-i')<=4 for p in row_calls),row_calls
+before+=len(row_calls)
+view('source-storyboard',{'assetId':'large','sampleEveryMs':1000,'limit':5,'maxBytes':1048588},'observed-large-rows')
+large_calls=[json.loads(l) for l in (root/'ffmpeg-invocations.jsonl').read_text().splitlines()][before:]
+source_reads=[p for p in large_calls if '-ss' in p]
+assert len(source_reads)==5 and all(p.count('-i')==1 for p in source_reads),source_reads
+a.ffmpeg=actual_ffmpeg
 # Integrity rejection for an existing cached image.
 sheet=next(Path(f['path']) for f in artifact['attachments'] if Path(f['path']).name=='storyboard.png');saved=sheet.read_bytes();sheet.write_bytes(saved+b'tamper')
 call('agent-media',ok=False,media={'kind':'storyboard','project':str(project),'jobId':artifact['jobId']});sheet.write_bytes(saved)
@@ -114,4 +184,6 @@ assert 'bytes changed' in source_failed['error'];managed.write_bytes(managed_sav
 assert hashlib.sha256(source.read_bytes()).hexdigest()==original_sha
 assert not any(project.joinpath('cache').glob('analysis-*'))
 summary={'passed':True,'storyboardTotalSamples':3,'pagination':True,'observedFrameTimes':True,'cacheHit':True,'storyboardColdSeconds':t,'storyboardWarmSeconds':hit,'previewSeconds':preview_time,'previewBytes':pd['bytes'],'previewFrames':pd['verification']['videoFrames'],'hardCaps':True,'adaptiveEncoding':True,'actualDurationFailureRejected':True,'transcriptContextInvalidation':True,'cliAlias':True,'impossibleBudgetRejected':True,'originalUnchanged':True,'nonzeroOriginVfrMapping':True,'hdrSdrPreview':True,'rotationAppliedOnce':True,'delayedAudioOnsetSeconds':audio_on,'lightBurstOnsetSeconds':video_on,'measuredAvOffsetSeconds':audio_on-video_on,'tamperRejected':True,'sourceTamperRejectedOnCacheHit':True,'videoTamperRejected':True,'revision':call('status')['revision'],'storyboardJobId':artifact['jobId'],'previewJobId':pa['jobId'],'limitations':['Generated local SDR; no semantic model or host-specific media acceptance','Storyboard is sparse; no claim to capture every important event']}
+summary.update({'exactStoryboardCells':True,'raggedAndDensePages':True,'largeFrameSequentialFallback':True,'singlePreviewValidationDecode':True,'measuredImpossibleBudgetHint':True,'videoOnlyPreview':True,'twelveTileImageProcesses':4})
+summary['limitations'][0]='Generated local media; no semantic model or host-specific media acceptance'
 (root/'summary.json').write_text(json.dumps(summary,indent=2));print(json.dumps(summary,indent=2))

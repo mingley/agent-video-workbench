@@ -251,23 +251,38 @@ pub fn validate_preview(q: &BudgetPreview, project: &Project) -> Result<()> {
     Ok(())
 }
 
-fn observed_frame(log: &str) -> Result<(i64, (u32, u32))> {
-    let b = log
+fn observed_frame(log: &str, sample: i64) -> Result<(i64, (u32, u32))> {
+    let tag = format!("[showinfo@sample{sample} @");
+    let lines = log
         .lines()
-        .find_map(|line| {
+        .filter(|line| line.starts_with(&tag))
+        .collect::<Vec<_>>();
+    let bases = lines
+        .iter()
+        .filter_map(|line| {
             line.split_once("config in time_base:")
                 .map(|(_, s)| s.split(',').next().unwrap_or("").trim())
         })
-        .ok_or_else(|| invalid("decoded frame time base unavailable"))?;
-    let pts = log
-        .lines()
-        .filter(|l| l.contains("showinfo") && l.contains("pts_time:"))
-        .find_map(|line| {
+        .collect::<Vec<_>>();
+    let [b] = bases.as_slice() else {
+        return Err(invalid(
+            "decoded sample must have one unambiguous time base",
+        ));
+    };
+    let pts = lines
+        .iter()
+        .filter(|l| l.contains("pts_time:"))
+        .map(|line| {
             line.split_once(" pts:")
                 .and_then(|(_, s)| s.split_whitespace().next()?.parse::<i64>().ok())
         })
-        .ok_or_else(|| invalid("decoded frame timestamp unavailable"))?;
-    Ok((pts, base(b)?))
+        .collect::<Vec<_>>();
+    match pts.as_slice() {
+        [Some(pts)] => Ok((*pts, base(b)?)),
+        _ => Err(invalid(
+            "decoded sample must have exactly one observed timestamp",
+        )),
+    }
 }
 
 pub fn storyboard(
@@ -289,69 +304,107 @@ pub fn storyboard(
     let height = q.tile_width * 9 / 16;
     let mut tiles = Vec::new();
     let mut paths = Vec::new();
-    for index in i64::from(q.offset)..last {
+    let color = color::source_filter(asset)?;
+    let color = if color.is_empty() {
+        color
+    } else {
+        format!("{color},")
+    };
+    // Four accurately sought inputs per row bound concurrent decoder memory.
+    // Trim before timestamp reset, then compose raw RGB cells before PNG
+    // encoding. This avoids one process and PNG round trip per source sample.
+    // Larger coded frames retain sequential extraction to avoid multiplying
+    // their decoder buffers. Composition still uses the same page grid.
+    let batch_size = if asset
+        .metadata
+        .video
+        .as_ref()
+        .is_some_and(|v| u64::from(v.size.width) * u64::from(v.size.height) > 1920 * 1080)
+    {
+        1
+    } else {
+        4
+    };
+    for row_start in (i64::from(q.offset)..last).step_by(batch_size) {
         control.check()?;
-        let requested = q.start_ms + index * i64::from(q.sample_every_ms);
-        let path = scratch.join(format!("tile-{index}.png"));
-        let color = color::source_filter(asset)?;
-        let filter = format!(
-            "showinfo,{}scale={}:{}:force_original_aspect_ratio=decrease,pad={}:{}:(ow-iw)/2:(oh-ih)/2,setsar=1",
-            if color.is_empty() {
-                color
-            } else {
-                format!("{color},")
-            },
-            q.tile_width,
-            height,
-            q.tile_width,
-            height
-        );
-        let output = process::run(
-            Command::new(backend.ffmpeg_path())
-                .args([
-                    "-nostdin",
-                    "-v",
-                    "info",
-                    "-copyts",
-                    "-threads",
-                    "1",
-                    "-protocol_whitelist",
-                    "file",
-                    "-ss",
-                    &seconds(workflow::time(requested)),
-                    "-noautorotate",
-                    "-i",
-                ])
-                .arg(source)
-                .args([
-                    "-map",
-                    &format!("0:{}", clock.stream),
-                    "-vf",
-                    &filter,
-                    "-frames:v",
-                    "1",
-                    "-fps_mode",
-                    "passthrough",
-                    "-map_metadata",
-                    "-1",
-                    "-threads",
-                    "1",
-                ])
-                .arg(&path),
-            Duration::from_secs(60),
-            control,
-        )?;
-        let (pts, b) = observed_frame(&output.stderr)?;
-        let actual = time(pts, b).checked_sub(clock.origin)?;
-        if actual.checked_cmp(workflow::time(requested))?.is_lt()
-            || actual.checked_cmp(workflow::time(end))?.is_ge()
-        {
-            return Err(invalid(
-                "decoded sample is outside its requested source window; inspect a narrower or earlier scope",
+        let row_end = (row_start + batch_size as i64).min(last);
+        let path = scratch.join(format!("row-{}.png", paths.len()));
+        let mut cmd = Command::new(backend.ffmpeg_path());
+        cmd.args([
+            "-nostdin",
+            "-v",
+            "info",
+            "-copyts",
+            "-filter_complex_threads",
+            "1",
+        ]);
+        let mut chains = Vec::new();
+        for (input, index) in (row_start..row_end).enumerate() {
+            let requested = q.start_ms + index * i64::from(q.sample_every_ms);
+            cmd.args([
+                "-threads",
+                "1",
+                "-protocol_whitelist",
+                "file",
+                "-ss",
+                &seconds(workflow::time(requested)),
+                "-noautorotate",
+                "-i",
+            ])
+            .arg(source);
+            chains.push(format!(
+                "[{input}:{}]trim=end_frame=1,showinfo@sample{index}=checksum=0,{color}scale={}:{}:force_original_aspect_ratio=decrease,pad={}:{}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=rgb24,setpts=PTS-STARTPTS[t{input}]",
+                clock.stream, q.tile_width, height, q.tile_width, height
             ));
         }
-        let tile = tiles.len() as i64;
-        tiles.push(json!({"index":index,"requestedSourceTimeMs":requested,"observedPts":pts,"timeBase":format!("{}/{}",b.0,b.1),"sourceTime":actual,"sourceTimeMs":actual.rescale_to(workflow::time(0).rate,RoundingMode::Nearest)?.value,"column":tile%columns,"row":tile/columns}));
+        let row_count = row_end - row_start;
+        let inputs = (0..row_count)
+            .map(|i| format!("[t{i}]"))
+            .collect::<String>();
+        let stack = if row_count == 1 {
+            String::new()
+        } else {
+            let layout = (0..row_count)
+                .map(|i| format!("{}_0", i * i64::from(q.tile_width)))
+                .collect::<Vec<_>>()
+                .join("|");
+            format!("xstack=inputs={row_count}:layout={layout}:fill=black,")
+        };
+        let row_width = if batch_size == 1 { 1 } else { columns } * i64::from(q.tile_width);
+        chains.push(format!(
+            "{inputs}{stack}pad={}:{}:0:0:color=black[row]",
+            row_width, height
+        ));
+        cmd.args([
+            "-filter_complex",
+            &chains.join(";"),
+            "-map",
+            "[row]",
+            "-frames:v",
+            "1",
+            "-fps_mode",
+            "passthrough",
+            "-map_metadata",
+            "-1",
+            "-threads",
+            "1",
+        ])
+        .arg(&path);
+        let output = process::run(&mut cmd, Duration::from_secs(60), control)?;
+        for index in row_start..row_end {
+            let requested = q.start_ms + index * i64::from(q.sample_every_ms);
+            let (pts, b) = observed_frame(&output.stderr, index)?;
+            let actual = time(pts, b).checked_sub(clock.origin)?;
+            if actual.checked_cmp(workflow::time(requested))?.is_lt()
+                || actual.checked_cmp(workflow::time(end))?.is_ge()
+            {
+                return Err(invalid(
+                    "decoded sample is outside its requested source window; inspect a narrower or earlier scope",
+                ));
+            }
+            let tile = tiles.len() as i64;
+            tiles.push(json!({"index":index,"requestedSourceTimeMs":requested,"observedPts":pts,"timeBase":format!("{}/{}",b.0,b.1),"sourceTime":actual,"sourceTimeMs":actual.rescale_to(workflow::time(0).rate,RoundingMode::Nearest)?.value,"column":tile%columns,"row":tile/columns}));
+        }
         paths.push(path);
     }
     let sheet = scratch.join("storyboard.png");
@@ -368,10 +421,11 @@ pub fn storyboard(
             .collect::<String>();
         let layout = (0..paths.len())
             .map(|i| {
+                let tile = i as i64 * batch_size as i64;
                 format!(
                     "{}_{}",
-                    i as u32 % columns as u32 * q.tile_width,
-                    i as u32 / columns as u32 * height
+                    tile % columns * i64::from(q.tile_width),
+                    tile / columns * i64::from(height)
                 )
             })
             .collect::<Vec<_>>()
@@ -434,6 +488,7 @@ fn frame_probe(
     backend: &FfmpegBackend,
     stream: u64,
     interval: Option<(RationalTime, RationalTime)>,
+    include_frames: bool,
     control: &mut dyn Control,
 ) -> Result<Value> {
     let mut cmd = Command::new(backend.ffprobe_path());
@@ -453,7 +508,28 @@ fn frame_probe(
             &format!("{}%{}", seconds(start), seconds(end)),
         ]);
     }
-    cmd.args(["-show_frames","-show_streams","-show_format","-show_entries","frame=best_effort_timestamp,duration:stream=index,codec_type,time_base,start_time,duration,width,height,codec_name:format=start_time,duration","-of","json"]).arg(path);
+    if include_frames {
+        cmd.arg("-show_frames");
+    }
+    // Requesting frame entries itself enables ffprobe's decoder, even without
+    // -show_frames. Output validation needs only headers before our one decode.
+    let entries = format!(
+        "{}stream=index,codec_type,time_base,start_time,duration,width,height,codec_name:format=start_time,duration",
+        if include_frames {
+            "frame=best_effort_timestamp,duration:"
+        } else {
+            ""
+        }
+    );
+    cmd.args([
+        "-show_streams",
+        "-show_format",
+        "-show_entries",
+        &entries,
+        "-of",
+        "json",
+    ])
+    .arg(path);
     let output = process::run(&mut cmd, Duration::from_secs(120), control)?;
     crate::json::parse(&output.stdout)
 }
@@ -467,6 +543,101 @@ fn frame_pts(probe: &Value) -> Result<Vec<i64>> {
                 .ok_or_else(|| invalid("decoded frame has no timestamp"))
         })
         .collect()
+}
+
+fn decoded_frame_pts(output: &[u8]) -> Result<(Vec<i64>, (u32, u32))> {
+    let log =
+        std::str::from_utf8(output).map_err(|_| invalid("decoded frame index is not UTF-8"))?;
+    let mut time_base = None;
+    let mut video_stream = false;
+    let mut pts = Vec::new();
+    for line in log.lines().map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(b) = line.strip_prefix("#tb 0:") {
+            if time_base.replace(base(b.trim())?).is_some() {
+                return Err(invalid("decoded frame index has multiple video clocks"));
+            }
+        } else if let Some(kind) = line.strip_prefix("#media_type 0:") {
+            video_stream = kind.trim() == "video";
+        } else if !line.starts_with('#') {
+            let fields = line.split(',').map(str::trim).collect::<Vec<_>>();
+            if fields.len() < 6 {
+                return Err(invalid("decoded frame index has an incomplete packet"));
+            }
+            let stream = fields[0]
+                .parse::<u32>()
+                .map_err(|_| invalid("invalid decoded stream"))?;
+            let packet_pts = fields[2]
+                .parse::<i64>()
+                .map_err(|_| invalid("decoded frame timestamp missing"))?;
+            if fields[1].parse::<i64>().is_err()
+                || fields[3].parse::<u64>().is_err()
+                || !fields[4].parse::<u64>().is_ok_and(|n| n > 0)
+                || fields[5]
+                    .strip_prefix("0x")
+                    .and_then(|s| u32::from_str_radix(s, 16).ok())
+                    .is_none()
+            {
+                return Err(invalid("decoded frame index has an invalid packet"));
+            }
+            if stream == 0 {
+                pts.push(packet_pts);
+            }
+        }
+    }
+    if !video_stream || pts.is_empty() {
+        return Err(invalid("decoded preview has no indexed video frames"));
+    }
+    Ok((
+        pts,
+        time_base.ok_or_else(|| invalid("decoded video clock missing"))?,
+    ))
+}
+
+fn decode_preview(
+    path: &Path,
+    backend: &FfmpegBackend,
+    control: &mut dyn Control,
+) -> Result<(Vec<i64>, (u32, u32))> {
+    // Framecrc indexes raw decoded frames on stdout, avoiding stderr's bounded
+    // diagnostic tail. Audio is decoded in the same pass; it is not stream copy.
+    let output = process::run(
+        Command::new(backend.ffmpeg_path())
+            .args([
+                "-nostdin",
+                "-v",
+                "error",
+                "-xerror",
+                "-copyts",
+                "-threads",
+                "1",
+                "-protocol_whitelist",
+                "file",
+                "-i",
+            ])
+            .arg(path)
+            .args([
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a?",
+                "-c:v",
+                "rawvideo",
+                "-threads:v",
+                "1",
+                "-c:a",
+                "pcm_s16le",
+                "-fps_mode",
+                "passthrough",
+                "-enc_time_base:v",
+                "demux",
+                "-f",
+                "framecrc",
+                "-",
+            ]),
+        Duration::from_secs(120),
+        control,
+    )?;
+    decoded_frame_pts(&output.stdout)
 }
 
 pub fn preview(
@@ -487,6 +658,7 @@ pub fn preview(
         backend,
         clock.stream,
         Some((start, end.checked_add(workflow::time(2000))?)),
+        true,
         control,
     )?;
     let source_pts = frame_pts(&source_probe)?
@@ -593,7 +765,7 @@ pub fn preview(
             continue;
         }
         // Validate actual duration, frames and the source clock after encoding.
-        let measured = frame_probe(&path, backend, 0, None, control)?;
+        let measured = frame_probe(&path, backend, 0, None, false, control)?;
         let duration = measured["format"]["duration"]
             .as_str()
             .ok_or_else(|| invalid("preview duration missing"))?;
@@ -607,7 +779,7 @@ pub fn preview(
                 q.max_duration_ms
             )));
         }
-        let output_pts = frame_pts(&measured)?;
+        let (output_pts, decoded_base) = decode_preview(&path, backend, control)?;
         if output_pts.len() != source_pts.len() {
             return Err(invalid(
                 "preview dropped or duplicated source frames; source clock cannot be mapped exactly",
@@ -634,6 +806,13 @@ pub fn preview(
                 .as_str()
                 .ok_or_else(|| invalid("preview time base missing"))?,
         )?;
+        if u64::from(output_base.0) * u64::from(decoded_base.1)
+            != u64::from(decoded_base.0) * u64::from(output_base.1)
+        {
+            return Err(invalid(
+                "decoded video clock differs from the preview container",
+            ));
+        }
         let offset = time(source_pts[0], clock.base)
             .checked_sub(clock.origin)?
             .checked_sub(time(output_pts[0], output_base))?;
@@ -660,22 +839,19 @@ pub fn preview(
         if (offset.as_seconds_f64() - q.start_ms as f64 / 1000.0).abs() > tolerance.max(0.002) {
             return Err(invalid("preview source clock was shifted unexpectedly"));
         }
-        process::run(
-            Command::new(backend.ffmpeg_path())
-                .args(["-nostdin", "-v", "error", "-xerror", "-threads", "1", "-i"])
-                .arg(&path)
-                .args(["-map", "0:v:0", "-map", "0:a?", "-f", "null", "-"]),
-            Duration::from_secs(120),
-            control,
-        )?;
-        let data = json!({"file":"proxy.mp4","mimeType":"video/mp4","quality":"SDR review preview; original media retained for final edits","notForFinal":true,"requestedSourceIntervalMs":[q.start_ms,q.end_ms],"maxDurationMs":q.max_duration_ms,"maxBytes":q.max_bytes,"bytes":bytes,"actualDuration":actual_duration,"verification":{"decoded":true,"videoFrames":output_pts.len(),"durationWithinBudget":true,"bytesWithinBudget":true},"width":stream["width"],"height":stream["height"],"attempts":attempts,"sourceClock":{"containerOrigin":clock.origin,"timeBase":format!("{}/{}",clock.base.0,clock.base.1)},"proxyTimeBase":format!("{}/{}",output_base.0,output_base.1),"sourceMinusProxyTime":offset,"observedFirstSourceTime":time(source_pts[0],clock.base).checked_sub(clock.origin)?,"observedLastSourceTime":time(*source_pts.last().expect("nonempty source frames"),clock.base).checked_sub(clock.origin)?,"frameMapping":mapping,"coverage":{"kind":"decoded-frame-preserving-window","semanticUnderstanding":false,"guidance":"Video frame timestamps are paired with the original. AAC is re-encoded; listen across boundaries. Preview resolution/color differ from the original. No host capability or policy is overridden."}});
+        let data = json!({"file":"proxy.mp4","mimeType":"video/mp4","quality":"SDR review preview; original media retained for final edits","notForFinal":true,"requestedSourceIntervalMs":[q.start_ms,q.end_ms],"maxDurationMs":q.max_duration_ms,"maxBytes":q.max_bytes,"bytes":bytes,"actualDuration":actual_duration,"verification":{"decoded":true,"frameCountMethod":"ffmpeg-framecrc-single-decode","videoFrames":output_pts.len(),"durationWithinBudget":true,"bytesWithinBudget":true},"width":stream["width"],"height":stream["height"],"attempts":attempts,"sourceClock":{"containerOrigin":clock.origin,"timeBase":format!("{}/{}",clock.base.0,clock.base.1)},"proxyTimeBase":format!("{}/{}",output_base.0,output_base.1),"sourceMinusProxyTime":offset,"observedFirstSourceTime":time(source_pts[0],clock.base).checked_sub(clock.origin)?,"observedLastSourceTime":time(*source_pts.last().expect("nonempty source frames"),clock.base).checked_sub(clock.origin)?,"frameMapping":mapping,"coverage":{"kind":"decoded-frame-preserving-window","semanticUnderstanding":false,"guidance":"Video frame timestamps are paired with the original. AAC is re-encoded; listen across boundaries. Preview resolution/color differ from the original. No host capability or policy is overridden."}});
         return Ok((
             data,
             vec![json!({"name":"proxy.mp4","sha256":media::hash_file_controlled(&path,control)?})],
         ));
     }
+    let smallest = attempts
+        .iter()
+        .filter_map(|a| a["bytes"].as_u64())
+        .min()
+        .ok_or_else(|| invalid("preview has no measured encoding attempts"))?;
     Err(invalid(format!(
-        "cannot fit preview within maxBytes {} after three bounded attempts; shorten the interval or increase the budget",
+        "cannot fit preview within maxBytes {} after three bounded attempts; smallest observed attempt was {smallest} bytes; shorten the interval or increase the budget",
         q.max_bytes
     )))
 }
@@ -684,12 +860,38 @@ pub fn preview(
 mod tests {
     use super::*;
     #[test]
+    fn decoded_index_keeps_video_clock_and_refuses_incomplete_evidence() {
+        let log = b"#tb 0: 1/90000\n#media_type 0: video\n#tb 1: 1/48000\n#media_type 1: audio\n0, 3003, 3003, 3003, 120, 0x00000000\n1, 0, 0, 1024, 2048, 0x12345678\n0, 9009, 9009, 3003, 120, 0xabcdef12\n";
+        assert_eq!(
+            decoded_frame_pts(log).unwrap(),
+            (vec![3003, 9009], (1, 90000))
+        );
+        for invalid in [
+            "0, 0, 0, 1, 120, 0x00000000",
+            "#tb 0: 1/0\n#media_type 0: video\n0, 0, 0, 1, 120, 0x00000000",
+            "#tb 0: 1/1000\n#media_type 0: video\n0, 0, N/A, 1, 120, 0x00000000",
+            "#tb 0: 1/1000\n#media_type 0: video\n0, 0, 0",
+            "#tb 0: 1/1000\n#tb 0: 1/1000\n#media_type 0: video\n0, 0, 0, 1, 120, 0x00000000",
+        ] {
+            assert!(decoded_frame_pts(invalid.as_bytes()).is_err());
+        }
+    }
+    #[test]
     fn exact_decimal_and_observed_frame_clock() {
         assert!((decimal_time("-0.125000").unwrap().as_seconds_f64() + 0.125).abs() < 1e-12);
         assert!(decimal_time("NaN").is_err());
         assert!(decimal_time("1.1234567890").is_err());
-        let log = "[Parsed_showinfo] config in time_base: 1/90000, frame_rate: 30/1\n[Parsed_showinfo] n:   0 pts: 123456 pts_time:1.37";
-        assert_eq!(observed_frame(log).unwrap(), (123456, (1, 90000)));
-        assert!(observed_frame("pts_time:1.3").is_err());
+        let log = "[showinfo@sample7 @ 0x1] config in time_base: 1/90000, frame_rate: 30/1\n[showinfo@sample8 @ 0x2] config in time_base: 1/1000, frame_rate: 30/1\n[showinfo@sample8 @ 0x2] n:   0 pts: 900 pts_time:0.9\n[showinfo@sample7 @ 0x1] n:   0 pts: 123456 pts_time:1.37";
+        assert_eq!(observed_frame(log, 7).unwrap(), (123456, (1, 90000)));
+        assert_eq!(observed_frame(log, 8).unwrap(), (900, (1, 1000)));
+        assert!(observed_frame(log, 9).is_err());
+        assert!(observed_frame("pts_time:1.3", 7).is_err());
+        assert!(
+            observed_frame(
+                &format!("{log}\n[showinfo@sample7 @ 0x1] n: 1 pts: 999 pts_time:0.1"),
+                7
+            )
+            .is_err()
+        );
     }
 }

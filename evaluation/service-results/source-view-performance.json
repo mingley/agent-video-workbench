@@ -1,0 +1,797 @@
+{
+  "version": "0.5.1",
+  "passed": true,
+  "localPlatformOnly": true,
+  "localValidation": {
+    "rustTestsPassed": 183,
+    "ordinarySuiteIgnored": 2,
+    "format": true,
+    "strictClippy": true,
+    "releaseBuild": true,
+    "generatedSchema": true,
+    "publicationGateTestsPassed": 6,
+    "sourceViewsAndOfficialMcp": {
+      "passed": true,
+      "storyboardTotalSamples": 3,
+      "pagination": true,
+      "observedFrameTimes": true,
+      "cacheHit": true,
+      "storyboardColdSeconds": 0.07085974699293729,
+      "storyboardWarmSeconds": 0.024384213000303134,
+      "previewSeconds": 0.6099186659994302,
+      "previewBytes": 1242586,
+      "previewFrames": 300,
+      "hardCaps": true,
+      "adaptiveEncoding": true,
+      "actualDurationFailureRejected": true,
+      "transcriptContextInvalidation": true,
+      "cliAlias": true,
+      "impossibleBudgetRejected": true,
+      "originalUnchanged": true,
+      "nonzeroOriginVfrMapping": true,
+      "hdrSdrPreview": true,
+      "rotationAppliedOnce": true,
+      "delayedAudioOnsetSeconds": 0.75,
+      "lightBurstOnsetSeconds": 0.5,
+      "measuredAvOffsetSeconds": 0.25,
+      "tamperRejected": true,
+      "sourceTamperRejectedOnCacheHit": true,
+      "videoTamperRejected": true,
+      "limitations": [
+        "Generated local media; no semantic model or host-specific media acceptance",
+        "Storyboard is sparse; no claim to capture every important event"
+      ],
+      "exactStoryboardCells": true,
+      "raggedAndDensePages": true,
+      "largeFrameSequentialFallback": true,
+      "singlePreviewValidationDecode": true,
+      "measuredImpossibleBudgetHint": true,
+      "videoOnlyPreview": true,
+      "twelveTileImageProcesses": 4,
+      "officialMcpSdk": true,
+      "cliMcpReplayEquivalent": true,
+      "boundedPreviewAudioTransport": true
+    },
+    "application": {
+      "passed": true,
+      "draftFrames": 900,
+      "revisedFrames": 930,
+      "sourceUnchanged": true,
+      "undoBytesMatch": true,
+      "corruptOriginalRejected": true,
+      "rotationOrientationVerified": true,
+      "limitations": [
+        "synthetic SDR only; no real iPhone or hosted bot trial"
+      ]
+    },
+    "workerRecovery": {
+      "passed": true,
+      "ownerDeathStopsChild": true,
+      "interruptedJobRecovered": true,
+      "retryAttempt": 2,
+      "cancelBounded": true,
+      "previousFinalPreserved": true
+    }
+  },
+  "benchmark": {
+    "passed": true,
+    "sourceSha256": "9f14924354604f277aed271e3d3bff3b5a33f37203f0a7f37ea4f0b0f8a8979c",
+    "sourceBytes": 102651966,
+    "repetitions": 5,
+    "decodedPixelsAudioAndTimestampsEqual": true,
+    "originalUnchanged": true,
+    "medianSeconds": {
+      "baseline": {
+        "storyboard-cold": 2.3119213660102105,
+        "storyboard-cached": 0.1900382140011061,
+        "preview-cold": 2.3150842239992926,
+        "preview-cached": 0.19196412699238863
+      },
+      "candidate": {
+        "storyboard-cold": 0.9024676310073119,
+        "storyboard-cached": 0.09949802698974963,
+        "preview-cold": 1.9398532260092907,
+        "preview-cached": 0.09793433699815068
+      }
+    },
+    "improvementPercent": {
+      "storyboard-cold": 60.96460527268097,
+      "storyboard-cached": 47.64314771492722,
+      "preview-cold": 16.20809273806,
+      "preview-cached": 48.98300086972303
+    },
+    "measurements": [
+      {
+        "client": "baseline",
+        "kind": "storyboard",
+        "phase": "cold",
+        "repetition": 0,
+        "seconds": 2.2080100839957595,
+        "peakWorkerOrChildRssKiB": 32860,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "baseline",
+        "kind": "storyboard",
+        "phase": "cached",
+        "repetition": 0,
+        "seconds": 0.18549364400678314,
+        "peakWorkerOrChildRssKiB": 12396,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "candidate",
+        "kind": "storyboard",
+        "phase": "cold",
+        "repetition": 0,
+        "seconds": 0.9018354610016104,
+        "peakWorkerOrChildRssKiB": 104080,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "candidate",
+        "kind": "storyboard",
+        "phase": "cached",
+        "repetition": 0,
+        "seconds": 0.10840382501191925,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "baseline",
+        "kind": "preview",
+        "phase": "cold",
+        "repetition": 0,
+        "seconds": 2.3150842239992926,
+        "peakWorkerOrChildRssKiB": 43488,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "baseline",
+        "kind": "preview",
+        "phase": "cached",
+        "repetition": 0,
+        "seconds": 0.18810700099857058,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "candidate",
+        "kind": "preview",
+        "phase": "cold",
+        "repetition": 0,
+        "seconds": 1.915407906009932,
+        "peakWorkerOrChildRssKiB": 45664,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "candidate",
+        "kind": "preview",
+        "phase": "cached",
+        "repetition": 0,
+        "seconds": 0.09793433699815068,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "candidate",
+        "kind": "storyboard",
+        "phase": "cold",
+        "repetition": 1,
+        "seconds": 0.8932571180048399,
+        "peakWorkerOrChildRssKiB": 105232,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "candidate",
+        "kind": "storyboard",
+        "phase": "cached",
+        "repetition": 1,
+        "seconds": 0.10038628100301139,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "baseline",
+        "kind": "storyboard",
+        "phase": "cold",
+        "repetition": 1,
+        "seconds": 2.3119213660102105,
+        "peakWorkerOrChildRssKiB": 34140,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "baseline",
+        "kind": "storyboard",
+        "phase": "cached",
+        "repetition": 1,
+        "seconds": 0.1909598990023369,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "candidate",
+        "kind": "preview",
+        "phase": "cold",
+        "repetition": 1,
+        "seconds": 1.8708394679997582,
+        "peakWorkerOrChildRssKiB": 44004,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "candidate",
+        "kind": "preview",
+        "phase": "cached",
+        "repetition": 1,
+        "seconds": 0.09836798900505528,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "baseline",
+        "kind": "preview",
+        "phase": "cold",
+        "repetition": 1,
+        "seconds": 2.2021451990003698,
+        "peakWorkerOrChildRssKiB": 44004,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "baseline",
+        "kind": "preview",
+        "phase": "cached",
+        "repetition": 1,
+        "seconds": 0.19387663100496866,
+        "peakWorkerOrChildRssKiB": 12396,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "baseline",
+        "kind": "storyboard",
+        "phase": "cold",
+        "repetition": 2,
+        "seconds": 2.410840433993144,
+        "peakWorkerOrChildRssKiB": 32864,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "baseline",
+        "kind": "storyboard",
+        "phase": "cached",
+        "repetition": 2,
+        "seconds": 0.1900382140011061,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "candidate",
+        "kind": "storyboard",
+        "phase": "cold",
+        "repetition": 2,
+        "seconds": 0.9322722280048765,
+        "peakWorkerOrChildRssKiB": 105608,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "candidate",
+        "kind": "storyboard",
+        "phase": "cached",
+        "repetition": 2,
+        "seconds": 0.09792096099408809,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "baseline",
+        "kind": "preview",
+        "phase": "cold",
+        "repetition": 2,
+        "seconds": 2.302786729997024,
+        "peakWorkerOrChildRssKiB": 43872,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "baseline",
+        "kind": "preview",
+        "phase": "cached",
+        "repetition": 2,
+        "seconds": 0.18747330299811438,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "candidate",
+        "kind": "preview",
+        "phase": "cold",
+        "repetition": 2,
+        "seconds": 1.9398532260092907,
+        "peakWorkerOrChildRssKiB": 43360,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "candidate",
+        "kind": "preview",
+        "phase": "cached",
+        "repetition": 2,
+        "seconds": 0.10027726700354833,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "candidate",
+        "kind": "storyboard",
+        "phase": "cold",
+        "repetition": 3,
+        "seconds": 0.9024676310073119,
+        "peakWorkerOrChildRssKiB": 106636,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "candidate",
+        "kind": "storyboard",
+        "phase": "cached",
+        "repetition": 3,
+        "seconds": 0.09771883899520617,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "baseline",
+        "kind": "storyboard",
+        "phase": "cold",
+        "repetition": 3,
+        "seconds": 2.3060609029926127,
+        "peakWorkerOrChildRssKiB": 32860,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "baseline",
+        "kind": "storyboard",
+        "phase": "cached",
+        "repetition": 3,
+        "seconds": 0.18944667899631895,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "candidate",
+        "kind": "preview",
+        "phase": "cold",
+        "repetition": 3,
+        "seconds": 1.9708306889951928,
+        "peakWorkerOrChildRssKiB": 43744,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "candidate",
+        "kind": "preview",
+        "phase": "cached",
+        "repetition": 3,
+        "seconds": 0.09731410299718846,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "baseline",
+        "kind": "preview",
+        "phase": "cold",
+        "repetition": 3,
+        "seconds": 2.5134043210127857,
+        "peakWorkerOrChildRssKiB": 43616,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "baseline",
+        "kind": "preview",
+        "phase": "cached",
+        "repetition": 3,
+        "seconds": 0.19196412699238863,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "baseline",
+        "kind": "storyboard",
+        "phase": "cold",
+        "repetition": 4,
+        "seconds": 2.4125323210028,
+        "peakWorkerOrChildRssKiB": 32864,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "baseline",
+        "kind": "storyboard",
+        "phase": "cached",
+        "repetition": 4,
+        "seconds": 0.19802961401001085,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "candidate",
+        "kind": "storyboard",
+        "phase": "cold",
+        "repetition": 4,
+        "seconds": 0.9748816479986999,
+        "peakWorkerOrChildRssKiB": 107092,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "candidate",
+        "kind": "storyboard",
+        "phase": "cached",
+        "repetition": 4,
+        "seconds": 0.09949802698974963,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 146015,
+        "encodingAttempts": null
+      },
+      {
+        "client": "baseline",
+        "kind": "preview",
+        "phase": "cold",
+        "repetition": 4,
+        "seconds": 2.509734409992234,
+        "peakWorkerOrChildRssKiB": 46048,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "baseline",
+        "kind": "preview",
+        "phase": "cached",
+        "repetition": 4,
+        "seconds": 0.19632580700272229,
+        "peakWorkerOrChildRssKiB": 12396,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "candidate",
+        "kind": "preview",
+        "phase": "cold",
+        "repetition": 4,
+        "seconds": 1.9486075919994619,
+        "peakWorkerOrChildRssKiB": 44388,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      },
+      {
+        "client": "candidate",
+        "kind": "preview",
+        "phase": "cached",
+        "repetition": 4,
+        "seconds": 0.09718744100246113,
+        "peakWorkerOrChildRssKiB": 12392,
+        "bytes": 885088,
+        "encodingAttempts": [
+          {
+            "bytes": 1951793,
+            "crf": 24,
+            "heightBound": 360,
+            "widthBound": 640
+          },
+          {
+            "bytes": 885088,
+            "crf": 28,
+            "heightBound": 270,
+            "widthBound": 480
+          }
+        ]
+      }
+    ],
+    "binaries": {
+      "baseline": {
+        "sha256": "56ee1d567666d439ed2bff85840dc0fe36566ee99203f4acb5e9596a94f0fb51",
+        "version": "avw 0.5.0"
+      },
+      "candidate": {
+        "sha256": "58bb39ef5cd608e9d8e163592d6bac604783423f4fef87299b39307f22bfab3c",
+        "version": "avw 0.5.1"
+      }
+    },
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "cpuQuota": "400000 100000",
+    "memoryLimitBytes": "17179869184",
+    "limits": [
+      "Generated 120s 720p/30fps SDR fixture with B frames; warm filesystem.",
+      "Source generation/import and independent equality checks excluded from timings; enqueue, worker, integrity and artifact lookup included.",
+      "Interleaved clients; no concurrent build/render. No camera, 4K, ASR/model or hosted-agent performance inferred."
+    ],
+    "cpuModel": "AMD EPYC 9V74 80-Core Processor"
+  },
+  "nativeQualification": {
+    "status": "not-yet-run",
+    "releasePublished": false
+  },
+  "researchSources": [
+    "https://doc.rust-lang.org/std/process/struct.Child.html#method.wait",
+    "https://doc.rust-lang.org/std/sync/mpsc/struct.Receiver.html#method.recv_timeout",
+    "https://github.com/FFmpeg/FFmpeg/blob/n8.0/doc/ffmpeg.texi",
+    "https://github.com/FFmpeg/FFmpeg/blob/n8.0/doc/filters.texi",
+    "https://github.com/FFmpeg/FFmpeg/blob/n8.0/doc/muxers.texi",
+    "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax"
+  ]
+}

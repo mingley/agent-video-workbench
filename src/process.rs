@@ -9,6 +9,7 @@ use std::{
     io::Read,
     os::unix::process::CommandExt,
     process::{Command, Stdio},
+    sync::mpsc::{self, RecvTimeoutError},
     thread,
     time::{Duration, Instant},
 };
@@ -105,23 +106,34 @@ pub fn run(command: &mut Command, timeout: Duration, control: &mut dyn Control) 
         .ok_or_else(|| Error::Invalid("stderr pipe missing".into()))?;
     let out = thread::spawn(move || capture(stdout, false));
     let err = thread::spawn(move || capture(stderr, true));
+    // Wake immediately when the child exits, while retaining the bounded
+    // cancellation/lease checks for long-running media work. Polling try_wait
+    // every 100ms imposed that delay on every short probe and thumbnail.
+    let (completed, completion) = mpsc::sync_channel(1);
+    let waiter = thread::spawn(move || {
+        let _ = completed.send(child.wait());
+    });
     let start = Instant::now();
     let outcome = loop {
         if let Err(error) = control.check() {
             break Err(error);
         }
-        if start.elapsed() > timeout {
+        let Some(remaining) = timeout.checked_sub(start.elapsed()) else {
             break Err(Error::Timeout);
-        }
-        match child.try_wait() {
-            Ok(Some(status)) => break Ok(status),
-            Ok(None) => thread::sleep(Duration::from_millis(100)),
-            Err(error) => break Err(error.into()),
+        };
+        match completion.recv_timeout(remaining.min(Duration::from_millis(100))) {
+            Ok(status) => break status.map_err(Error::from),
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => {
+                break Err(Error::Invalid("subprocess waiter disconnected".into()));
+            }
         }
     };
     // Kill descendants even if the direct child exited. They must not retain pipes.
     let _ = killpg(group, Signal::SIGKILL);
-    let _ = child.wait();
+    waiter
+        .join()
+        .map_err(|_| Error::Invalid("subprocess waiter failed".into()))?;
     let (stdout, exceeded) = out
         .join()
         .map_err(|_| Error::Invalid("output reader failed".into()))??;
