@@ -29,7 +29,13 @@ video and audio unchanged. A separate four-sample-per-version comparison on
 generated 60-second AAC with a constant-output fake provider measured ASR
 worker medians of 99.9 ms → 146.3 ms after adding the timing audit. These are
 fixture-specific results, not general export or speech-model throughput claims.
-Publication and the public installer are verified separately.
+[Publication](https://github.com/mingley/agent-video-workbench/actions/runs/42444391333)
+verified the 39 x86_64 and 33 ARM64 required summaries and published the
+[0.5.2 release](https://github.com/mingley/agent-video-workbench/releases/tag/v0.5.2).
+The public installer downloaded an x86_64 binary whose SHA-256 and source
+commit matched the published native manifest. ARM64 was qualified in native CI;
+the public installer check ran on x86_64 only. Detailed records and limitations
+are in [release evidence](../evaluation/service-results/release-0.5.2.json).
 
 Analysis cache identity currently does not include the configured ffprobe tool.
 After changing ffprobe, use a fresh project when generating frame indexes or

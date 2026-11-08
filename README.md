@@ -5,7 +5,7 @@ stdio. It owns immutable originals, editable projects, revision history,
 analysis, persistent jobs and verified delivery. The agent chooses content and
 uses its host's file tools to deliver results.
 
-**0.5.2 source** adds ready-to-use preview requests to storyboard tiles, lets
+**[0.5.2](https://github.com/mingley/agent-video-workbench/releases/tag/v0.5.2)** adds ready-to-use preview requests to storyboard tiles, lets
 storyboard scopes continue past the 24-hour position, and avoids repeatedly
 hashing identical managed originals in the initial render verification pass. It
 also resolves cancellation ordering and maps ASR cues to an audited source audio

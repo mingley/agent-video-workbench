@@ -1,0 +1,265 @@
+{
+  "version": "0.5.2",
+  "date": "2026-11-08",
+  "sourceCommit": "61acfc404ac9001e33cfdd04d0ba73a938bb0e72",
+  "mergeCommit": "04151493a8b2b2f0b4b037ed0f5069707aa759b1",
+  "qualification": {
+    "runId": 42443616525,
+    "url": "https://github.com/mingley/agent-video-workbench/actions/runs/42443616525",
+    "event": "push",
+    "passed": true,
+    "x86_64": {
+      "rustTestsPassed": 211,
+      "ordinarySuiteIgnored": 2,
+      "functionalSummariesPassed": 39,
+      "browserChecks": true
+    },
+    "aarch64": {
+      "rustTestsPassed": 211,
+      "ordinarySuiteIgnored": 2,
+      "functionalSummariesPassed": 33,
+      "browserChecks": false
+    },
+    "previousV2CacheExercised": true,
+    "previousV3BinaryExercised": false
+  },
+  "publication": {
+    "runId": 42444391333,
+    "url": "https://github.com/mingley/agent-video-workbench/actions/runs/42444391333",
+    "passed": true,
+    "requestCommit": "97408cae7542c981e9e7b8037e6a83116a0d2553",
+    "qualifiedArchivesReused": true,
+    "additionalNativeBuild": false
+  },
+  "release": {
+    "tag": "v0.5.2",
+    "url": "https://github.com/mingley/agent-video-workbench/releases/tag/v0.5.2",
+    "publishedAt": "2026-11-08T03:52:27Z",
+    "assets": [
+      {
+        "name": "avw-0.5.2-linux-aarch64.tar.gz",
+        "size": 5736126,
+        "digest": "sha256:a7bd1b37877c7fbaf841b6fc12431f29074c4cdd813c02a4a0862eb4f655b9cd"
+      },
+      {
+        "name": "avw-0.5.2-linux-x86_64.tar.gz",
+        "size": 5964806,
+        "digest": "sha256:0b4cd225e0233409b7e48e0d5554ca6e933a8391aec1e31a0aae0c55a7cbab4a"
+      },
+      {
+        "name": "install-release.sh",
+        "size": 1817,
+        "digest": "sha256:4c50319ef3072340bfee22dcd802a1b70707e718abcb557ed3e891bc4ba1c2e0"
+      },
+      {
+        "name": "native-manifests.json",
+        "size": 1179,
+        "digest": "sha256:37687d61fd39d1b79eb139caae042a3e3c8127ceba5363ca638938571604fe32"
+      },
+      {
+        "name": "setup-asr.sh",
+        "size": 1447,
+        "digest": "sha256:c9aaae6409c20ae458934905c14ca214e597761eb12ee62a870724fb854aebb2"
+      },
+      {
+        "name": "setup-media.sh",
+        "size": 2496,
+        "digest": "sha256:eecfeb7f999e01d83278507a3167580e4e18778850619489f28f9aa452c5c40a"
+      },
+      {
+        "name": "SHA256SUMS",
+        "size": 193,
+        "digest": "sha256:8e1e412a13bf19904f25b66d0bf44fc52853137669d1663eca1e0f6f8593b749"
+      }
+    ]
+  },
+  "publicInstaller": {
+    "passed": true,
+    "platform": "x86_64 GitHub Actions runner",
+    "version": "avw 0.5.2",
+    "binarySha256": "a90a3982dd2a4bc89e7bb370769cafa014f36fd461321fa03afc7a604b837244",
+    "sourceCommit": "61acfc404ac9001e33cfdd04d0ba73a938bb0e72",
+    "publishedNativeManifestMatch": true
+  },
+  "duplicateOriginalBenchmark": {
+    "aliasCount": 5,
+    "binaries": {
+      "baseline": {
+        "sha256": "4505197a38fa12d9d3127a178a0def897f11f850c37e1c6ecbd1924099eec39a",
+        "version": "avw 0.5.1"
+      },
+      "candidate": {
+        "sha256": "a90a3982dd2a4bc89e7bb370769cafa014f36fd461321fa03afc7a604b837244",
+        "version": "avw 0.5.2"
+      }
+    },
+    "decodedAudioEqual": true,
+    "decodedAudioSha256": "SHA256=049e98b61fb88a45efefa495c7b85cc4ebd322fec0e8321dd583acc74c677a67",
+    "decodedVideoEqual": true,
+    "decodedVideoSha256": "SHA256=75d97284a97bdb43c31ed32c179bbd1b237d27283308a4c47dc79083f3b69d00",
+    "endToEndSeconds": {
+      "baseline": [
+        0.7653390160000413,
+        0.748236023000004,
+        0.7522796940000376
+      ],
+      "candidate": [
+        0.5814688620000084,
+        0.5664892789999953,
+        0.561836765999999
+      ]
+    },
+    "freeBoxBytes": 67108864,
+    "limits": [
+      "Generated 640x360 SDR video with a sparse free box; no camera, HDR or 4K claim.",
+      "Filesystem was warm; source generation, imports and independent decoding excluded.",
+      "Identical content imported under several distinct IDs; unique-asset workloads may not improve.",
+      "Timings are observational and have no pass/fail speed threshold."
+    ],
+    "machine": {
+      "cgroupCpuMax": "max 100000",
+      "cgroupMemoryMax": "max",
+      "cgroupPath": "/sys/fs/cgroup/system.slice/hosted-compute-agent.service",
+      "cpuModel": "AMD EPYC 7763 64-Core Processor",
+      "logicalCpuCount": 4
+    },
+    "originalUnchanged": true,
+    "passed": true,
+    "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
+    "sourceBytes": 68620595,
+    "sourceSha256": "c4bd9ee765561f07e96c0a9bd51415b139d72ba6f661e4d17ba3b01c5bb17945",
+    "verifyOriginals": {
+      "afterMedianSeconds": 0.048448177,
+      "afterSeconds": [
+        0.048984692,
+        0.048448177,
+        0.048141578
+      ],
+      "beforeMedianSeconds": 0.240487385,
+      "beforeSeconds": [
+        0.240487385,
+        0.239790199,
+        0.240592278
+      ],
+      "medianReductionPercent": 79.85417114498541
+    }
+  },
+  "asrAuditBenchmark": {
+    "available": true,
+    "baselineMedianSeconds": 0.0999389444999963,
+    "binaries": {
+      "baseline": {
+        "sha256": "4505197a38fa12d9d3127a178a0def897f11f850c37e1c6ecbd1924099eec39a",
+        "version": "avw 0.5.1"
+      },
+      "candidate": {
+        "sha256": "a90a3982dd2a4bc89e7bb370769cafa014f36fd461321fa03afc7a604b837244",
+        "version": "avw 0.5.2"
+      }
+    },
+    "candidateChangePercent": 46.341067770663294,
+    "candidateMedianSeconds": 0.14625171850002516,
+    "ffmpegVersion": "ffmpeg version n8.0.1-48-g0592be14ff-20260116 Copyright (c) 2000-2025 the FFmpeg developers",
+    "limitations": [
+      "Warm filesystem, generated 60-second audio, constant-output offline provider, and four serial samples per binary.",
+      "Measures worker and audio-audit overhead, not real speech-model throughput or model accuracy.",
+      "Shared CI runner contention and small samples can affect the comparison; no speed threshold is applied."
+    ],
+    "machine": {
+      "affinityCpus": 4,
+      "cgroupCpuMax": "max 100000",
+      "cgroupMemoryMax": "max",
+      "cgroupPath": "/sys/fs/cgroup/system.slice/hosted-compute-agent.service",
+      "cpuModel": "AMD EPYC 7763 64-Core Processor",
+      "logicalCpus": 4,
+      "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39"
+    },
+    "order": [
+      "baseline",
+      "candidate",
+      "candidate",
+      "baseline",
+      "candidate",
+      "baseline",
+      "baseline",
+      "candidate"
+    ],
+    "source": {
+      "bytes": 144542,
+      "probe": {
+        "format": {
+          "duration": "60.023000",
+          "size": "144542",
+          "start_time": "-0.023000",
+          "tags": {
+            "ENCODER": "Lavf62.3.100"
+          }
+        },
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "channels": 1,
+            "codec_name": "aac",
+            "disposition": {
+              "attached_pic": 0,
+              "captions": 0,
+              "clean_effects": 0,
+              "comment": 0,
+              "default": 0,
+              "dependent": 0,
+              "descriptions": 0,
+              "dub": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "karaoke": 0,
+              "lyrics": 0,
+              "metadata": 0,
+              "multilayer": 0,
+              "non_diegetic": 0,
+              "original": 0,
+              "still_image": 0,
+              "timed_thumbnails": 0,
+              "visual_impaired": 0
+            },
+            "sample_rate": "44100",
+            "start_time": "-0.023000",
+            "tags": {
+              "DURATION": "00:01:00.023000000",
+              "ENCODER": "Lavc62.11.100 aac"
+            },
+            "time_base": "1/1000"
+          }
+        ]
+      },
+      "sha256": "076aca876048e8dc31220c14face27e2193984fb687298c945dd0aed52136c0b"
+    },
+    "validations": {
+      "cacheMisses": true,
+      "freshProjects": true,
+      "identicalCues": true,
+      "sameSourceAndFakeProvider": true
+    },
+    "workerSeconds": {
+      "baseline": [
+        0.10673340900001449,
+        0.09855048099996111,
+        0.10044448200000033,
+        0.09943340699999226
+      ],
+      "candidate": [
+        0.15172106299996813,
+        0.1407135780000317,
+        0.1493451790000222,
+        0.14315825800002813
+      ]
+    }
+  },
+  "limits": [
+    "No local build was run because the selected development environment did not become available; native x86_64 and ARM64 checks ran in GitHub Actions.",
+    "The public installer check ran on x86_64; ARM64 was qualified natively in CI but not through the public installer.",
+    "Generated media and an offline fake ASR provider were used; no real-camera appearance or speech-model accuracy/throughput claim.",
+    "Storyboards sample sparsely and may miss brief events; later than 24-hour browsing does not remove separate editing and transcript source-position limits.",
+    "Existing pre-v4 ASR artifacts remain accessible but can retain shifted cue times; a genuine prior v3 binary was not exercised."
+  ]
+}
