@@ -58,22 +58,22 @@ def run(argv, payload=None):
         raise AssertionError((list(map(str, argv)), result.stdout[-3000:], result.stderr[-3000:]))
     return result.stdout
 
-def prefix(binary, probe=None):
-    return [binary, "--workspace", root, "--ffmpeg", args.ffmpeg, "--ffprobe", probe or args.ffprobe,
+def prefix(binary, probe=None, ffmpeg=None):
+    return [binary, "--workspace", root, "--ffmpeg", ffmpeg or args.ffmpeg, "--ffprobe", probe or args.ffprobe,
             "--whisper", provider, "--whisper-model", model, "--whisper-model-sha256", model_sha]
 
-def call(binary, project, command, probe=None, **fields):
+def call(binary, project, command, probe=None, ffmpeg=None, **fields):
     request = {"command": command, "project": str(project), **fields}
-    raw = run([*prefix(binary, probe), "request", "-"], json.dumps(request).encode())
+    raw = run([*prefix(binary, probe, ffmpeg), "request", "-"], json.dumps(request).encode())
     response = json.loads(raw)
     assert response["ok"], (request, response)
     return response["result"]
 
-def transcribe(binary, project, key, probe=None):
-    job = call(binary, project, "transcribe-start", probe=probe, assetId="audio",
+def transcribe(binary, project, key, probe=None, ffmpeg=None):
+    job = call(binary, project, "transcribe-start", probe=probe, ffmpeg=ffmpeg, assetId="audio",
                expectedRevision=1, key=key, noLaunch=True)
-    run([*prefix(binary, probe), "worker", project])
-    return call(binary, project, "job-status", probe=probe, id=job["id"])
+    run([*prefix(binary, probe, ffmpeg), "worker", project])
+    return call(binary, project, "job-status", probe=probe, ffmpeg=ffmpeg, id=job["id"])
 
 def call_count():
     return len(calls.read_text().splitlines()) if calls.exists() else 0
@@ -158,7 +158,8 @@ def validate_case(name, source, authored, *, tolerance_ms=2):
     actual = [cue["startMs"] for cue in cues]
     assert len(actual) == 2 and all(abs(a-b) <= tolerance_ms for a,b in zip(actual,expected)), (
         name, actual, expected, cues)
-    assert all(0 <= cue["startMs"] < cue["endMs"] <= 4000 for cue in cues), (name,cues)
+    max_end = 61_000 if name == "long-aac" else 4000
+    assert all(0 <= cue["startMs"] < cue["endMs"] <= max_end for cue in cues), (name,cues)
     return {"expectedMs":expected,"actualMs":actual,"firstPtsMs":float(first_pts*1000),
             "originMs":float(origin*1000)}
 
@@ -192,6 +193,18 @@ tracks = json.loads(run([args.ffprobe,"-v","error","-select_streams","a",
                         "-show_entries","stream=channels","-of","json",multi]))["streams"]
 assert [stream["channels"] for stream in tracks] == [1,2], tracks
 fixtures["multi"] = (multi,[1250,2500])
+
+# A minute of ordinary 44.1 kHz AAC catches cumulative timestamp jitter that
+# a short clip or pairwise-only continuity checks can miss.
+long_aac = root / "long-aac.mkv"
+run([args.ffmpeg,"-nostdin","-v","error","-f","lavfi","-i","testsrc2=s=64x64:r=1:d=60",
+     "-f","lavfi","-i",
+     r"aevalsrc=0.5*sin(2*PI*1000*t)*(between(t\,0.25\,0.4)+between(t\,58.5\,58.65)):s=44100:d=60",
+     "-map","0:v:0","-map","1:a:0","-c:v","libx264","-preset","ultrafast",
+     "-threads:v","1","-c:a","aac","-b:a","96k","-avoid_negative_ts","disabled","-y",long_aac])
+long_origin,_,_ = source_clock(long_aac)
+assert long_origin is not None
+fixtures["long-aac"] = (long_aac,[250-float(long_origin*1000),58500-float(long_origin*1000)])
 
 observed = {name:validate_case(name,source,authored) for name,(source,authored) in fixtures.items()}
 
@@ -228,6 +241,45 @@ failed = transcribe(args.avw,ambiguous,"clock-ambiguous",probe=probe_wrapper)
 assert failed["state"] == "failed" and "audio clock" in failed["error"].lower(),failed
 assert call_count() == before
 
+# Inject failures after the actual decoder finishes, without touching any
+# original: malformed/oversized audits, mismatched WAV length and absent
+# same-decode PTS evidence must all fail before the provider is invoked.
+faults = ("malformed-audit", "oversized-audit", "wav-mismatch", "missing-marker")
+for fault in faults:
+    wrapper = root / ("ffmpeg-" + fault)
+    wrapper.write_text(
+        "#!/usr/bin/env python3\n"
+        "from pathlib import Path\n"
+        "import subprocess, sys, wave\n"
+        f"real = {args.ffmpeg!r}\n"
+        f"fault = {fault!r}\n"
+        "args = sys.argv[1:]\n"
+        "p = subprocess.run([real,*args],capture_output=True)\n"
+        "err = p.stderr\n"
+        "if p.returncode == 0 and 'framecrc' in args:\n"
+        "    audit = Path(args[-1])\n"
+        "    if fault == 'malformed-audit':\n"
+        "        with audit.open('a') as f: f.write('bad,packet\\n')\n"
+        "    elif fault == 'oversized-audit':\n"
+        "        with audit.open('ab') as f: f.truncate(16*1024*1024)\n"
+        "    elif fault == 'wav-mismatch':\n"
+        "        path = next(Path(a) for a in args if a.endswith('.wav'))\n"
+        "        with wave.open(str(path),'rb') as w:\n"
+        "            params=w.getparams(); data=w.readframes(w.getnframes()-128)\n"
+        "        with wave.open(str(path),'wb') as w:\n"
+        "            w.setparams(params); w.writeframes(data)\n"
+        "    elif fault == 'missing-marker':\n"
+        "        err=b'\\n'.join(line for line in err.splitlines() if b'ashowinfo@asr_clock' not in line)\n"
+        "sys.stdout.buffer.write(p.stdout); sys.stderr.buffer.write(err); sys.exit(p.returncode)\n",
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o755)
+    project = create_project(fault,fixtures["zero"][0])
+    before = call_count()
+    failed = transcribe(args.avw,project,"clock-"+fault,ffmpeg=wrapper)
+    assert failed["state"] == "failed" and "audio clock" in failed["error"].lower(),(fault,failed)
+    assert call_count() == before, fault
+
 # A real older executable demonstrates that an old successful result remains
 # readable but must not be used for a fresh, corrected transcript.
 legacy = {"v2Exercised":False,"v3Exercised":False}
@@ -255,6 +307,10 @@ summary = {
     "cases":observed,
     "internalPtsGapRefused":True,
     "ambiguousVideoOriginRefused":True,
+    "malformedAndOversizedAuditsRefused":True,
+    "wavAuditMismatchRefused":True,
+    "missingClockMarkerRefused":True,
+    "sixtySecondAacContinuity":True,
     "firstAudioTrackSelected":True,
     "legacy":legacy,
     "limitations":["Generated deterministic audio and an offline fake provider; no speech accuracy claim.",
