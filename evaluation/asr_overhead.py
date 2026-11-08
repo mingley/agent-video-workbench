@@ -123,6 +123,14 @@ def run_measurement():
         affinity = len(os.sched_getaffinity(0))
     except (AttributeError, OSError):
         affinity = None
+    cgroup = None
+    membership = read_optional("/proc/self/cgroup")
+    if membership:
+        for line in membership.splitlines():
+            parts = line.split(":", 2)
+            if len(parts) == 3 and parts[:2] == ["0", ""]:
+                cgroup = Path("/sys/fs/cgroup") / parts[2].lstrip("/")
+                break
     return {
         "available": True,
         "order": order,
@@ -138,8 +146,9 @@ def run_measurement():
         "ffmpegVersion": command([args.ffmpeg,"-version"]).splitlines()[0],
         "machine": {"platform":platform.platform(),"cpuModel":cpu_model,
                     "logicalCpus":os.cpu_count(),"affinityCpus":affinity,
-                    "cgroupCpuMax":read_optional("/sys/fs/cgroup/cpu.max"),
-                    "cgroupMemoryMax":read_optional("/sys/fs/cgroup/memory.max")},
+                    "cgroupPath":str(cgroup) if cgroup else None,
+                    "cgroupCpuMax":read_optional(cgroup / "cpu.max") if cgroup else None,
+                    "cgroupMemoryMax":read_optional(cgroup / "memory.max") if cgroup else None},
         "validations": {"freshProjects":True,"cacheMisses":True,"identicalCues":True,
                         "sameSourceAndFakeProvider":True},
         "limitations": [
