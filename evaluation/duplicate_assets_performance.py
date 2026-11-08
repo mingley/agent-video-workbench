@@ -9,6 +9,7 @@ independent media comparisons are outside the measured verification stage.
 import argparse
 import hashlib
 import json
+import os
 import platform
 from pathlib import Path
 import statistics
@@ -20,6 +21,45 @@ import time
 def sha256(path):
     with Path(path).open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+
+def read_text_or_none(path):
+    try:
+        return Path(path).read_text(encoding='utf-8').strip() or None
+    except (OSError, UnicodeError):
+        return None
+
+
+def machine_details():
+    model = None
+    cpuinfo = read_text_or_none('/proc/cpuinfo')
+    if cpuinfo:
+        for line in cpuinfo.splitlines():
+            name, separator, value = line.partition(':')
+            if separator and name.strip().lower() in ('model name', 'hardware'):
+                model = value.strip() or None
+                if model:
+                    break
+
+    # In cgroup v2 the process's relative path is the line beginning "0::".
+    # Missing files are normal on non-Linux machines or cgroup v1.
+    cgroup = None
+    membership = read_text_or_none('/proc/self/cgroup')
+    if membership:
+        for line in membership.splitlines():
+            parts = line.split(':', 2)
+            if len(parts) == 3 and parts[:2] == ['0', '']:
+                cgroup = Path('/sys/fs/cgroup') / parts[2].lstrip('/')
+                break
+
+    return {
+        'cpuModel': model or platform.processor() or None,
+        'logicalCpuCount': os.cpu_count(),
+        'cgroupPath': str(cgroup) if cgroup else None,
+        'cgroupCpuMax': read_text_or_none(cgroup / 'cpu.max') if cgroup else None,
+        'cgroupMemoryMax': read_text_or_none(cgroup / 'memory.max') if cgroup else None,
+    }
 
 
 def main():
@@ -164,6 +204,7 @@ def main():
                              'version': run([path, '--version'])[0].decode().strip()}
                      for label, path in binaries.items()},
         'platform': platform.platform(),
+        'machine': machine_details(),
         'limits': [
             'Generated 640x360 SDR video with a sparse free box; no camera, HDR or 4K claim.',
             'Filesystem was warm; source generation, imports and independent decoding excluded.',
