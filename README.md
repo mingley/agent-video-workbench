@@ -5,6 +5,15 @@ stdio. It owns immutable originals, editable projects, revision history,
 analysis, persistent jobs and verified delivery. The agent chooses content and
 uses its host's file tools to deliver results.
 
+**0.5.2 source** adds ready-to-use preview requests to storyboard tiles, lets
+storyboard scopes continue past the 24-hour position, and avoids repeatedly
+hashing identical managed originals in the initial render verification pass. It
+also resolves cancellation ordering and maps ASR cues to an audited source audio
+clock. Older transcript artifacts remain available but may contain shifted times;
+new requests use a separate cache. Output duration, byte and integrity checks
+remain enforced. Editing and transcript search retain their separate 24-hour
+source-position limits.
+
 **[0.5.1](https://github.com/mingley/agent-video-workbench/releases/tag/v0.5.1) improves browsing latency.** Event-driven subprocess completion,
 bounded storyboard graphs and one-pass preview validation retain decoded media
 and timeline mappings. Five interleaved synthetic runs measured 61% faster
@@ -57,7 +66,7 @@ page. The native binary installer needs no Rust compiler, Node, GUI or root
 (see deployment for installation without a checkout):
 
 ```sh
-AVW_VERSION=0.5.1
+AVW_VERSION=0.5.2
 scripts/install-release.sh /path/to/new-bin "$AVW_VERSION"
 scripts/setup-media.sh /path/to/tools
 /path/to/new-bin/avw --ffmpeg /path/to/tools/ffmpeg8/linux/ffmpeg \

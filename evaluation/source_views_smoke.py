@@ -2,8 +2,10 @@
 """Generated source-wide storyboard / precise constrained preview / mapping regression."""
 import argparse, base64, hashlib, json, re, statistics, subprocess, time
 from pathlib import Path
+from fractions import Fraction
 p=argparse.ArgumentParser(description=__doc__)
 for name in ('avw','ffmpeg','ffprobe','output'): p.add_argument('--'+name,required=True)
+p.add_argument('--baseline-avw', help='optional installed 0.5.1 binary for legacy artifact/cache compatibility')
 a=p.parse_args();root=Path(a.output).resolve();root.mkdir(parents=True,exist_ok=False);project=root/'project';ledger=[]
 
 def run(argv, data=None):
@@ -47,19 +49,73 @@ def assert_story_cells(report, artifact, original, adapter='', autorotate=False)
  for cell in range(len(data['tiles']),columns*rows):
   assert not any(b for y in range(th) for b in rgb[((cell//columns*th+y)*w+cell%columns*tw)*3:((cell//columns*th+y)*w+(cell%columns+1)*tw)*3])
 
+def assert_suggestion(tile, scope_start, scope_end):
+ request=tile['suggestedPreview']
+ assert set(request)=={'assetId','startMs','endMs','maxDurationMs','maxBytes','width','height'},request
+ assert request['assetId'] and request['maxDurationMs']==10000 and request['maxBytes']==1048576
+ assert request['width']==640 and request['height']==640
+ source_time=tile['sourceTime'];rate=source_time['rate']
+ observed_ms=Fraction(source_time['value']*rate['denominator']*1000,rate['numerator'])
+ assert scope_start<=request['startMs']<=observed_ms<request['endMs']<=scope_end,(tile,request)
+ assert request['endMs']-request['startMs']==min(9000,scope_end-scope_start),request
+ return request
+
+def assert_preview_budget(report, artifact, request):
+ clip=next(Path(f['path']) for f in artifact['attachments'] if Path(f['path']).name=='proxy.mp4')
+ actual=json.loads(run([a.ffprobe,'-v','error','-show_entries','format=duration','-of','json',clip]))['format']['duration']
+ assert clip.stat().st_size==report['data']['bytes']<=request['maxBytes']
+ assert Fraction(actual)*1000<=request['maxDurationMs'],(actual,request)
+ assert report['data']['verification']['durationWithinBudget']
+
 source=root/'source.mp4'
 run([a.ffmpeg,'-v','error','-f','lavfi','-i','testsrc2=s=640x360:r=30:d=30','-f','lavfi','-i','sine=frequency=440:duration=30','-c:v','libx264','-preset','ultrafast','-threads','2','-g','240','-bf','2','-keyint_min','240','-sc_threshold','0','-pix_fmt','yuv420p','-x264-params','colorprim=bt709:transfer=bt709:colormatrix=bt709','-color_range','tv','-c:a','aac','-shortest',source])
 original_sha=hashlib.sha256(source.read_bytes()).hexdigest();call('create',name='Source views regression');call('import',source=str(source),id='source',expectedRevision=0,key='source-import')
 q={'assetId':'source','sampleEveryMs':10000,'limit':2}
 page,t,artifact=view('source-storyboard',q,'story-page-first');d=page['data'];assert d['totalSamples']==3 and d['nextOffset']==2
 assert [t['sourceTimeMs'] for t in d['tiles']]==[0,10000],d
+for tile in d['tiles']:assert_suggestion(tile,d['scopeStartMs'],d['scopeEndMs'])
+suggestion=assert_suggestion(d['tiles'][0],d['scopeStartMs'],d['scopeEndMs'])
+suggested,_,suggested_artifact=view('budget-preview',suggestion,'story-suggested-preview')
+assert_preview_budget(suggested,suggested_artifact,suggestion)
+assert any(pair['sourcePts']==d['tiles'][0]['observedPts'] for pair in suggested['data']['frameMapping'])
 assert not d['coverage']['continuousVideoInspected']
 media=call('agent-media',media={'kind':'storyboard','project':str(project),'jobId':artifact['jobId']})
 assert base64.b64decode(media['content']['data']).startswith(b'\x89PNG\r\n\x1a\n')
 assert media['metadata']['storyboard']['tiles']==d['tiles']
+legacy={'exercised':False}
+if a.baseline_avw:
+ assert run([a.baseline_avw,'--version']).decode().strip()=='avw 0.5.1'
+ current_avw=a.avw
+ a.avw=a.baseline_avw
+ old_story,_,old_story_artifact=view('source-storyboard',q,'legacy-storyboard')
+ assert all('suggestedPreview' not in tile for tile in old_story['data']['tiles'])
+ old_query={'assetId':'source','startMs':1300,'endMs':4300,'maxDurationMs':4000,
+            'maxBytes':1500000,'width':320,'height':180}
+ _,_,old_preview_artifact=view('budget-preview',old_query,'legacy-budget-preview')
+ a.avw=current_avw
+ old_media=call('agent-media',media={'kind':'storyboard','project':str(project),'jobId':old_story_artifact['jobId']})
+ assert all('suggestedPreview' not in tile for tile in old_media['metadata']['storyboard']['tiles'])
+ refreshed,_,refreshed_artifact=view('source-storyboard',q,'current-storyboard-cache')
+ assert refreshed_artifact['path']!=old_story_artifact['path']
+ assert all('suggestedPreview' in tile for tile in refreshed['data']['tiles'])
+ _,_,reused_preview=view('budget-preview',old_query,'current-budget-preview-cache')
+ assert reused_preview['path']==old_preview_artifact['path']
+ assert call('job-status',id=reused_preview['jobId'])['result']['cacheHit']
+ legacy={'exercised':True,'storyboardJobId':old_story_artifact['jobId'],
+         'legacyStoryboardReadable':True,'storyboardCacheRefreshed':True,
+         'budgetPreviewCacheReused':True}
 page2,_,_=view('source-storyboard',{**q,'offset':2},'story-page-last');assert page2['data']['nextOffset'] is None and page2['data']['tiles'][0]['sourceTimeMs']==20000
 cached,hit,cache_artifact=view('source-storyboard',q,'story-page-cached');assert cache_artifact['path']==artifact['path']
 assert call('job-status',id=cache_artifact['jobId'])['result']['cacheHit']
+assert all('suggestedPreview' in tile for tile in cached['data']['tiles'])
+# A non-frame-aligned request must anchor the suggestion to the observed PTS,
+# using floor rather than the rounded display timestamp.
+mid,_,_=view('source-storyboard',{'assetId':'source','startMs':10034,'endMs':25034,
+                                  'sampleEveryMs':1000,'offset':5,'limit':1},'observed-anchor-story')
+mid_tile=mid['data']['tiles'][0]
+mid_suggestion=assert_suggestion(mid_tile,10034,25034)
+assert mid_tile['requestedSourceTimeMs']==15034 and mid_tile['sourceTimeMs']==15067,mid_tile
+assert mid_suggestion['startMs']==10566 and mid_suggestion['endMs']==19566,mid_tile
 # Normal clip cap and exact frame-to-original mapping.
 preview={'assetId':'source','startMs':300,'endMs':10300,'maxDurationMs':10000,'maxBytes':2000000,'width':640,'height':360}
 r,preview_time,pa=view('budget-preview',preview,'bounded-preview');pd=r['data'];assert pd['bytes']<=preview['maxBytes'] and len(pd['frameMapping'])==300,pd
@@ -83,6 +139,11 @@ run([a.ffmpeg,'-v','error','-f','lavfi','-i','testsrc2=s=320x180:r=30:d=8','-f',
 call('import',source=str(vfr),id='vfr',expectedRevision=1,key='vfr-import')
 vr,_,vra=view('source-storyboard',{'assetId':'vfr','startMs':550,'endMs':4500,'sampleEveryMs':1000,'limit':4},'vfr-storyboard')
 assert vr['data']['tiles'][0]['sourceTimeMs']==600,vr['data']
+vfr_tile=vr['data']['tiles'][0]
+vfr_suggestion=assert_suggestion(vfr_tile,550,4500)
+vfr_suggested,_,vfr_suggested_artifact=view('budget-preview',vfr_suggestion,'vfr-suggested-preview')
+assert_preview_budget(vfr_suggested,vfr_suggested_artifact,vfr_suggestion)
+assert any(pair['sourcePts']==vfr_tile['observedPts'] for pair in vfr_suggested['data']['frameMapping'])
 vp,_,vpa=view('budget-preview',{'assetId':'vfr','startMs':500,'endMs':4500,'maxDurationMs':4500,'maxBytes':1000000,'width':320,'height':180},'vfr-preview')
 assert vp['data']['frameMapping'] and abs(vp['data']['sourceClock']['containerOrigin']['value']*vp['data']['sourceClock']['containerOrigin']['rate']['denominator']/vp['data']['sourceClock']['containerOrigin']['rate']['numerator']-5)<.001,vp['data']
 # Validate delay against authored bursts, not just packet metadata.
@@ -173,6 +234,43 @@ large_calls=[json.loads(l) for l in (root/'ffmpeg-invocations.jsonl').read_text(
 source_reads=[p for p in large_calls if '-ss' in p]
 assert len(source_reads)==5 and all(p.count('-i')==1 for p in source_reads),source_reads
 a.ffmpeg=actual_ffmpeg
+# Nine low-resolution frames span over 25 hours. Frames around the 24h
+# boundary are one second apart; large PTS gaps keep this fixture quick.
+long_source=root/'long-source.mp4'
+pts="setpts='if(lt(N,2),N,if(lt(N,8),86397+N,89992+N))/TB'"
+run([a.ffmpeg,'-v','error','-f','lavfi','-i','testsrc2=s=64x64:r=1:d=9',
+     '-vf',pts,'-fps_mode','passthrough','-c:v','libx264','-preset','ultrafast',
+     '-threads','1','-g','1','-bf','0','-pix_fmt','yuv420p','-x264-params',
+     'colorprim=bt709:transfer=bt709:colormatrix=bt709',long_source])
+frame_probe=json.loads(run([a.ffprobe,'-v','error','-select_streams','v:0','-show_frames',
+                            '-show_entries','frame=best_effort_timestamp_time','-of','json',long_source]))
+assert [Fraction(f['best_effort_timestamp_time']) for f in frame_probe['frames']]==[
+    0,1,86399,86400,86401,86402,86403,86404,90000],frame_probe
+revision=call('status')['revision']
+call('import',source=str(long_source),id='long',expectedRevision=revision,key='long-source-import')
+long_query={'assetId':'long','startMs':86399000,'endMs':86403000,'sampleEveryMs':1000,'limit':2}
+late1,_,late1_artifact=view('source-storyboard',long_query,'long-first-page')
+late2,_,late2_artifact=view('source-storyboard',{**long_query,'offset':2},'long-second-page')
+assert [t['sourceTimeMs'] for t in late1['data']['tiles']]==[86399000,86400000],late1['data']
+assert [t['sourceTimeMs'] for t in late2['data']['tiles']]==[86401000,86402000],late2['data']
+assert (late1['data']['pageStartMs'],late1['data']['pageEndMs'],late1['data']['nextOffset'])==(86399000,86401000,2)
+assert (late2['data']['pageStartMs'],late2['data']['pageEndMs'],late2['data']['nextOffset'])==(86401000,86403000,None)
+assert late2['data']['coverage']['scopeContinues']
+assert_story_cells(late1,late1_artifact,long_source)
+assert_story_cells(late2,late2_artifact,long_source)
+for page in (late1,late2):
+ for tile in page['data']['tiles']:
+  assert_suggestion(tile,86399000,86403000)
+selected=late1['data']['tiles'][1]
+long_preview=assert_suggestion(selected,86399000,86403000)
+assert (long_preview['startMs'],long_preview['endMs'])==(86399000,86403000)
+long_result,_,long_artifact=view('budget-preview',long_preview,'long-suggested-preview')
+assert_preview_budget(long_result,long_artifact,long_preview)
+assert any(pair['sourcePts']==selected['observedPts'] for pair in long_result['data']['frameMapping'])
+late_default,_,_=view('source-storyboard',{'assetId':'long','startMs':86400000,
+                                        'sampleEveryMs':1000,'limit':2},'long-default-scope')
+assert late_default['data']['scopeEndMs']>=86403000
+assert [t['sourceTimeMs'] for t in late_default['data']['tiles']]==[86400000,86401000]
 # Integrity rejection for an existing cached image.
 sheet=next(Path(f['path']) for f in artifact['attachments'] if Path(f['path']).name=='storyboard.png');saved=sheet.read_bytes();sheet.write_bytes(saved+b'tamper')
 call('agent-media',ok=False,media={'kind':'storyboard','project':str(project),'jobId':artifact['jobId']});sheet.write_bytes(saved)
@@ -186,4 +284,6 @@ assert not any(project.joinpath('cache').glob('analysis-*'))
 summary={'passed':True,'storyboardTotalSamples':3,'pagination':True,'observedFrameTimes':True,'cacheHit':True,'storyboardColdSeconds':t,'storyboardWarmSeconds':hit,'previewSeconds':preview_time,'previewBytes':pd['bytes'],'previewFrames':pd['verification']['videoFrames'],'hardCaps':True,'adaptiveEncoding':True,'actualDurationFailureRejected':True,'transcriptContextInvalidation':True,'cliAlias':True,'impossibleBudgetRejected':True,'originalUnchanged':True,'nonzeroOriginVfrMapping':True,'hdrSdrPreview':True,'rotationAppliedOnce':True,'delayedAudioOnsetSeconds':audio_on,'lightBurstOnsetSeconds':video_on,'measuredAvOffsetSeconds':audio_on-video_on,'tamperRejected':True,'sourceTamperRejectedOnCacheHit':True,'videoTamperRejected':True,'revision':call('status')['revision'],'storyboardJobId':artifact['jobId'],'previewJobId':pa['jobId'],'limitations':['Generated local SDR; no semantic model or host-specific media acceptance','Storyboard is sparse; no claim to capture every important event']}
 summary.update({'exactStoryboardCells':True,'raggedAndDensePages':True,'largeFrameSequentialFallback':True,'singlePreviewValidationDecode':True,'measuredImpossibleBudgetHint':True,'videoOnlyPreview':True,'twelveTileImageProcesses':4})
 summary['limitations'][0]='Generated local media; no semantic model or host-specific media acceptance'
+summary.update({'longSourceBeyond24Hours':True,'suggestedPreviewFromObservedPts':True,
+                'vfrSuggestedPreview':True,'sourceSha256':original_sha,'legacyCompatibility':legacy})
 (root/'summary.json').write_text(json.dumps(summary,indent=2));print(json.dumps(summary,indent=2))

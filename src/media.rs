@@ -286,11 +286,10 @@ pub fn verify_asset(root: &Path, asset: &agentcut_core::Asset) -> Result<()> {
     verify_asset_controlled(root, asset, &mut crate::process::Uncontrolled)
 }
 
-pub(crate) fn verify_asset_controlled(
+fn managed_original<'a>(
     root: &Path,
-    asset: &agentcut_core::Asset,
-    control: &mut dyn crate::process::Control,
-) -> Result<()> {
+    asset: &'a agentcut_core::Asset,
+) -> Result<(&'a str, PathBuf)> {
     let expected = asset
         .fingerprint
         .sha256
@@ -307,8 +306,75 @@ pub(crate) fn verify_asset_controlled(
     }
     let target = project_directory(root, "originals")?.join(expected);
     regular_file(&target, "managed original")?;
+    Ok((expected, target))
+}
+
+pub(crate) fn verify_asset_controlled(
+    root: &Path,
+    asset: &agentcut_core::Asset,
+    control: &mut dyn crate::process::Control,
+) -> Result<()> {
+    let (expected, target) = managed_original(root, asset)?;
     if hash_file_controlled(&target, control)? != expected {
         return Err(Error::Invalid(format!("asset {} bytes changed", asset.id)));
+    }
+    Ok(())
+}
+
+// Identifies common replacements or writes between duplicate asset records.
+// This is a static check, not isolation from concurrent filesystem mutations.
+type OriginalStamp = (u64, u64, u64, i64, i64, i64, i64);
+
+fn original_stamp(path: &Path) -> Result<OriginalStamp> {
+    use std::os::unix::fs::MetadataExt;
+
+    let metadata = std::fs::symlink_metadata(path)?;
+    if !metadata.file_type().is_file() {
+        return Err(Error::Invalid(
+            "managed original must be a regular file".into(),
+        ));
+    }
+    Ok((
+        metadata.dev(),
+        metadata.ino(),
+        metadata.len(),
+        metadata.mtime(),
+        metadata.mtime_nsec(),
+        metadata.ctime(),
+        metadata.ctime_nsec(),
+    ))
+}
+
+fn verify_render_originals_with<F>(
+    root: &Path,
+    project: &Project,
+    control: &mut dyn crate::process::Control,
+    mut hash: F,
+) -> Result<()>
+where
+    F: FnMut(&Path, &mut dyn crate::process::Control) -> Result<String>,
+{
+    // This cache exists for one render verification only. Every asset still
+    // validates its own identity, managed path and current regular-file status.
+    let mut verified = std::collections::BTreeMap::<String, OriginalStamp>::new();
+    for asset in &project.assets {
+        let (expected, target) = managed_original(root, asset)?;
+        control.check()?;
+        let before = original_stamp(&target)?;
+        if verified.get(expected) == Some(&before) {
+            continue;
+        }
+        if hash(&target, control)? != expected {
+            return Err(Error::Invalid(format!("asset {} bytes changed", asset.id)));
+        }
+        let after = original_stamp(&target)?;
+        if before != after {
+            return Err(Error::Invalid(format!(
+                "asset {} changed during verification",
+                asset.id
+            )));
+        }
+        verified.insert(expected.to_owned(), after);
     }
     Ok(())
 }
@@ -364,9 +430,7 @@ pub(crate) fn render_attempt(
     crate::delivery::sidecars(project.require_sequence(sequence)?)?;
     let assembled = crate::assembly::policy(project.require_sequence(sequence)?)?.is_some();
     crate::audio_cleanup::validate_scope(project, sequence, assembled)?;
-    for asset in &project.assets {
-        verify_asset_controlled(root, asset, control)?;
-    }
+    verify_render_originals_with(root, project, control, hash_file_controlled)?;
     timings.insert("verifyOriginals", started.elapsed().as_secs_f64());
     let planning_started = std::time::Instant::now();
     let snapshot = project;
@@ -1120,6 +1184,277 @@ mod render_input_tests {
         MediaMetadata, RationalRate, Sequence, SequenceRefData, TimeRange, TimelineItem, Track,
         TrackType, Transform2d,
     };
+
+    fn duplicate_original_fixture() -> (tempfile::TempDir, Project, PathBuf) {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("originals")).unwrap();
+        let bytes = vec![0x5a; 256 * 1024 + 1];
+        let sha = format!("{:x}", Sha256::digest(&bytes));
+        let path = root.path().join("originals").join(&sha);
+        std::fs::write(&path, &bytes).unwrap();
+        let mut project = Project::new("duplicate", 64, 64, RationalRate::frames(30).unwrap());
+        let mut fingerprint = Fingerprint::unprobed();
+        fingerprint.strategy = FingerprintStrategy::Sha256;
+        fingerprint.size_bytes = bytes.len() as u64;
+        fingerprint.sha256 = Some(sha.clone());
+        let first = Asset {
+            id: "first".into(),
+            kind: AssetKind::Video,
+            uri: format!("originals/{sha}"),
+            proxy_uri: None,
+            label: "generated".into(),
+            fingerprint,
+            metadata: MediaMetadata::unprobed(),
+            tags: Vec::new(),
+            extensions: Default::default(),
+        };
+        let mut second = first.clone();
+        second.id = "second".into();
+        project.assets.extend([first, second]);
+        (root, project, path)
+    }
+
+    #[test]
+    fn repeated_original_is_hashed_once_per_render_and_rechecked_next_time() {
+        let (root, mut project, path) = duplicate_original_fixture();
+        let other = b"another generated original";
+        let other_sha = format!("{:x}", Sha256::digest(other));
+        std::fs::write(root.path().join("originals").join(&other_sha), other).unwrap();
+        let mut distinct = project.assets[0].clone();
+        distinct.id = "distinct".into();
+        distinct.uri = format!("originals/{other_sha}");
+        distinct.fingerprint.size_bytes = other.len() as u64;
+        distinct.fingerprint.sha256 = Some(other_sha);
+        project.assets.push(distinct);
+
+        let mut reads = 0;
+        verify_render_originals_with(
+            root.path(),
+            &project,
+            &mut crate::process::Uncontrolled,
+            |path, control| {
+                reads += 1;
+                hash_file_controlled(path, control)
+            },
+        )
+        .unwrap();
+        assert_eq!(reads, 2, "two different originals must each be hashed");
+
+        verify_render_originals_with(
+            root.path(),
+            &project,
+            &mut crate::process::Uncontrolled,
+            |path, control| {
+                reads += 1;
+                hash_file_controlled(path, control)
+            },
+        )
+        .unwrap();
+        assert_eq!(reads, 4, "verification cannot persist across renders");
+
+        std::fs::write(&path, b"changed original").unwrap();
+        let error = verify_render_originals_with(
+            root.path(),
+            &project,
+            &mut crate::process::Uncontrolled,
+            hash_file_controlled,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("asset first bytes changed"));
+    }
+
+    #[test]
+    fn repeated_original_still_validates_each_asset_and_regular_path() {
+        let (root, project, path) = duplicate_original_fixture();
+        let mut wrong_uri = project.clone();
+        wrong_uri.assets[1].uri = "originals/not-the-digest".into();
+        let error = verify_render_originals_with(
+            root.path(),
+            &wrong_uri,
+            &mut crate::process::Uncontrolled,
+            hash_file_controlled,
+        )
+        .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("asset second is not a managed original")
+        );
+
+        let mut invalid_sha = project.clone();
+        invalid_sha.assets[1].fingerprint.sha256 = Some("g".repeat(64));
+        let error = verify_render_originals_with(
+            root.path(),
+            &invalid_sha,
+            &mut crate::process::Uncontrolled,
+            hash_file_controlled,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("invalid asset content identity"));
+
+        let mut missing_sha = project.clone();
+        missing_sha.assets[1].fingerprint.sha256 = None;
+        let error = verify_render_originals_with(
+            root.path(),
+            &missing_sha,
+            &mut crate::process::Uncontrolled,
+            hash_file_controlled,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("asset second has no SHA-256"));
+
+        let outside = root.path().join("outside");
+        std::fs::write(&outside, b"outside").unwrap();
+        std::fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink(&outside, &path).unwrap();
+        assert!(
+            verify_render_originals_with(
+                root.path(),
+                &project,
+                &mut crate::process::Uncontrolled,
+                hash_file_controlled,
+            )
+            .is_err()
+        );
+        std::fs::remove_file(&path).unwrap();
+        assert!(
+            verify_render_originals_with(
+                root.path(),
+                &project,
+                &mut crate::process::Uncontrolled,
+                hash_file_controlled,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn mutation_during_verification_is_not_cached() {
+        let (root, project, _) = duplicate_original_fixture();
+        let error = verify_render_originals_with(
+            root.path(),
+            &project,
+            &mut crate::process::Uncontrolled,
+            |path, control| {
+                let digest = hash_file_controlled(path, control)?;
+                std::fs::write(path, b"changed after hashing")?;
+                Ok(digest)
+            },
+        )
+        .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("asset first changed during verification")
+        );
+    }
+
+    #[test]
+    fn a_changed_duplicate_is_rehashed_before_the_render() {
+        use std::cell::Cell;
+
+        struct ChangeAfterFirst<'a> {
+            armed: &'a Cell<bool>,
+            path: PathBuf,
+        }
+        impl crate::process::Control for ChangeAfterFirst<'_> {
+            fn check(&mut self) -> Result<()> {
+                if self.armed.replace(false) {
+                    std::fs::write(&self.path, b"changed size")?;
+                }
+                Ok(())
+            }
+        }
+
+        let (root, project, path) = duplicate_original_fixture();
+        let armed = Cell::new(false);
+        let reads = Cell::new(0);
+        let mut control = ChangeAfterFirst {
+            armed: &armed,
+            path,
+        };
+        let error =
+            verify_render_originals_with(root.path(), &project, &mut control, |path, control| {
+                reads.set(reads.get() + 1);
+                let digest = hash_file_controlled(path, control)?;
+                if reads.get() == 1 {
+                    armed.set(true);
+                }
+                Ok(digest)
+            })
+            .unwrap_err();
+        assert_eq!(reads.get(), 2);
+        assert!(error.to_string().contains("asset second bytes changed"));
+    }
+
+    #[test]
+    fn a_symlink_replacing_a_duplicate_is_not_reused() {
+        use std::cell::Cell;
+
+        struct ReplaceAfterFirst<'a> {
+            armed: &'a Cell<bool>,
+            path: PathBuf,
+            outside: PathBuf,
+        }
+        impl crate::process::Control for ReplaceAfterFirst<'_> {
+            fn check(&mut self) -> Result<()> {
+                if self.armed.replace(false) {
+                    std::fs::remove_file(&self.path)?;
+                    std::os::unix::fs::symlink(&self.outside, &self.path)?;
+                }
+                Ok(())
+            }
+        }
+
+        let (root, project, path) = duplicate_original_fixture();
+        let outside = root.path().join("outside");
+        std::fs::write(&outside, b"unverified").unwrap();
+        let armed = Cell::new(false);
+        let reads = Cell::new(0);
+        let mut control = ReplaceAfterFirst {
+            armed: &armed,
+            path,
+            outside,
+        };
+        let error =
+            verify_render_originals_with(root.path(), &project, &mut control, |path, control| {
+                reads.set(reads.get() + 1);
+                let digest = hash_file_controlled(path, control)?;
+                armed.set(true);
+                Ok(digest)
+            })
+            .unwrap_err();
+        assert_eq!(reads.get(), 1);
+        assert!(
+            error
+                .to_string()
+                .contains("managed original must be a regular file")
+        );
+    }
+
+    #[test]
+    fn render_original_verification_checks_cancellation_during_hashing() {
+        struct CancelAfterChecks(usize);
+        impl crate::process::Control for CancelAfterChecks {
+            fn check(&mut self) -> Result<()> {
+                self.0 += 1;
+                if self.0 >= 4 {
+                    Err(Error::Cancelled)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+
+        let (root, project, _) = duplicate_original_fixture();
+        let result = verify_render_originals_with(
+            root.path(),
+            &project,
+            &mut CancelAfterChecks(0),
+            hash_file_controlled,
+        );
+        assert!(matches!(result, Err(Error::Cancelled)));
+    }
 
     #[test]
     #[ignore = "requires AVW_TEST_FFMPEG and AVW_TEST_FFPROBE"]

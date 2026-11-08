@@ -5,7 +5,22 @@ on:
   pull_request:
   workflow_dispatch:
 jobs:
+  formatting:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, Node 24
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+      - name: Show formatting corrections on failure
+        if: failure()
+        run: |
+          cargo fmt --all
+          git diff
   qualify:
+    needs: formatting
     # Internal branches already qualify on push. Fork PRs still need parent CI.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     strategy:
@@ -34,13 +49,17 @@ jobs:
           scripts/package.sh "$RUNNER_TEMP/release"
       - name: Checksum-verified FFmpeg runtime
         run: scripts/setup-media.sh "$RUNNER_TEMP/tools"
+      - name: Install 0.5.1 baseline for compatibility and comparison
+        run: scripts/install-release.sh "$RUNNER_TEMP/baseline" 0.5.1
       - name: Application, media and worker qualification
         shell: bash
         run: |
           set -euo pipefail
           media="$RUNNER_TEMP/tools/ffmpeg8/linux"
           python3 evaluation/application_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/application"
-          python3 evaluation/source_views_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/source-views"
+          python3 evaluation/source_views_smoke.py --avw "$PWD/target/release/avw" --baseline-avw "$RUNNER_TEMP/baseline/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/source-views"
+          python3 evaluation/asr_cache_smoke.py --avw "$PWD/target/release/avw" --baseline-avw "$RUNNER_TEMP/baseline/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/asr-cache"
+          python3 evaluation/asr_clock_smoke.py --avw "$PWD/target/release/avw" --baseline-avw "$RUNNER_TEMP/baseline/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/asr-clock"
           python3 evaluation/job_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --project "$RUNNER_TEMP/application/backup" --output "$RUNNER_TEMP/jobs"
           python3 evaluation/media_matrix.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/matrix"
           python3 evaluation/combined_media_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/combined"
@@ -58,6 +77,20 @@ jobs:
           python3 evaluation/caption_sidecar_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --output "$RUNNER_TEMP/caption-sidecar"
           python3 evaluation/solo_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/solo"
           python3 evaluation/subject_reframe_smoke.py --avw "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/subject-reframe"
+      - name: Observational ASR audio-audit overhead
+        if: matrix.arch == 'x86_64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          media="$RUNNER_TEMP/tools/ffmpeg8/linux"
+          python3 evaluation/asr_overhead.py --avw "$PWD/target/release/avw" --baseline-avw "$RUNNER_TEMP/baseline/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --source "$RUNNER_TEMP/asr-clock/long-aac.mkv" --output "$RUNNER_TEMP/asr-overhead"
+      - name: Paired duplicate-original verification benchmark
+        if: matrix.arch == 'x86_64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          media="$RUNNER_TEMP/tools/ffmpeg8/linux"
+          python3 evaluation/duplicate_assets_performance.py --baseline "$RUNNER_TEMP/baseline/avw" --candidate "$PWD/target/release/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/duplicate-assets"
       - name: Official MCP client, installed binary and CLI conformance
         shell: bash
         run: |
@@ -97,6 +130,9 @@ jobs:
             ${{ runner.temp }}/release/SHA256SUMS
             ${{ runner.temp }}/application/summary.json
             ${{ runner.temp }}/source-views/summary.json
+            ${{ runner.temp }}/asr-cache/summary.json
+            ${{ runner.temp }}/asr-clock/summary.json
+            ${{ runner.temp }}/duplicate-assets/summary.json
             ${{ runner.temp }}/jobs/summary.json
             ${{ runner.temp }}/matrix/summary.json
             ${{ runner.temp }}/combined/summary.json
