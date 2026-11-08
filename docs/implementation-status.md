@@ -15,8 +15,21 @@ requests use an audited source audio clock and a separate cache; old artifacts
 remain readable but can have shifted cue timestamps. Timestamp gaps or ambiguous
 origins are rejected rather than silently mapped onto a continuous WAV.
 
-Native qualification and the generated-media A/B benchmark must pass before
-publication; source review alone is not runtime proof.
+[Native qualification](https://github.com/mingley/agent-video-workbench/actions/runs/42443616525)
+passed on x86_64 and ARM64 at `61acfc404ac9001e33cfdd04d0ba73a938bb0e72`: 211 Rust tests
+passed and two existing tests were ignored per architecture. Generated-media,
+long-source, old-cache and official MCP checks passed. A delayed-audio fixture
+that formerly placed a cue 1,000 ms early now matched the source time; real
+v2 artifacts were exercised, but an actual v3 binary was not.
+
+On the x86 AMD EPYC 7763 runner, three interleaved warm generated-source runs
+with five IDs for one 68.6 MB original (including a 64 MiB sparse free box)
+measured initial verification medians of 240.5 ms → 48.4 ms, with decoded
+video and audio unchanged. A separate four-sample-per-version comparison on
+generated 60-second AAC with a constant-output fake provider measured ASR
+worker medians of 99.9 ms → 146.3 ms after adding the timing audit. These are
+fixture-specific results, not general export or speech-model throughput claims.
+Publication and the public installer are verified separately.
 
 Analysis cache identity currently does not include the configured ffprobe tool.
 After changing ffprobe, use a fresh project when generating frame indexes or
