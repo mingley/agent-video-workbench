@@ -166,6 +166,67 @@ fn duration(asset: &Asset) -> Result<i64> {
         .value)
 }
 
+const MAX_STORYBOARD_SCOPE_MS: i64 = 86_400_000;
+
+fn sample_time_ms(start: i64, index: i64, step: u32) -> Result<i64> {
+    if index < 0 {
+        return Err(invalid("storyboard sample index must be nonnegative"));
+    }
+    let Some(delta) = index.checked_mul(i64::from(step)) else {
+        return Err(invalid("storyboard sample offset overflow"));
+    };
+    let Some(value) = start.checked_add(delta) else {
+        return Err(invalid("storyboard sample timestamp overflow"));
+    };
+    Ok(value)
+}
+
+fn sample_count(start: i64, end: i64, step: u32) -> Result<i64> {
+    let Some(span) = end.checked_sub(start) else {
+        return Err(invalid("storyboard scope must be 1ms..24h"));
+    };
+    if !(1..=MAX_STORYBOARD_SCOPE_MS).contains(&span) || step == 0 {
+        return Err(invalid("storyboard scope or sampling interval is invalid"));
+    }
+    let step = i64::from(step);
+    Ok(span / step + if span % step == 0 { 0 } else { 1 })
+}
+
+fn page_end_ms(start: i64, end: i64, last: i64, total: i64, step: u32) -> Result<i64> {
+    if last == total {
+        Ok(end)
+    } else {
+        sample_time_ms(start, last, step)
+    }
+}
+
+fn suggested_preview(
+    asset_id: &str,
+    actual: RationalTime,
+    scope_start: i64,
+    scope_end: i64,
+) -> Result<Value> {
+    let Some(span) = scope_end.checked_sub(scope_start) else {
+        return Err(invalid("invalid storyboard scope"));
+    };
+    if scope_start < 0 || span <= 0 {
+        return Err(invalid("invalid storyboard scope"));
+    }
+    let span = span.min(9_000);
+    let center = actual
+        .rescale_to(workflow::time(0).rate, RoundingMode::Floor)?
+        .value;
+    if center < scope_start || center >= scope_end {
+        return Err(invalid("observed frame is outside the storyboard scope"));
+    }
+    let latest = scope_end - span;
+    let start = center.saturating_sub(span / 2).clamp(scope_start, latest);
+    let Some(end) = start.checked_add(span) else {
+        return Err(invalid("suggested preview timestamp overflow"));
+    };
+    Ok(json!({"assetId":asset_id,"startMs":start,"endMs":end,"maxDurationMs":10000,"maxBytes":1048576,"width":640,"height":640}))
+}
+
 fn storyboard_end(q: &Storyboard, asset: &Asset) -> Result<(i64, Option<i64>)> {
     let c = clock(asset)?;
     let reported = asset
@@ -192,7 +253,7 @@ fn storyboard_end(q: &Storyboard, asset: &Asset) -> Result<(i64, Option<i64>)> {
     let end = q.end_ms.unwrap_or(
         duration(asset)?
             .min(video_end.unwrap_or(i64::MAX))
-            .min(86_400_000),
+            .min(q.start_ms.saturating_add(MAX_STORYBOARD_SCOPE_MS)),
     );
     if video_end.is_some_and(|v| end > v) {
         return Err(invalid(
@@ -207,10 +268,12 @@ pub fn validate_storyboard(q: &Storyboard, project: &Project) -> Result<()> {
     clock(asset)?;
     color::source_filter(asset)?;
     let (end, _) = storyboard_end(q, asset)?;
+    let valid_span = end
+        .checked_sub(q.start_ms)
+        .is_some_and(|span| (1..=MAX_STORYBOARD_SCOPE_MS).contains(&span));
     if q.start_ms < 0
-        || end <= q.start_ms
+        || !valid_span
         || end > duration(asset)?
-        || end > 86_400_000
         || !(1000..=300_000).contains(&q.sample_every_ms)
         || !(1..=24).contains(&q.limit)
         || !(128..=512).contains(&q.tile_width)
@@ -221,8 +284,7 @@ pub fn validate_storyboard(q: &Storyboard, project: &Project) -> Result<()> {
             "storyboard needs an in-source scope up to 24h, sampleEveryMs 1000..300000, limit 1..24, tileWidth 128..512 divisible by 16, maxBytes 16384..2097152",
         ));
     }
-    let total =
-        (end - q.start_ms + i64::from(q.sample_every_ms) - 1) / i64::from(q.sample_every_ms);
+    let total = sample_count(q.start_ms, end, q.sample_every_ms)?;
     if i64::from(q.offset) >= total {
         return Err(invalid("storyboard offset is outside the sample index"));
     }
@@ -294,11 +356,13 @@ pub fn storyboard(
     backend: &FfmpegBackend,
     control: &mut dyn Control,
 ) -> Result<(Value, Vec<Value>)> {
+    validate_storyboard(q, project)?;
     let clock = clock(asset)?;
     let (end, reported_video_end) = storyboard_end(q, asset)?;
-    let total =
-        (end - q.start_ms + i64::from(q.sample_every_ms) - 1) / i64::from(q.sample_every_ms);
+    let total = sample_count(q.start_ms, end, q.sample_every_ms)?;
     let last = (i64::from(q.offset) + i64::from(q.limit)).min(total);
+    let page_start = sample_time_ms(q.start_ms, i64::from(q.offset), q.sample_every_ms)?;
+    let page_end = page_end_ms(q.start_ms, end, last, total, q.sample_every_ms)?;
     let count = last - i64::from(q.offset);
     let columns = count.min(4);
     let height = q.tile_width * 9 / 16;
@@ -340,7 +404,7 @@ pub fn storyboard(
         ]);
         let mut chains = Vec::new();
         for (input, index) in (row_start..row_end).enumerate() {
-            let requested = q.start_ms + index * i64::from(q.sample_every_ms);
+            let requested = sample_time_ms(q.start_ms, index, q.sample_every_ms)?;
             cmd.args([
                 "-threads",
                 "1",
@@ -392,7 +456,7 @@ pub fn storyboard(
         .arg(&path);
         let output = process::run(&mut cmd, Duration::from_secs(60), control)?;
         for index in row_start..row_end {
-            let requested = q.start_ms + index * i64::from(q.sample_every_ms);
+            let requested = sample_time_ms(q.start_ms, index, q.sample_every_ms)?;
             let (pts, b) = observed_frame(&output.stderr, index)?;
             let actual = time(pts, b).checked_sub(clock.origin)?;
             if actual.checked_cmp(workflow::time(requested))?.is_lt()
@@ -403,7 +467,7 @@ pub fn storyboard(
                 ));
             }
             let tile = tiles.len() as i64;
-            tiles.push(json!({"index":index,"requestedSourceTimeMs":requested,"observedPts":pts,"timeBase":format!("{}/{}",b.0,b.1),"sourceTime":actual,"sourceTimeMs":actual.rescale_to(workflow::time(0).rate,RoundingMode::Nearest)?.value,"column":tile%columns,"row":tile/columns}));
+            tiles.push(json!({"index":index,"requestedSourceTimeMs":requested,"observedPts":pts,"timeBase":format!("{}/{}",b.0,b.1),"sourceTime":actual,"sourceTimeMs":actual.rescale_to(workflow::time(0).rate,RoundingMode::Nearest)?.value,"suggestedPreview":suggested_preview(&q.asset_id,actual,q.start_ms,end)?,"column":tile%columns,"row":tile/columns}));
         }
         paths.push(path);
     }
@@ -461,8 +525,7 @@ pub fn storyboard(
         .collect::<Vec<_>>();
     let transcript = if active.len() == 1 {
         let t = active[0];
-        let page_start = q.start_ms + i64::from(q.offset) * i64::from(q.sample_every_ms);
-        let page_end = (q.start_ms + last * i64::from(q.sample_every_ms)).min(end);
+
         let mut cues = t
             .cues
             .iter()
@@ -478,7 +541,7 @@ pub fn storyboard(
         json!({"name":"storyboard.png","sha256":media::hash_file_controlled(&sheet,control)?}),
     ];
     Ok((
-        json!({"file":"storyboard.png","mimeType":"image/png","bytes":bytes,"tileWidth":q.tile_width,"tileHeight":height,"columns":columns,"tiles":tiles,"transcript":transcript,"scopeStartMs":q.start_ms,"scopeEndMs":end,"pageStartMs":q.start_ms+i64::from(q.offset)*i64::from(q.sample_every_ms),"pageEndMs":(q.start_ms+last*i64::from(q.sample_every_ms)).min(end),"sourceDurationMsFloor":duration(asset)?,"reportedVideoEndMsFloor":reported_video_end,"totalSamples":total,"offset":q.offset,"nextOffset":if last<total {Some(last)}else{None},"sampleEveryMs":q.sample_every_ms,"containerOrigin":clock.origin,"coverage":{"kind":"sparse-observed-frames","continuousVideoInspected":false,"scopeContinues":end<duration(asset)?,"audioOnlyTailMayRemain":reported_video_end.is_some_and(|v|v<duration(asset).unwrap_or(v)),"guidance":"Sparse samples can miss brief events, small text, motion and speech. Request denser pages, full-resolution frames or a bounded preview; empty samples or unavailable transcripts do not establish absence."}}),
+        json!({"file":"storyboard.png","mimeType":"image/png","bytes":bytes,"tileWidth":q.tile_width,"tileHeight":height,"columns":columns,"tiles":tiles,"transcript":transcript,"scopeStartMs":q.start_ms,"scopeEndMs":end,"pageStartMs":page_start,"pageEndMs":page_end,"sourceDurationMsFloor":duration(asset)?,"reportedVideoEndMsFloor":reported_video_end,"totalSamples":total,"offset":q.offset,"nextOffset":if last<total {Some(last)}else{None},"sampleEveryMs":q.sample_every_ms,"containerOrigin":clock.origin,"coverage":{"kind":"sparse-observed-frames","continuousVideoInspected":false,"scopeContinues":end<duration(asset)?,"audioOnlyTailMayRemain":reported_video_end.is_some_and(|v|v<duration(asset).unwrap_or(v)),"guidance":"Sparse samples can miss brief events, small text, motion and speech. Request denser pages, full-resolution frames or a bounded preview; empty samples or unavailable transcripts do not establish absence."}}),
         files,
     ))
 }
@@ -859,6 +922,71 @@ pub fn preview(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sample_arithmetic_handles_long_windows_and_overflow() {
+        let start = 86_399_000;
+        let end = 86_403_000;
+        let total = sample_count(start, end, 1_000).unwrap();
+        assert_eq!(total, 4);
+        assert_eq!(sample_time_ms(start, 0, 1_000).unwrap(), 86_399_000);
+        assert_eq!(sample_time_ms(start, 1, 1_000).unwrap(), 86_400_000);
+        assert_eq!(sample_time_ms(start, 2, 1_000).unwrap(), 86_401_000);
+        assert_eq!(page_end_ms(start, end, 2, total, 1_000).unwrap(), 86_401_000);
+        assert_eq!(page_end_ms(start, end, 4, total, 1_000).unwrap(), end);
+
+        let start = i64::MAX - 1;
+        let end = i64::MAX;
+        let total = sample_count(start, end, 1_000).unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(sample_time_ms(start, 0, 1_000).unwrap(), start);
+        assert_eq!(page_end_ms(start, end, 1, total, 1_000).unwrap(), end);
+        assert!(sample_time_ms(start, 1, 1_000).is_err());
+        assert!(sample_count(i64::MIN, i64::MAX, 1_000).is_err());
+        assert!(sample_count(0, 1, 0).is_err());
+        assert!(sample_count(0, 86_400_001, 1_000).is_err());
+    }
+
+    #[test]
+    fn suggested_preview_contains_observed_frame_within_source_scope() {
+        for (observed, scope_start, scope_end, expected_start, expected_end) in [
+            (0, 0, 30_000, 0, 9_000),
+            (29_100, 0, 30_000, 21_000, 30_000),
+            (10_500, 10_000, 11_000, 10_000, 11_000),
+            (86_400_123, 86_399_000, 86_403_000, 86_399_000, 86_403_000),
+            (i64::MAX - 1, i64::MAX - 1, i64::MAX, i64::MAX - 1, i64::MAX),
+        ] {
+            let suggestion =
+                suggested_preview("source", workflow::time(observed), scope_start, scope_end)
+                    .unwrap();
+            assert_eq!(suggestion["assetId"], "source");
+            assert_eq!(suggestion["startMs"], expected_start);
+            assert_eq!(suggestion["endMs"], expected_end);
+            assert_eq!(suggestion["maxDurationMs"], 10_000);
+            assert_eq!(suggestion["maxBytes"], 1_048_576);
+            assert_eq!(suggestion["width"], 640);
+            assert_eq!(suggestion["height"], 640);
+        }
+
+        // 9,999.999ms is inside a half-open interval ending at 10,000ms.
+        let fractional = RationalTime::new(9_999_999, RationalRate::frames(1_000_000).unwrap());
+        let range = suggested_preview("source", fractional, 0, 10_000).unwrap();
+        assert_eq!(range["startMs"], 1_000);
+        assert_eq!(range["endMs"], 10_000);
+        assert!(
+            !fractional
+                .checked_cmp(workflow::time(range["startMs"].as_i64().unwrap()))
+                .unwrap()
+                .is_lt()
+        );
+        assert!(
+            fractional
+                .checked_cmp(workflow::time(range["endMs"].as_i64().unwrap()))
+                .unwrap()
+                .is_lt()
+        );
+        assert!(suggested_preview("source", workflow::time(10_000), 0, 10_000).is_err());
+    }
     #[test]
     fn decoded_index_keeps_video_clock_and_refuses_incomplete_evidence() {
         let log = b"#tb 0: 1/90000\n#media_type 0: video\n#tb 1: 1/48000\n#media_type 1: audio\n0, 3003, 3003, 3003, 120, 0x00000000\n1, 0, 0, 1024, 2048, 0x12345678\n0, 9009, 9009, 3003, 120, 0xabcdef12\n";
