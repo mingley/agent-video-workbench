@@ -566,10 +566,7 @@ mod finalization_tests {
             None,
         )
         .unwrap();
-        let after = Store::open(&root)
-            .unwrap()
-            .cancel_job(&running.id)
-            .unwrap();
+        let after = Store::open(&root).unwrap().cancel_job(&running.id).unwrap();
         assert_eq!(after.state, "succeeded");
         assert!(!after.cancel_requested);
         assert_eq!(after.result, Some(value));
@@ -605,10 +602,7 @@ mod finalization_tests {
     fn explicit_cancel_wins_over_late_failure_or_interruption() {
         for outcome in ["failed", "interrupted"] {
             let (_temp, root, store, running) = running_job();
-            Store::open(&root)
-                .unwrap()
-                .cancel_job(&running.id)
-                .unwrap();
+            Store::open(&root).unwrap().cancel_job(&running.id).unwrap();
             finalize_attempt(
                 &store,
                 &running,

@@ -51,7 +51,9 @@ fn incomplete_cache() -> Error {
 fn cache_file_exists(path: &Path) -> Result<bool> {
     match std::fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_file() => Ok(true),
-        Ok(_) => Err(Error::Invalid("ASR cache entries must be regular files".into())),
+        Ok(_) => Err(Error::Invalid(
+            "ASR cache entries must be regular files".into(),
+        )),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error.into()),
     }
@@ -92,10 +94,14 @@ fn cached(
         || manifest["provider"] != serde_json::to_value(&context.input.config)?
         || manifest["adapterVersion"].as_u64() != Some(version)
     {
-        return Err(Error::Invalid("cached ASR manifest identity changed".into()));
+        return Err(Error::Invalid(
+            "cached ASR manifest identity changed".into(),
+        ));
     }
     if version == 3 && manifest["assetId"].as_str() != Some(context.input.asset_id.as_str()) {
-        return Err(Error::Invalid("cached ASR manifest asset ID changed".into()));
+        return Err(Error::Invalid(
+            "cached ASR manifest asset ID changed".into(),
+        ));
     }
     let transcript: Transcript = crate::json::read(cache)
         .map_err(|_| Error::Invalid("cached ASR transcript is malformed".into()))?;
@@ -103,7 +109,9 @@ fn cached(
         if version == 2 {
             return Ok(None);
         }
-        return Err(Error::Invalid("cached ASR transcript asset ID changed".into()));
+        return Err(Error::Invalid(
+            "cached ASR transcript asset ID changed".into(),
+        ));
     }
     Ok(Some(
         json!({"path":cache,"manifest":manifest_path,"sha256":hash,"mimeType":"application/json","assetId":transcript.asset_id,"cacheHit":true,"cueCount":transcript.cues.len()}),
@@ -261,7 +269,8 @@ pub fn analyze(
     let legacy_data_exists = cache_file_exists(&legacy)?;
     let legacy_manifest_exists = cache_file_exists(&legacy_manifest)?;
     let use_legacy = match (legacy_data_exists, legacy_manifest_exists) {
-        (true, false) => match repair_legacy_manifest(&context, &legacy, &legacy_manifest, control) {
+        (true, false) => match repair_legacy_manifest(&context, &legacy, &legacy_manifest, control)
+        {
             Ok(()) => true,
             // A legacy entry with insufficient or conflicting evidence stays
             // untouched; the independent v3 cache can still serve this asset.

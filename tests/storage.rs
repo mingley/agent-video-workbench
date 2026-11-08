@@ -88,7 +88,13 @@ fn retention_keeps_legacy_and_explicit_asr_sidecars() {
     let modern = root.join("analysis/asr-modern.json");
     let modern_manifest = modern.with_extension("manifest.json");
     let orphan = root.join("analysis/asr-orphan.manifest.json");
-    for path in [&legacy, &legacy_manifest, &modern, &modern_manifest, &orphan] {
+    for path in [
+        &legacy,
+        &legacy_manifest,
+        &modern,
+        &modern_manifest,
+        &orphan,
+    ] {
         std::fs::write(path, b"{}").unwrap();
         age(path);
     }

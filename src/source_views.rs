@@ -224,7 +224,9 @@ fn suggested_preview(
     let Some(end) = start.checked_add(span) else {
         return Err(invalid("suggested preview timestamp overflow"));
     };
-    Ok(json!({"assetId":asset_id,"startMs":start,"endMs":end,"maxDurationMs":10000,"maxBytes":1048576,"width":640,"height":640}))
+    Ok(
+        json!({"assetId":asset_id,"startMs":start,"endMs":end,"maxDurationMs":10000,"maxBytes":1048576,"width":640,"height":640}),
+    )
 }
 
 fn storyboard_end(q: &Storyboard, asset: &Asset) -> Result<(i64, Option<i64>)> {
@@ -932,7 +934,10 @@ mod tests {
         assert_eq!(sample_time_ms(start, 0, 1_000).unwrap(), 86_399_000);
         assert_eq!(sample_time_ms(start, 1, 1_000).unwrap(), 86_400_000);
         assert_eq!(sample_time_ms(start, 2, 1_000).unwrap(), 86_401_000);
-        assert_eq!(page_end_ms(start, end, 2, total, 1_000).unwrap(), 86_401_000);
+        assert_eq!(
+            page_end_ms(start, end, 2, total, 1_000).unwrap(),
+            86_401_000
+        );
         assert_eq!(page_end_ms(start, end, 4, total, 1_000).unwrap(), end);
 
         let start = i64::MAX - 1;

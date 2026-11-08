@@ -1275,7 +1275,11 @@ mod render_input_tests {
             hash_file_controlled,
         )
         .unwrap_err();
-        assert!(error.to_string().contains("asset second is not a managed original"));
+        assert!(
+            error
+                .to_string()
+                .contains("asset second is not a managed original")
+        );
 
         let mut invalid_sha = project.clone();
         invalid_sha.assets[1].fingerprint.sha256 = Some("g".repeat(64));
@@ -1338,7 +1342,11 @@ mod render_input_tests {
             },
         )
         .unwrap_err();
-        assert!(error.to_string().contains("asset first changed during verification"));
+        assert!(
+            error
+                .to_string()
+                .contains("asset first changed during verification")
+        );
     }
 
     #[test]
@@ -1365,20 +1373,16 @@ mod render_input_tests {
             armed: &armed,
             path,
         };
-        let error = verify_render_originals_with(
-            root.path(),
-            &project,
-            &mut control,
-            |path, control| {
+        let error =
+            verify_render_originals_with(root.path(), &project, &mut control, |path, control| {
                 reads.set(reads.get() + 1);
                 let digest = hash_file_controlled(path, control)?;
                 if reads.get() == 1 {
                     armed.set(true);
                 }
                 Ok(digest)
-            },
-        )
-        .unwrap_err();
+            })
+            .unwrap_err();
         assert_eq!(reads.get(), 2);
         assert!(error.to_string().contains("asset second bytes changed"));
     }
@@ -1412,20 +1416,20 @@ mod render_input_tests {
             path,
             outside,
         };
-        let error = verify_render_originals_with(
-            root.path(),
-            &project,
-            &mut control,
-            |path, control| {
+        let error =
+            verify_render_originals_with(root.path(), &project, &mut control, |path, control| {
                 reads.set(reads.get() + 1);
                 let digest = hash_file_controlled(path, control)?;
                 armed.set(true);
                 Ok(digest)
-            },
-        )
-        .unwrap_err();
+            })
+            .unwrap_err();
         assert_eq!(reads.get(), 1);
-        assert!(error.to_string().contains("managed original must be a regular file"));
+        assert!(
+            error
+                .to_string()
+                .contains("managed original must be a regular file")
+        );
     }
 
     #[test]
