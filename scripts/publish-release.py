@@ -34,6 +34,10 @@ def required_summaries(tag, arch):
             required.update({'preserve-browser', 'review-duration', 'review-compare', 'review-import'})
     if tuple(map(int, tag[1:].split('.'))) >= (0, 5, 0):
         required.add('source-views')
+    if tuple(map(int, tag[1:].split('.'))) >= (0, 5, 2):
+        required.add('asr-cache')
+        if arch == 'x86_64':
+            required.add('duplicate-assets')
     return required
 
 
@@ -42,6 +46,9 @@ def verify_summaries(native, required):
     if set(summaries) != required or any(
             json.loads(p.read_text()).get('passed') is not True for p in summaries.values()):
         raise ValueError('every required native workflow summary must pass')
+    if ('asr-cache' in required and
+            json.loads(summaries['asr-cache'].read_text()).get('legacyV2Compatibility') != 'passed'):
+        raise ValueError('ASR legacy cache compatibility must be exercised and pass')
 
 
 def main():

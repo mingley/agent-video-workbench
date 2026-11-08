@@ -1,5 +1,24 @@
 # Implementation and qualification
 
+## Source navigation, verification and cache integrity on 0.5.2 source
+
+Storyboard pages suggest editable, budget-aware preview requests centered on
+observed frames. A storyboard scope is limited to 24 hours of span rather than
+an absolute 24-hour source position. Existing edit, transcript and discovery
+source-position limits remain separate. Duplicate managed originals are hashed
+once in the initial render-verification pass while every asset identity and
+regular path is checked. Legacy HDR metadata recovery may recheck originals. A
+concurrently requested cancellation is resolved atomically with job completion.
+ASR cache sidecars remain referenced for existing and new successful jobs, and
+source asset identities do not share mismatched transcript records.
+
+Native qualification and the generated-media A/B benchmark must pass before
+publication; source review alone is not runtime proof.
+
+Analysis cache identity currently does not include the configured ffprobe tool.
+After changing ffprobe, use a fresh project when generating frame indexes or
+budget previews until those caches are requalified for the new tool.
+
 ## Source-view latency improvements (0.5.1)
 
 The runner wakes on child exit instead of waiting for a polling interval.

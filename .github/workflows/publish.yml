@@ -22,3 +22,37 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/publish-release.py "$RUNNER_TEMP/native-release"
+      - name: Verify the public installer and published binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/public-install"
+          tag="$(python3 -c 'import json; print(json.load(open(".github/release-request.json"))["tag"])')"
+          url="https://github.com/mingley/agent-video-workbench/releases/download/$tag"
+          curl --silent --show-error --fail --location --retry 5 --retry-delay 2 --retry-all-errors --proto '=https' --proto-redir '=https' --tlsv1.2 "$url/install-release.sh" -o "$RUNNER_TEMP/public-install/install-release.sh"
+          cmp "$RUNNER_TEMP/public-install/install-release.sh" "$RUNNER_TEMP/native-release/assets/install-release.sh"
+          bash "$RUNNER_TEMP/public-install/install-release.sh" "$RUNNER_TEMP/public-install/bin" "${tag#v}"
+          curl --silent --show-error --fail --location --retry 5 --retry-delay 2 --retry-all-errors --proto '=https' --proto-redir '=https' --tlsv1.2 "$url/native-manifests.json" -o "$RUNNER_TEMP/public-install/native-manifests.json"
+          cmp "$RUNNER_TEMP/public-install/native-manifests.json" "$RUNNER_TEMP/native-release/assets/native-manifests.json"
+          python3 - "$RUNNER_TEMP/public-install" <<'PY'
+          import hashlib, json, pathlib, subprocess, sys
+          root = pathlib.Path(sys.argv[1])
+          request = json.loads(pathlib.Path(".github/release-request.json").read_text())
+          manifest = next(m for m in json.loads((root / "native-manifests.json").read_text()) if m["arch"] == "x86_64")
+          binary = root / "bin/avw"
+          digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+          version = subprocess.check_output([str(binary), "--version"], text=True).strip()
+          assert digest == manifest["binarySha256"]
+          assert manifest["commit"] == request["commit"]
+          assert version == manifest["version"] == "avw " + request["tag"][1:]
+          summary = {"passed": True, "version": version, "binarySha256": digest,
+                     "sourceCommit": manifest["commit"], "publishedManifestMatch": True}
+          (root / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+          print(json.dumps(summary))
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1, Node 24
+        if: always()
+        with:
+          name: public-install
+          path: ${{ runner.temp }}/public-install/summary.json
+          if-no-files-found: ignore

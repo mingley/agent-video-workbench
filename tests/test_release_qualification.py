@@ -58,6 +58,30 @@ class QualificationTests(unittest.TestCase):
         self.assertIn('source-views', PUBLISH.required_summaries('v0.5.0', 'aarch64'))
         self.assertNotIn('source-views', PUBLISH.required_summaries('v0.4.0', 'aarch64'))
 
+    def test_052_requires_cache_and_duplicate_asset_evidence(self):
+        self.assertEqual(len(PUBLISH.required_summaries('v0.5.1', 'x86_64')), 36)
+        self.assertEqual(len(PUBLISH.required_summaries('v0.5.1', 'aarch64')), 31)
+        self.assertEqual(len(PUBLISH.required_summaries('v0.5.2', 'x86_64')), 38)
+        self.assertEqual(len(PUBLISH.required_summaries('v0.5.2', 'aarch64')), 32)
+        self.assertIn('asr-cache', PUBLISH.required_summaries('v0.5.2', 'aarch64'))
+        self.assertIn('duplicate-assets', PUBLISH.required_summaries('v0.5.2', 'x86_64'))
+        self.assertNotIn('duplicate-assets', PUBLISH.required_summaries('v0.5.2', 'aarch64'))
+
+    def test_asr_legacy_compatibility_must_be_exercised(self):
+        required = PUBLISH.required_summaries('v0.5.2', 'aarch64')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in required:
+                (root / name).mkdir()
+                (root / name / 'summary.json').write_text('{"passed": true}')
+            target = root / 'asr-cache' / 'summary.json'
+            for status in (None, 'not-exercised', 'failed'):
+                target.write_text(json.dumps({'passed': True, 'legacyV2Compatibility': status}))
+                with self.assertRaises(ValueError):
+                    PUBLISH.verify_summaries(root, required)
+            target.write_text(json.dumps({'passed': True, 'legacyV2Compatibility': 'passed'}))
+            PUBLISH.verify_summaries(root, required)
+
     def test_missing_failed_malformed_and_unexpected_summaries_cannot_pass(self):
         required = PUBLISH.required_summaries('v0.4.0', 'x86_64')
         with tempfile.TemporaryDirectory() as directory:

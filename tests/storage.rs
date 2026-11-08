@@ -77,3 +77,40 @@ fn workspace_maintenance_defers_busy_projects_and_collects_idle_ones() {
     assert!(!scratch.exists());
     assert!(busy.join("project.sqlite").exists());
 }
+
+#[test]
+fn retention_keeps_legacy_and_explicit_asr_sidecars() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("project");
+    let store = Store::create(&root, "legacy ASR retention").unwrap();
+    let legacy = root.join("analysis/asr-legacy.json");
+    let legacy_manifest = legacy.with_extension("manifest.json");
+    let modern = root.join("analysis/asr-modern.json");
+    let modern_manifest = modern.with_extension("manifest.json");
+    let orphan = root.join("analysis/asr-orphan.manifest.json");
+    for path in [&legacy, &legacy_manifest, &modern, &modern_manifest, &orphan] {
+        std::fs::write(path, b"{}").unwrap();
+        age(path);
+    }
+    store.start_job("legacy-asr", 0).unwrap();
+    store
+        .finish_job(
+            "legacy-asr",
+            &json!({"path": &legacy, "sha256": "old", "mimeType": "application/json", "assetId": "source"}),
+        )
+        .unwrap();
+    store.start_job("modern-asr", 0).unwrap();
+    store
+        .finish_job(
+            "modern-asr",
+            &json!({"path": &modern, "manifest": &modern_manifest}),
+        )
+        .unwrap();
+    let result = storage::gc(&root, 60, false).unwrap();
+    assert!(!result["dryRun"].as_bool().unwrap());
+    assert!(!orphan.exists());
+    for path in [&legacy, &legacy_manifest, &modern, &modern_manifest] {
+        assert!(path.is_file(), "{path:?} should be retained");
+        assert_eq!(std::fs::read(path).unwrap(), b"{}");
+    }
+}
