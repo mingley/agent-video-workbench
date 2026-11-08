@@ -15,6 +15,7 @@ use std::{
 
 pub(super) const SAMPLE_RATE: i128 = 16_000;
 pub(super) const MAX_AUDIT_BYTES: u64 = 16 * 1024 * 1024;
+const AUDIT_STOP_MARGIN: u64 = 4096;
 
 pub(super) struct ClockProbe {
     pub(super) stream_index: u64,
@@ -231,9 +232,9 @@ fn read_audit(path: &Path, tolerance: i128, control: &mut dyn Control) -> Result
         .metadata()
         .map_err(|_| invalid("cannot inspect audit"))?
         .len()
-        > MAX_AUDIT_BYTES
+        >= MAX_AUDIT_BYTES - AUDIT_STOP_MARGIN
     {
-        return Err(invalid("audit exceeds 16 MiB"));
+        return Err(invalid("audit reached its size limit and may be truncated"));
     }
     let mut reader = BufReader::new(file.take(MAX_AUDIT_BYTES + 1));
     let mut line = String::new();
@@ -255,7 +256,7 @@ fn read_audit(path: &Path, tolerance: i128, control: &mut dyn Control) -> Result
         bytes = bytes
             .checked_add(u64::try_from(count).map_err(|_| invalid("audit size overflow"))?)
             .ok_or_else(|| invalid("audit size overflow"))?;
-        if bytes > MAX_AUDIT_BYTES || line.len() > 4096 || !line.ends_with('\n') {
+        if bytes >= MAX_AUDIT_BYTES - AUDIT_STOP_MARGIN || line.len() > 4096 || !line.ends_with('\n') {
             return Err(invalid("audit is too large or incomplete"));
         }
         let row = line.trim();
@@ -504,6 +505,27 @@ mod tests {
         assert!(file.as_file().metadata().unwrap().len() > 8 * 1024 * 1024);
         let parsed = read_audit(file.path(), 2, &mut crate::process::Uncontrolled).unwrap();
         assert_eq!(parsed.samples, pts);
+    }
+
+    #[test]
+    fn capped_audit_is_rejected_as_possibly_truncated() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        file.as_file()
+            .set_len(MAX_AUDIT_BYTES - AUDIT_STOP_MARGIN)
+            .unwrap();
+        let error = read_audit(file.path(), 2, &mut crate::process::Uncontrolled)
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("may be truncated"));
+    }
+
+    #[test]
+    fn first_marker_must_be_present_unique_and_numeric() {
+        let marker = "[ashowinfo@asr_clock @ 0x1] n:0 pts:123 pts_time:0.0076875\n";
+        assert_eq!(first_input_pts(marker).unwrap(), 123);
+        assert!(first_input_pts("no first marker").is_err());
+        assert!(first_input_pts(&format!("{marker}{marker}")).is_err());
+        assert!(first_input_pts("[ashowinfo@asr_clock @ 0x1] n:0 pts:NOPTS\n").is_err());
     }
 
     #[test]
