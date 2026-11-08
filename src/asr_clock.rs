@@ -16,6 +16,7 @@ use std::{
 pub(super) const SAMPLE_RATE: i128 = 16_000;
 pub(super) const MAX_AUDIT_BYTES: u64 = 16 * 1024 * 1024;
 const AUDIT_STOP_MARGIN: u64 = 4096;
+const MAX_WAV_BYTES: u64 = 120 * 1024 * 1024;
 
 pub(super) struct ClockProbe {
     pub(super) stream_index: u64,
@@ -348,6 +349,13 @@ fn wav_samples(
     control: &mut dyn Control,
 ) -> Result<i128> {
     crate::media::regular_file(path, "audio clock WAV")?;
+    if std::fs::metadata(path)
+        .map_err(|_| invalid("cannot inspect WAV"))?
+        .len()
+        >= MAX_WAV_BYTES - AUDIT_STOP_MARGIN
+    {
+        return Err(invalid("WAV reached its size limit and may be truncated"));
+    }
     let output = process::run(
         Command::new(backend.ffprobe_path())
             .args([
@@ -422,12 +430,19 @@ pub(super) fn audit_audio_clock(
         None => return Err(invalid("container origin is ambiguous")),
     };
     Ok(AudioClock {
-        offset_ticks: observed
-            .first_pts
-            .checked_sub(origin)
-            .ok_or_else(|| invalid("source offset overflow"))?,
+        offset_ticks: relative_offset(observed.first_pts, origin)?,
         samples: observed.samples,
     })
+}
+
+fn relative_offset(first_pts: i128, origin: i128) -> Result<i128> {
+    let offset = first_pts
+        .checked_sub(origin)
+        .ok_or_else(|| invalid("source offset overflow"))?;
+    if offset < 0 {
+        return Err(invalid("source audio starts before the container origin"));
+    }
+    Ok(offset)
 }
 
 #[cfg(test)]
@@ -517,6 +532,27 @@ mod tests {
             .err()
             .unwrap();
         assert!(error.to_string().contains("may be truncated"));
+    }
+
+    #[test]
+    fn capped_wav_is_rejected_as_possibly_truncated() {
+        // Size validation occurs before launching ffprobe.
+        let file = tempfile::NamedTempFile::new().unwrap();
+        file.as_file()
+            .set_len(MAX_WAV_BYTES - AUDIT_STOP_MARGIN)
+            .unwrap();
+        let backend = crate::media::backend("unused".into(), "unused".into());
+        let error = wav_samples(file.path(), &backend, &mut crate::process::Uncontrolled)
+            .unwrap_err();
+        assert!(error.to_string().contains("may be truncated"));
+    }
+
+    #[test]
+    fn source_audio_must_not_start_before_origin() {
+        assert_eq!(relative_offset(16000, 0).unwrap(), 16000);
+        assert_eq!(relative_offset(0, 0).unwrap(), 0);
+        assert!(relative_offset(-1, 0).is_err());
+        assert!(relative_offset(i128::MIN, 1).is_err());
     }
 
     #[test]
