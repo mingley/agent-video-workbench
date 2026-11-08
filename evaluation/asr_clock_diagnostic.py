@@ -112,6 +112,11 @@ def inspect(name, path, root):
     if not packets:
         raise ValueError("empty framecrc")
     audit_gaps = [Fraction(b[0]-a[0]-a[1])*tb for a,b in zip(packets,packets[1:])]
+    cumulative = []
+    total = 0
+    for pts, duration, _, _ in packets:
+        cumulative.append((pts-packets[0][0]-total)*tb*16000)
+        total += duration
     cursor = 0
     checksums_match = True
     for _,_,size,checksum in packets:
@@ -137,7 +142,12 @@ def inspect(name, path, root):
         "minSourceGapMs":float(min(source_gaps,default=Fraction(0))*1000),
         "maxAuditGapMs":float(max(audit_gaps,default=Fraction(0))*1000),
         "minAuditGapMs":float(min(audit_gaps,default=Fraction(0))*1000),
+        "maxCumulativeDriftSamples":float(max(cumulative,default=Fraction(0))),
+        "minCumulativeDriftSamples":float(min(cumulative,default=Fraction(0))),
+        "maxAbsoluteCumulativeDriftSamples":float(max((abs(x) for x in cumulative),default=Fraction(0))),
         "auditPacketCount":len(packets),"auditBytes":audit_path.stat().st_size,
+        "auditHeaders":[line for line in audit if line.startswith("#")],
+        "auditFirstPackets":[line for line in audit if line and not line.startswith("#")][:2],
     }
     return result
 
@@ -170,6 +180,21 @@ with tempfile.TemporaryDirectory(prefix="avw-audio-clock-") as tmp:
         except Exception as error:
             print(json.dumps({"case":"aac_44100","fixtureError":str(error)}),flush=True)
             errors.append("aac_44100")
+    # A longer unedited AAC source reveals drift hidden by adjacent-packet checks.
+    for seconds in (60, 600):
+        name = "aac_long_" + str(seconds)
+        try:
+            path = root / (name + ".mkv")
+            run([args.ffmpeg,"-nostdin","-v","error",
+                 "-f","lavfi","-i",f"testsrc2=s=64x64:r=1:d={seconds}",
+                 "-f","lavfi","-i",f"sine=frequency=1000:sample_rate=44100:duration={seconds}",
+                 "-map","0:v:0","-map","1:a:0","-c:v","libx264","-preset","ultrafast",
+                 "-threads:v","1","-c:a","aac","-b:a","96k",
+                 "-avoid_negative_ts","disabled","-y",path])
+            cases[name] = path
+        except Exception as error:
+            print(json.dumps({"case":name,"fixtureError":str(error)}),flush=True)
+            errors.append(name)
     for name,path in cases.items():
         try:
             result=inspect(name,path,root)
