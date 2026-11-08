@@ -140,24 +140,36 @@ def main():
     assert legacy.is_file() and legacy_manifest.is_file(), gc
     assert legacy.read_bytes() == original
 
-    reused = transcribe(args.avw, "voice_a", 1, "matching-asset-reuse")
-    assert reused["state"] == "succeeded" and reused["result"]["cacheHit"], reused
-    assert Path(reused["result"]["path"]) == legacy
-    assert Path(reused["result"]["manifest"]) == legacy_manifest
-    assert call_count() == 1 and artifact(args.avw, first)["sha256"] == original_hash
+    current = transcribe(args.avw, "voice_a", 1, "matching-asset-current")
+    assert current["state"] == "succeeded", current
+    current_path = Path(current["result"]["path"])
+    current_manifest = Path(current["result"]["manifest"])
+    if args.baseline_avw:
+        # v2 source clocks may be wrong, so never treat an old transcript as
+        # a fresh result; the historical artifact remains readable.
+        assert not current["result"]["cacheHit"] and current_path != legacy, current
+        assert json.loads(current_manifest.read_text())["adapterVersion"] == 4
+        assert call_count() == 2
+    else:
+        assert current["result"]["cacheHit"] and current_path == legacy, current
+        assert call_count() == 1
+    assert artifact(args.avw, first)["sha256"] == original_hash
 
     saved_legacy_manifest = legacy_manifest.read_bytes()
     legacy_manifest.unlink()
-    recovery = transcribe(args.avw, "voice_a", 1, "missing-legacy-sidecar")
+    recovery = transcribe(args.avw, "voice_a", 1, "missing-old-sidecar")
     if args.baseline_avw:
+        # A missing legacy sidecar must not block the isolated v4 cache.
         assert recovery["state"] == "succeeded" and recovery["result"]["cacheHit"], recovery
-        assert legacy_manifest.is_file() and legacy.read_bytes() == original
-        assert json.loads(legacy_manifest.read_text())["adapterVersion"] == 2
+        assert Path(recovery["result"]["path"]) == current_path
+        assert not legacy_manifest.exists() and legacy.read_bytes() == original
     else:
+        # Here the initially generated entry is v4, so its own incomplete pair
+        # is refused until its referenced sidecar is restored.
         assert recovery["state"] == "failed" and "incomplete" in recovery["error"], recovery
         assert not legacy_manifest.exists() and legacy.read_bytes() == original
-        legacy_manifest.write_bytes(saved_legacy_manifest)
-    assert call_count() == 1 and artifact(args.avw, first)["sha256"] == original_hash
+    legacy_manifest.write_bytes(saved_legacy_manifest)
+    assert artifact(args.avw, first)["sha256"] == original_hash
 
     call(
         args.avw, "import", source=str(source), id="voice_b",
@@ -165,29 +177,24 @@ def main():
     )
     phrase.write_text("second asset words", encoding="utf-8")
     if args.baseline_avw:
-        # Exercise the actual 0.5.1 bug: B incorrectly reuses A's v2
-        # transcript and leaves a successful conflicting historical job.
+        # Exercise the real 0.5.1 bug: B incorrectly reuses A's v2 transcript.
         legacy_alias = transcribe(baseline, "voice_b", 2, "legacy-cross-asset-hit")
         assert legacy_alias["state"] == "succeeded" and legacy_alias["result"]["cacheHit"], legacy_alias
         assert legacy_alias["result"]["assetId"] == "voice_a"
-        assert Path(legacy_alias["result"]["path"]) == legacy and call_count() == 1
+        assert Path(legacy_alias["result"]["path"]) == legacy and call_count() == 2
         legacy_manifest.unlink()
 
-    # Neither requested asset has a v3 entry yet. When the v2 manifest is
-    # missing, both can create separate entries without changing the v2 bytes,
-    # even though B's legacy success conflicts with A's repair evidence.
+    # A conflicting or incomplete v2 entry cannot block a fresh v4 entry.
     second = transcribe(args.avw, "voice_b", 2, "second-asset-transcription")
     assert second["state"] == "succeeded" and not second["result"]["cacheHit"], second
-    assert legacy.read_bytes() == original and call_count() == 2
+    assert legacy.read_bytes() == original
     if args.baseline_avw:
         assert not legacy_manifest.exists()
         owner = transcribe(args.avw, "voice_a", 2, "conflicted-legacy-owner")
-        assert owner["state"] == "succeeded" and not owner["result"]["cacheHit"], owner
+        assert owner["state"] == "succeeded" and owner["result"]["cacheHit"], owner
         assert owner["result"]["assetId"] == "voice_a"
-        assert Path(owner["result"]["path"]) != legacy
-        assert json.loads(Path(owner["result"]["path"]).read_text())["assetId"] == "voice_a"
+        assert Path(owner["result"]["path"]) == current_path
         assert not legacy_manifest.exists() and legacy.read_bytes() == original
-        assert call_count() == 3
         legacy_manifest.write_bytes(saved_legacy_manifest)
     expected_provider_runs = 3 if args.baseline_avw else 2
     second_path = Path(second["result"]["path"])
@@ -202,9 +209,9 @@ def main():
     assert again["state"] == "succeeded" and again["result"]["cacheHit"], again
     assert Path(again["result"]["path"]) == second_path and call_count() == expected_provider_runs
 
-    # A partial v3 pair must fail before invoking a provider or changing bytes.
+    # A partial v4 pair must fail before invoking a provider or changing bytes.
     second_manifest.unlink()
-    missing_manifest = transcribe(args.avw, "voice_b", 2, "missing-v3-manifest")
+    missing_manifest = transcribe(args.avw, "voice_b", 2, "missing-v4-manifest")
     assert missing_manifest["state"] == "failed" and "incomplete" in missing_manifest["error"], missing_manifest
     assert missing_manifest["result"] is None and second_path.read_bytes() == second_original
     assert not second_manifest.exists() and call_count() == expected_provider_runs
@@ -219,7 +226,7 @@ def main():
 
     held = root / "held-transcript.json"
     second_path.rename(held)
-    missing_data = transcribe(args.avw, "voice_b", 2, "missing-v3-transcript")
+    missing_data = transcribe(args.avw, "voice_b", 2, "missing-v4-transcript")
     assert missing_data["state"] == "failed" and "incomplete" in missing_data["error"], missing_data
     assert not second_path.exists() and second_manifest.read_bytes() == second_manifest_bytes
     held.rename(second_path)
@@ -253,50 +260,43 @@ def main():
     assert artifact(args.avw, first)["sha256"] == original_hash
     assert Path(artifact(args.avw, second)["path"]).read_bytes() == second_original
 
-    # Diagnostic only: compare a known delayed PCM burst's original decoded PTS
-    # with the cue produced from the adapter's extracted WAV. Do not gate this
-    # cache test on a timing hypothesis.
-    timing = {"status": "unavailable"}
-    try:
-        delayed = root / "delayed-audio.mkv"
-        process([
-            args.ffmpeg, "-v", "error",
-            "-f", "lavfi", "-i", "testsrc2=s=160x90:r=10:d=4",
-            "-itsoffset", "1", "-f", "lavfi", "-i",
-            "sine=frequency=440:sample_rate=16000:duration=2",
-            "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264",
-            "-preset", "ultrafast", "-threads", "1", "-c:a", "pcm_s16le",
-            "-t", "4", delayed,
-        ])
-        probe = json.loads(process([
-            args.ffprobe, "-v", "error", "-select_streams", "a:0",
-            "-show_frames", "-show_format", "-show_entries",
-            "frame=best_effort_timestamp_time:format=start_time", "-of", "json", delayed,
-        ]))
-        original_ms = round(1000 * (
-            float(probe["frames"][0]["best_effort_timestamp_time"])
-            - float(probe["format"]["start_time"])
-        ))
-        call(
-            args.avw, "import", source=str(delayed), id="delayed_audio",
-            expectedRevision=2, key="delayed-audio-import",
-        )
-        (root / "measure-onset").touch()
-        diagnostic = transcribe(args.avw, "delayed_audio", 3, "delayed-audio-observation")
-        if diagnostic["state"] == "succeeded":
-            cue = json.loads(Path(diagnostic["result"]["path"]).read_text())["cues"][0]
-            cue_ms = cue["startMs"]
-            timing = {
-                "status": "observation-only",
-                "declaredDelayMs": 1000,
-                "firstDecodedAudioSourcePtsMs": original_ms,
-                "providerCueStartMs": cue_ms,
-                "cueMinusSourcePtsMs": cue_ms - original_ms,
-            }
-        else:
-            timing = {"status": "unavailable", "reason": diagnostic.get("error")}
-    except (AssertionError, OSError, KeyError, IndexError, ValueError) as error:
-        timing = {"status": "unavailable", "reason": str(error)[:240]}
+    # Compare a known delayed PCM burst with independently probed source PTS.
+    delayed = root / "delayed-audio.mkv"
+    process([
+        args.ffmpeg, "-v", "error",
+        "-f", "lavfi", "-i", "testsrc2=s=160x90:r=10:d=4",
+        "-itsoffset", "1", "-f", "lavfi", "-i",
+        "sine=frequency=440:sample_rate=16000:duration=2",
+        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264",
+        "-preset", "ultrafast", "-threads", "1", "-c:a", "pcm_s16le",
+        "-t", "4", delayed,
+    ])
+    probe = json.loads(process([
+        args.ffprobe, "-v", "error", "-select_streams", "a:0",
+        "-show_frames", "-show_format", "-show_entries",
+        "frame=best_effort_timestamp_time:format=start_time", "-of", "json", delayed,
+    ]))
+    original_ms = round(1000 * (
+        float(probe["frames"][0]["best_effort_timestamp_time"])
+        - float(probe["format"]["start_time"])
+    ))
+    call(
+        args.avw, "import", source=str(delayed), id="delayed_audio",
+        expectedRevision=2, key="delayed-audio-import",
+    )
+    (root / "measure-onset").touch()
+    diagnostic = transcribe(args.avw, "delayed_audio", 3, "delayed-audio-observation")
+    assert diagnostic["state"] == "succeeded", diagnostic
+    cue = json.loads(Path(diagnostic["result"]["path"]).read_text())["cues"][0]
+    cue_ms = cue["startMs"]
+    assert abs(cue_ms - original_ms) <= 2, (cue_ms, original_ms)
+    timing = {
+        "status": "verified",
+        "declaredDelayMs": 1000,
+        "firstDecodedAudioSourcePtsMs": original_ms,
+        "providerCueStartMs": cue_ms,
+        "cueMinusSourcePtsMs": cue_ms - original_ms,
+    }
     summary = {
         "passed": True,
         "generatedOfflineProvider": True,
@@ -309,7 +309,7 @@ def main():
         "failedJobsRetryWithoutReprocessing": True,
         "manifestIdentityChecked": True,
         "symlinkedCacheRefused": True,
-        "legacyRecoveryWithMatchingEvidence": bool(args.baseline_avw),
+        "legacyTimingUnsafeCacheNotReused": bool(args.baseline_avw),
         "priorArtifactStillVerifies": True,
         "legacyConflictingEvidenceBypassed": bool(args.baseline_avw),
         "cacheRegressionProviderRuns": expected_provider_runs,
@@ -318,7 +318,7 @@ def main():
         "limitations": [
             "Generated audio and fake provider; no speech model accuracy or real-camera audio tested.",
             "Legacy 0.5.1 compatibility is exercised only when --baseline-avw is supplied.",
-            "Individual missing-history, provider, source, and hash conflicts are not independently exercised.",
+            "Timing-unsafe legacy v2/v3 cache entries are not reused for new transcriptions.",
         ],
     }
     (root / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
