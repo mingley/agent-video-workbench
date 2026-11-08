@@ -168,9 +168,16 @@ fixtures = {
     "delay": (make_fixture("delay",delay=1), [1250,2500]),
     "origin": (make_fixture("origin",origin=5,delay=1), [1250,2500]),
     "resampled": (make_fixture("resampled",rate=44100,delay=.375), [625,1875]),
-    "negative": (make_fixture("negative",origin=-1,delay=.5), [250,1500]),
     "near-end": (make_fixture("near-end",delay=3.5,near_end=True), [3600,3800]),
 }
+# The muxer can choose the earliest retained packet as its origin. Anchor
+# the expectation to authored absolute audio PTS, then subtract the actual
+# independently probed container origin.
+negative = make_fixture("negative",origin=-1,delay=.5)
+negative_origin,negative_first,_ = source_clock(negative)
+assert negative_origin is not None and abs(float(negative_first)+.5) <= .001
+fixtures["negative"] = (negative,[-250-float(negative_origin*1000),
+                                  1000-float(negative_origin*1000)])
 wav = root / "audio-only.wav"
 run([args.ffmpeg,"-nostdin","-v","error","-f","lavfi","-i",
      r"aevalsrc=0.5*sin(2*PI*1000*t)*(between(t\,0.25\,0.4)+between(t\,1.5\,1.65)):s=16000:d=2",
