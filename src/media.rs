@@ -1325,6 +1325,23 @@ mod render_input_tests {
     }
 
     #[test]
+    fn mutation_during_verification_is_not_cached() {
+        let (root, project, _) = duplicate_original_fixture();
+        let error = verify_render_originals_with(
+            root.path(),
+            &project,
+            &mut crate::process::Uncontrolled,
+            |path, control| {
+                let digest = hash_file_controlled(path, control)?;
+                std::fs::write(path, b"changed after hashing")?;
+                Ok(digest)
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("asset first changed during verification"));
+    }
+
+    #[test]
     fn a_changed_duplicate_is_rehashed_before_the_render() {
         use std::cell::Cell;
 
