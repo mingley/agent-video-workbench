@@ -136,7 +136,9 @@ fn probe_value(report: &Value) -> Result<ClockProbe> {
             .as_str()
             .ok_or_else(|| invalid("source audio time base is missing"))?,
     )?;
-    let start = report["format"]["start_time"].as_str().filter(|s| *s != "N/A");
+    let start = report["format"]["start_time"]
+        .as_str()
+        .filter(|s| *s != "N/A");
     let origin_ticks = start.map(decimal_ticks).transpose()?;
     // WAV does not carry an absolute stream start time. Only an audio-only,
     // one-stream WAV may defer the zero-origin decision to the observed PTS.
@@ -191,7 +193,10 @@ pub(super) fn probe_audio_clock(
 
 fn first_input_pts(stderr: &str) -> Result<i128> {
     let mut observed = None;
-    for line in stderr.lines().filter(|line| line.contains("ashowinfo@asr_clock")) {
+    for line in stderr
+        .lines()
+        .filter(|line| line.contains("ashowinfo@asr_clock"))
+    {
         let Some((_, body)) = line.split_once(']') else {
             continue;
         };
@@ -257,7 +262,10 @@ fn read_audit(path: &Path, tolerance: i128, control: &mut dyn Control) -> Result
         bytes = bytes
             .checked_add(u64::try_from(count).map_err(|_| invalid("audit size overflow"))?)
             .ok_or_else(|| invalid("audit size overflow"))?;
-        if bytes >= MAX_AUDIT_BYTES - AUDIT_STOP_MARGIN || line.len() > 4096 || !line.ends_with('\n') {
+        if bytes >= MAX_AUDIT_BYTES - AUDIT_STOP_MARGIN
+            || line.len() > 4096
+            || !line.ends_with('\n')
+        {
             return Err(invalid("audit is too large or incomplete"));
         }
         let row = line.trim();
@@ -323,7 +331,9 @@ fn read_audit(path: &Path, tolerance: i128, control: &mut dyn Control) -> Result
             .checked_sub(expected)
             .ok_or_else(|| invalid("audit PTS overflow"))?;
         if difference < -tolerance || difference > tolerance {
-            return Err(invalid("source audio contains a gap, overlap, or clock drift"));
+            return Err(invalid(
+                "source audio contains a gap, overlap, or clock drift",
+            ));
         }
         samples = samples
             .checked_add(duration)
@@ -343,11 +353,7 @@ fn read_audit(path: &Path, tolerance: i128, control: &mut dyn Control) -> Result
     })
 }
 
-fn wav_samples(
-    path: &Path,
-    backend: &FfmpegBackend,
-    control: &mut dyn Control,
-) -> Result<i128> {
+fn wav_samples(path: &Path, backend: &FfmpegBackend, control: &mut dyn Control) -> Result<i128> {
     crate::media::regular_file(path, "audio clock WAV")?;
     if std::fs::metadata(path)
         .map_err(|_| invalid("cannot inspect WAV"))?
@@ -478,9 +484,10 @@ mod tests {
         ambiguous["format"]["format_name"] = json!("matroska");
         assert!(probe_value(&ambiguous).is_err());
         ambiguous = wav;
-        ambiguous["streams"].as_array_mut().unwrap().push(
-            json!({"index":1,"codec_type":"video","time_base":"1/1000"}),
-        );
+        ambiguous["streams"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"index":1,"codec_type":"video","time_base":"1/1000"}));
         assert!(probe_value(&ambiguous).is_err());
     }
 
@@ -493,18 +500,52 @@ mod tests {
 
     #[test]
     fn framecrc_checks_cumulative_clock_and_packet_shape() {
-        let content = format!("{HEADERS}0, 1000, 1000, 100, 200, 0x00000000\n0, 1102, 1102, 100, 200, 0x00000000\n");
+        let content = format!(
+            "{HEADERS}0, 1000, 1000, 100, 200, 0x00000000\n0, 1102, 1102, 100, 200, 0x00000000\n"
+        );
         let file = audit_file(&content);
         let audit = read_audit(file.path(), 2, &mut crate::process::Uncontrolled).unwrap();
         assert_eq!((audit.first_pts, audit.samples), (1000, 200));
-        let drift = format!("{HEADERS}0, 1000, 1000, 100, 200, 0x00000000\n0, 1103, 1103, 100, 200, 0x00000000\n");
-        assert!(read_audit(audit_file(&drift).path(), 2, &mut crate::process::Uncontrolled).is_err());
-        let cumulative = format!("{HEADERS}0, 1000, 1000, 100, 200, 0x00000000\n0, 1102, 1102, 100, 200, 0x00000000\n0, 1204, 1204, 100, 200, 0x00000000\n");
-        assert!(read_audit(audit_file(&cumulative).path(), 2, &mut crate::process::Uncontrolled).is_err());
+        let drift = format!(
+            "{HEADERS}0, 1000, 1000, 100, 200, 0x00000000\n0, 1103, 1103, 100, 200, 0x00000000\n"
+        );
+        assert!(
+            read_audit(
+                audit_file(&drift).path(),
+                2,
+                &mut crate::process::Uncontrolled
+            )
+            .is_err()
+        );
+        let cumulative = format!(
+            "{HEADERS}0, 1000, 1000, 100, 200, 0x00000000\n0, 1102, 1102, 100, 200, 0x00000000\n0, 1204, 1204, 100, 200, 0x00000000\n"
+        );
+        assert!(
+            read_audit(
+                audit_file(&cumulative).path(),
+                2,
+                &mut crate::process::Uncontrolled
+            )
+            .is_err()
+        );
         let bad_size = format!("{HEADERS}0, 1000, 1000, 100, 201, 0x00000000\n");
-        assert!(read_audit(audit_file(&bad_size).path(), 2, &mut crate::process::Uncontrolled).is_err());
+        assert!(
+            read_audit(
+                audit_file(&bad_size).path(),
+                2,
+                &mut crate::process::Uncontrolled
+            )
+            .is_err()
+        );
         let missing_header = "0, 1000, 1000, 100, 200, 0x00000000\n";
-        assert!(read_audit(audit_file(missing_header).path(), 2, &mut crate::process::Uncontrolled).is_err());
+        assert!(
+            read_audit(
+                audit_file(missing_header).path(),
+                2,
+                &mut crate::process::Uncontrolled
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -516,7 +557,12 @@ mod tests {
             let mut writer = BufWriter::new(file.as_file_mut());
             writer.write_all(HEADERS.as_bytes()).unwrap();
             for _ in 0..170_000 {
-                writeln!(writer, "0, {pts:12}, {pts:12}, {:8}, {:8}, 0x00000000", 341, 682).unwrap();
+                writeln!(
+                    writer,
+                    "0, {pts:12}, {pts:12}, {:8}, {:8}, 0x00000000",
+                    341, 682
+                )
+                .unwrap();
                 pts += 341;
             }
             writer.flush().unwrap();
@@ -546,8 +592,8 @@ mod tests {
             .set_len(MAX_WAV_BYTES - AUDIT_STOP_MARGIN)
             .unwrap();
         let backend = crate::media::backend("unused".into(), "unused".into());
-        let error = wav_samples(file.path(), &backend, &mut crate::process::Uncontrolled)
-            .unwrap_err();
+        let error =
+            wav_samples(file.path(), &backend, &mut crate::process::Uncontrolled).unwrap_err();
         assert!(error.to_string().contains("may be truncated"));
     }
 

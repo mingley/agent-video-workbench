@@ -3,7 +3,6 @@
 #[path = "asr_clock.rs"]
 mod asr_clock;
 
-use asr_clock::{AudioClock, MAX_AUDIT_BYTES, MAX_WAV_BYTES, audit_audio_clock, probe_audio_clock};
 use crate::{
     Error, Result, media,
     process::{self, Control},
@@ -11,6 +10,7 @@ use crate::{
 };
 use agentcut_core::{Asset, Project};
 use agentcut_render::FfmpegBackend;
+use asr_clock::{AudioClock, MAX_AUDIT_BYTES, MAX_WAV_BYTES, audit_audio_clock, probe_audio_clock};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -169,7 +169,11 @@ fn map_cue_to_source(
         return Err(invalid());
     }
     let start = source_start.checked_add(8).ok_or_else(invalid)? / 16;
-    let end = source_end.min(duration_samples).checked_add(8).ok_or_else(invalid)? / 16;
+    let end = source_end
+        .min(duration_samples)
+        .checked_add(8)
+        .ok_or_else(invalid)?
+        / 16;
     let duration_ms = (duration * 1000.0).floor() as i128;
     let end = end.min(duration_ms);
     if end <= start {
@@ -268,13 +272,7 @@ pub fn analyze(
                 ])
                 .arg(&source)
                 .args(["-filter_complex", &filters])
-                .args([
-                    "-map",
-                    "[w]",
-                    "-c:a",
-                    "pcm_s16le",
-                    "-fs",
-                ])
+                .args(["-map", "[w]", "-c:a", "pcm_s16le", "-fs"])
                 .arg(MAX_WAV_BYTES.to_string())
                 .args(["-f", "wav", "-n"])
                 .arg(&audio)
@@ -427,12 +425,24 @@ mod clock_mapping_tests {
         assert!(validate_audio_range(&clock(), 2.0).is_err());
         assert!(validate_audio_range(&clock(), f64::NAN).is_err());
         assert!(
-            validate_audio_range(&AudioClock { offset_ticks: -1, samples: 100 }, 1.0).is_err()
+            validate_audio_range(
+                &AudioClock {
+                    offset_ticks: -1,
+                    samples: 100
+                },
+                1.0
+            )
+            .is_err()
         );
         assert!(
-            validate_audio_range(&AudioClock { offset_ticks: 1, samples: i128::MAX }, 1.0)
-                .is_err()
+            validate_audio_range(
+                &AudioClock {
+                    offset_ticks: 1,
+                    samples: i128::MAX
+                },
+                1.0
+            )
+            .is_err()
         );
     }
-
 }
