@@ -229,18 +229,18 @@ large_calls=[json.loads(l) for l in (root/'ffmpeg-invocations.jsonl').read_text(
 source_reads=[p for p in large_calls if '-ss' in p]
 assert len(source_reads)==5 and all(p.count('-i')==1 for p in source_reads),source_reads
 a.ffmpeg=actual_ffmpeg
-# Seven low-resolution frames span over 25 hours. Frames around the 24h
+# Nine low-resolution frames span over 25 hours. Frames around the 24h
 # boundary are one second apart; large PTS gaps keep this fixture quick.
 long_source=root/'long-source.mp4'
-pts="setpts='if(lt(N,2),N,if(lt(N,6),86397+N,89994+N))/TB'"
-run([a.ffmpeg,'-v','error','-f','lavfi','-i','testsrc2=s=64x64:r=1:d=7',
+pts="setpts='if(lt(N,2),N,if(lt(N,8),86397+N,89992+N))/TB'"
+run([a.ffmpeg,'-v','error','-f','lavfi','-i','testsrc2=s=64x64:r=1:d=9',
      '-vf',pts,'-fps_mode','passthrough','-c:v','libx264','-preset','ultrafast',
      '-threads','1','-g','1','-bf','0','-pix_fmt','yuv420p','-x264-params',
      'colorprim=bt709:transfer=bt709:colormatrix=bt709',long_source])
 frame_probe=json.loads(run([a.ffprobe,'-v','error','-select_streams','v:0','-show_frames',
                             '-show_entries','frame=best_effort_timestamp_time','-of','json',long_source]))
 assert [Fraction(f['best_effort_timestamp_time']) for f in frame_probe['frames']]==[
-    0,1,86399,86400,86401,86402,90000],frame_probe
+    0,1,86399,86400,86401,86402,86403,86404,90000],frame_probe
 revision=call('status')['revision']
 call('import',source=str(long_source),id='long',expectedRevision=revision,key='long-source-import')
 long_query={'assetId':'long','startMs':86399000,'endMs':86403000,'sampleEveryMs':1000,'limit':2}
