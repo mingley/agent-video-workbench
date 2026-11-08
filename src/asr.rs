@@ -42,10 +42,10 @@ struct CacheContext<'a> {
     scratch_dir: PathBuf,
 }
 
+const INCOMPLETE_CACHE_MESSAGE: &str = "ASR cache is incomplete or cannot be verified; restore its missing companion from a verified backup, or collect it only if no successful job references it";
+
 fn incomplete_cache() -> Error {
-    Error::Invalid(
-        "ASR cache is incomplete or cannot be verified; restore its missing companion from a verified backup, or collect it only if no successful job references it".into(),
-    )
+    Error::Invalid(INCOMPLETE_CACHE_MESSAGE.into())
 }
 
 fn cache_file_exists(path: &Path) -> Result<bool> {
@@ -119,6 +119,9 @@ fn repair_legacy_manifest(
     control: &mut dyn Control,
 ) -> Result<()> {
     let transcript: Transcript = crate::json::read(cache).map_err(|_| incomplete_cache())?;
+    if transcript.asset_id.as_str() != context.input.asset_id.as_str() {
+        return Err(incomplete_cache());
+    }
     let hash = media::hash_file_controlled(cache, control)?;
     let source_sha = context
         .asset
@@ -255,10 +258,20 @@ pub fn analyze(
     );
     let legacy = context.analysis_dir.join(format!("asr-{legacy_key}.json"));
     let legacy_manifest = legacy.with_extension("manifest.json");
-    if cache_file_exists(&legacy)? && !cache_file_exists(&legacy_manifest)? {
-        repair_legacy_manifest(&context, &legacy, &legacy_manifest, control)?;
-    }
-    if let Some(hit) = cached(&context, &legacy, &legacy_manifest, 2, control)? {
+    let legacy_data_exists = cache_file_exists(&legacy)?;
+    let legacy_manifest_exists = cache_file_exists(&legacy_manifest)?;
+    let use_legacy = match (legacy_data_exists, legacy_manifest_exists) {
+        (true, false) => match repair_legacy_manifest(&context, &legacy, &legacy_manifest, control) {
+            Ok(()) => true,
+            // A legacy entry with insufficient or conflicting evidence stays
+            // untouched; the independent v3 cache can still serve this asset.
+            Err(Error::Invalid(message)) if message == INCOMPLETE_CACHE_MESSAGE => false,
+            Err(error) => return Err(error),
+        },
+        (false, true) => false,
+        _ => true,
+    };
+    if use_legacy && let Some(hit) = cached(&context, &legacy, &legacy_manifest, 2, control)? {
         return Ok(hit);
     }
     let scratch = context

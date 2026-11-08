@@ -164,8 +164,32 @@ def main():
         expectedRevision=1, key="same-bytes-second-asset",
     )
     phrase.write_text("second asset words", encoding="utf-8")
+    if args.baseline_avw:
+        # Exercise the actual 0.5.1 bug: B incorrectly reuses A's v2
+        # transcript and leaves a successful conflicting historical job.
+        legacy_alias = transcribe(baseline, "voice_b", 2, "legacy-cross-asset-hit")
+        assert legacy_alias["state"] == "succeeded" and legacy_alias["result"]["cacheHit"], legacy_alias
+        assert legacy_alias["result"]["assetId"] == "voice_a"
+        assert Path(legacy_alias["result"]["path"]) == legacy and call_count() == 1
+        legacy_manifest.unlink()
+
+    # Neither requested asset has a v3 entry yet. When the v2 manifest is
+    # missing, both can create separate entries without changing the v2 bytes,
+    # even though B's legacy success conflicts with A's repair evidence.
     second = transcribe(args.avw, "voice_b", 2, "second-asset-transcription")
     assert second["state"] == "succeeded" and not second["result"]["cacheHit"], second
+    assert legacy.read_bytes() == original and call_count() == 2
+    if args.baseline_avw:
+        assert not legacy_manifest.exists()
+        owner = transcribe(args.avw, "voice_a", 2, "conflicted-legacy-owner")
+        assert owner["state"] == "succeeded" and not owner["result"]["cacheHit"], owner
+        assert owner["result"]["assetId"] == "voice_a"
+        assert Path(owner["result"]["path"]) != legacy
+        assert json.loads(Path(owner["result"]["path"]).read_text())["assetId"] == "voice_a"
+        assert not legacy_manifest.exists() and legacy.read_bytes() == original
+        assert call_count() == 3
+        legacy_manifest.write_bytes(saved_legacy_manifest)
+    expected_provider_runs = 3 if args.baseline_avw else 2
     second_path = Path(second["result"]["path"])
     second_manifest = Path(second["result"]["manifest"])
     second_original = second_path.read_bytes()
@@ -173,17 +197,17 @@ def main():
     second_transcript = json.loads(second_original)
     assert second_path != legacy and second_transcript["assetId"] == "voice_b"
     assert second_transcript["cues"][0]["text"] == "second asset words"
-    assert legacy.read_bytes() == original and call_count() == 2
+    assert legacy.read_bytes() == original and call_count() == expected_provider_runs
     again = transcribe(args.avw, "voice_b", 2, "second-asset-cache-hit")
     assert again["state"] == "succeeded" and again["result"]["cacheHit"], again
-    assert Path(again["result"]["path"]) == second_path and call_count() == 2
+    assert Path(again["result"]["path"]) == second_path and call_count() == expected_provider_runs
 
     # A partial v3 pair must fail before invoking a provider or changing bytes.
     second_manifest.unlink()
     missing_manifest = transcribe(args.avw, "voice_b", 2, "missing-v3-manifest")
     assert missing_manifest["state"] == "failed" and "incomplete" in missing_manifest["error"], missing_manifest
     assert missing_manifest["result"] is None and second_path.read_bytes() == second_original
-    assert not second_manifest.exists() and call_count() == 2
+    assert not second_manifest.exists() and call_count() == expected_provider_runs
     second_manifest.write_bytes(second_manifest_bytes)
     retried = call(args.avw, "job-retry", id=missing_manifest["id"], noLaunch=True)
     assert retried["id"] == missing_manifest["id"] and retried["state"] == "queued", retried
@@ -191,7 +215,7 @@ def main():
     retried = call(args.avw, "job-status", id=missing_manifest["id"])
     assert retried["state"] == "succeeded" and retried["attempt"] == 2, retried
     assert retried["result"]["cacheHit"] and second_path.read_bytes() == second_original
-    assert call_count() == 2
+    assert call_count() == expected_provider_runs
 
     held = root / "held-transcript.json"
     second_path.rename(held)
@@ -199,7 +223,7 @@ def main():
     assert missing_data["state"] == "failed" and "incomplete" in missing_data["error"], missing_data
     assert not second_path.exists() and second_manifest.read_bytes() == second_manifest_bytes
     held.rename(second_path)
-    assert call_count() == 2
+    assert call_count() == expected_provider_runs
 
     # Every component of a complete manifest is checked, not only its hash.
     good = json.loads(second_manifest_bytes)
@@ -212,7 +236,7 @@ def main():
         second_manifest.write_text(json.dumps(altered))
         invalid = transcribe(args.avw, "voice_b", 2, f"bad-manifest-{index}")
         assert invalid["state"] == "failed" and "manifest" in invalid["error"], invalid
-        assert second_path.read_bytes() == second_original and call_count() == 2
+        assert second_path.read_bytes() == second_original and call_count() == expected_provider_runs
     second_manifest.write_bytes(second_manifest_bytes)
 
     # A leaf symlink is not accepted as a managed cache file.
@@ -225,87 +249,7 @@ def main():
     second_manifest.unlink()
     moved.rename(second_manifest)
 
-    if args.baseline_avw:
-        # Recreating a sidecar requires a matching historically successful job.
-        legacy_manifest.unlink()
-        db = sqlite3.connect(project / "project.sqlite")
-        rows = [
-            (job_id,) for job_id, raw in
-            db.execute("SELECT id,result FROM jobs WHERE state='succeeded'").fetchall()
-            if raw and json.loads(raw).get("path") == str(legacy)
-        ]
-        assert rows
-        with db:
-            db.executemany("UPDATE jobs SET state='failed' WHERE id=?", rows)
-        db.close()
-        no_evidence = transcribe(args.avw, "voice_a", 2, "missing-legacy-evidence")
-        assert no_evidence["state"] == "failed" and "incomplete" in no_evidence["error"], no_evidence
-        assert not legacy_manifest.exists() and legacy.read_bytes() == original
-        db = sqlite3.connect(project / "project.sqlite")
-        with db:
-            db.executemany("UPDATE jobs SET state='succeeded' WHERE id=?", rows)
-        db.close()
-        retried = call(args.avw, "job-retry", id=no_evidence["id"], noLaunch=True)
-        assert retried["state"] == "queued", retried
-        process([*prefix(args.avw), "worker", project])
-        retried = call(args.avw, "job-status", id=no_evidence["id"])
-        assert retried["state"] == "succeeded" and retried["attempt"] == 2, retried
-        assert retried["result"]["cacheHit"] and legacy_manifest.is_file()
-        assert legacy.read_bytes() == original and call_count() == 2
-        legacy_manifest.unlink()
-
-        # A job with a different queued config or asset cannot authorize repair.
-        db = sqlite3.connect(project / "project.sqlite")
-        saved_input = db.execute("SELECT input FROM jobs WHERE id=?", (first["id"],)).fetchone()[0]
-        db.close()
-        for index, (field, value) in enumerate([
-            ("assetId", "voice_b"),
-            ("modelSha256", "0" * 64),
-        ]):
-            altered_input = json.loads(saved_input)
-            if field == "assetId":
-                altered_input["asr"]["assetId"] = value
-            else:
-                altered_input["asr"]["config"][field] = value
-            db = sqlite3.connect(project / "project.sqlite")
-            with db:
-                db.execute("UPDATE jobs SET input=? WHERE id=?", (json.dumps(altered_input), first["id"]))
-            db.close()
-            mismatch = transcribe(args.avw, "voice_a", 2, f"legacy-job-mismatch-{index}")
-            assert mismatch["state"] == "failed" and "incomplete" in mismatch["error"], mismatch
-            assert not legacy_manifest.exists() and legacy.read_bytes() == original
-            db = sqlite3.connect(project / "project.sqlite")
-            with db:
-                db.execute("UPDATE jobs SET input=? WHERE id=?", (saved_input, first["id"]))
-            db.close()
-
-        # Historical source identity must match the current original bytes.
-        db = sqlite3.connect(project / "project.sqlite")
-        saved_snapshot = db.execute("SELECT snapshot FROM revisions WHERE id=1").fetchone()[0]
-        altered_project = json.loads(saved_snapshot)
-        prior_asset = next(a for a in altered_project["assets"] if a["id"] == "voice_a")
-        prior_asset["fingerprint"]["sha256"] = "0" * 64
-        with db:
-            db.execute("UPDATE revisions SET snapshot=? WHERE id=1", (json.dumps(altered_project),))
-        db.close()
-        wrong_source = transcribe(args.avw, "voice_a", 2, "legacy-source-mismatch")
-        assert wrong_source["state"] == "failed" and "incomplete" in wrong_source["error"], wrong_source
-        assert not legacy_manifest.exists() and legacy.read_bytes() == original
-        db = sqlite3.connect(project / "project.sqlite")
-        with db:
-            db.execute("UPDATE revisions SET snapshot=? WHERE id=1", (saved_snapshot,))
-        db.close()
-
-        # A modified legacy transcript must not be blessed or overwritten.
-        tampered = original + b" "
-        legacy.write_bytes(tampered)
-        bad_hash = transcribe(args.avw, "voice_a", 2, "legacy-hash-mismatch")
-        assert bad_hash["state"] == "failed" and "incomplete" in bad_hash["error"], bad_hash
-        assert legacy.read_bytes() == tampered and not legacy_manifest.exists()
-        legacy.write_bytes(original)
-        legacy_manifest.write_bytes(saved_legacy_manifest)
-
-    assert call_count() == 2
+    assert call_count() == expected_provider_runs
     assert artifact(args.avw, first)["sha256"] == original_hash
     assert Path(artifact(args.avw, second)["path"]).read_bytes() == second_original
 
@@ -360,13 +304,16 @@ def main():
         "legacySucceededManifestSurvivesGc": True,
         "cacheReuseWithoutProvider": True,
         "duplicateAssetIdentitySeparated": True,
+        "unrelatedIncompleteV2DoesNotBlockNewAsset": bool(args.baseline_avw),
         "partialCacheRefusedWithoutOverwrite": True,
         "failedJobsRetryWithoutReprocessing": True,
         "manifestIdentityChecked": True,
         "symlinkedCacheRefused": True,
         "legacyRecoveryRequiresMatchingEvidence": bool(args.baseline_avw),
         "priorArtifactStillVerifies": True,
-        "cacheProviderRuns": 2,
+        "legacyConflictingEvidenceBypassed": bool(args.baseline_avw),
+        "cacheRegressionProviderRuns": expected_provider_runs,
+        "totalProviderRuns": call_count(),
         "delayedAudioObservation": timing,
         "limitations": [
             "Generated audio and fake provider; no speech model accuracy or real-camera audio tested.",
