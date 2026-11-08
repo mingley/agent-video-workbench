@@ -300,6 +300,10 @@ for name,binary in (("v2",args.baseline_avw),("v3",args.v3_avw)):
     old_path = Path(old_artifact["path"])
     old_bytes = old_path.read_bytes()
     old_hash = hashlib.sha256(old_bytes).hexdigest()
+    old_manifest = json.loads(old_path.with_suffix(".manifest.json").read_text())
+    assert old_manifest["adapterVersion"] == (2 if name == "v2" else 3), old_manifest
+    old_cues = json.loads(old_bytes)["cues"]
+    assert abs(old_cues[0]["startMs"] - 250) <= 2, old_cues
     fresh = transcribe(args.avw,project,"clock-new-"+name)
     assert fresh["state"] == "succeeded" and not fresh["result"]["cacheHit"],fresh
     assert Path(fresh["result"]["path"]) != old_path
