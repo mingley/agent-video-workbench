@@ -362,6 +362,30 @@ impl Control for JobControl<'_> {
     }
 }
 
+// Commit the terminal state atomically against an independently accepted cancel.
+// Files are already verified here; this only publishes or withholds the job reference.
+fn finalize_attempt(
+    store: &Store,
+    job: &Job,
+    state: &str,
+    result: Option<String>,
+    error: Option<String>,
+) -> Result<()> {
+    let updated = store.conn.execute(
+        "UPDATE jobs SET
+             state=CASE WHEN cancel_requested != 0 THEN 'cancelled' ELSE ?1 END,
+             result=CASE WHEN cancel_requested != 0 THEN NULL ELSE ?2 END,
+             error=CASE WHEN cancel_requested != 0 THEN 'Job cancelled' ELSE ?3 END,
+             updated=?4
+         WHERE id=?5 AND generation=?6 AND state IN ('running','verifying')",
+        params![state, result, error, now()?, job.id, job.generation],
+    )?;
+    if updated != 1 {
+        return Err(Error::Invalid("job execution generation was fenced".into()));
+    }
+    Ok(())
+}
+
 pub fn worker(root: &Path, stop: Arc<AtomicBool>, idle_seconds: u64) -> Result<Value> {
     let root = root.canonicalize()?;
     let lock = OpenOptions::new()
@@ -429,10 +453,7 @@ pub fn worker(root: &Path, stop: Arc<AtomicBool>, idle_seconds: u64) -> Result<V
             Err(Error::Cancelled) => ("cancelled", None, Some("Job cancelled".to_owned())),
             Err(error) => ("failed", None, Some(error.to_string())),
         };
-        let updated = store.conn.execute("UPDATE jobs SET state=?1,result=?2,error=?3,updated=?4 WHERE id=?5 AND generation=?6 AND state IN ('running','verifying')",params![state,result,error,now()?,job.id,job.generation])?;
-        if updated != 1 {
-            return Err(Error::Invalid("job execution generation was fenced".into()));
-        }
+        finalize_attempt(&store, &job, state, result, error)?;
         completed += 1;
     }
     let policy = store.project()?.extensions.get("avw.retention").cloned();
@@ -475,4 +496,125 @@ pub fn free_space(root: &Path) -> Result<u64> {
         .blocks_available()
         .checked_mul(stats.fragment_size())
         .ok_or_else(|| Error::Invalid("filesystem size overflow".into()))
+}
+
+#[cfg(test)]
+mod finalization_tests {
+    use super::*;
+    use crate::service::{Request, Service};
+
+    fn running_job() -> (tempfile::TempDir, std::path::PathBuf, Store, Job) {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("p");
+        let mut store = Store::create(&root, "finalization").unwrap();
+        let input = RenderInput {
+            sequence: "seq_main".into(),
+            priority: 0,
+            expected_revision: 0,
+            ffmpeg: "ffmpeg".into(),
+            ffprobe: "ffprobe".into(),
+            asr: None,
+            analysis: None,
+        };
+        let queued = store.enqueue("finalization-test", &input).unwrap();
+        let running = store.claim().unwrap().unwrap();
+        assert_eq!(running.id, queued.id);
+        (temp, root, store, running)
+    }
+
+    #[test]
+    fn acknowledged_cancel_wins_over_late_success() {
+        let (temp, root, store, running) = running_job();
+        let cancel_store = Store::open(&root).unwrap();
+        let accepted = cancel_store.cancel_job(&running.id).unwrap();
+        assert_eq!(accepted.state, "running");
+        assert!(accepted.cancel_requested);
+        finalize_attempt(&store, &running, "succeeded", Some("{}".into()), None).unwrap();
+        let final_job = store.job(&running.id).unwrap();
+        assert_eq!(final_job.state, "cancelled");
+        assert!(final_job.cancel_requested);
+        assert!(final_job.result.is_none());
+        assert_eq!(final_job.error.as_deref(), Some("Job cancelled"));
+        let service = Service {
+            root: Some(temp.path().to_path_buf()),
+            backend: crate::media::backend("ffmpeg".into(), "ffprobe".into()),
+            executable: "avw".into(),
+            asr: None,
+            downloads: Default::default(),
+            provider: None,
+        };
+        assert!(matches!(
+            service.execute(Request::Artifact {
+                project: root,
+                id: running.id,
+                sheet: false,
+                preview: false,
+            }),
+            Err(Error::Invalid(message)) if message == "job has no verified artifact"
+        ));
+    }
+
+    #[test]
+    fn success_committed_before_cancel_stays_successful() {
+        let (_temp, root, store, running) = running_job();
+        let value = serde_json::json!({"path": "verified"});
+        finalize_attempt(
+            &store,
+            &running,
+            "succeeded",
+            Some(serde_json::to_string(&value).unwrap()),
+            None,
+        )
+        .unwrap();
+        let after = Store::open(&root).unwrap().cancel_job(&running.id).unwrap();
+        assert_eq!(after.state, "succeeded");
+        assert!(!after.cancel_requested);
+        assert_eq!(after.result, Some(value));
+        assert!(after.error.is_none());
+    }
+
+    #[test]
+    fn retry_claim_fences_old_generation() {
+        let (_temp, root, mut store, first) = running_job();
+        let client = Store::open(&root).unwrap();
+        client.cancel_job(&first.id).unwrap();
+        finalize_attempt(&store, &first, "succeeded", Some("{}".into()), None).unwrap();
+        let queued = client.retry_job(&first.id).unwrap();
+        assert_eq!(queued.state, "queued");
+        assert!(!queued.cancel_requested);
+        let second = store.claim().unwrap().unwrap();
+        assert_eq!(second.id, first.id);
+        assert_eq!(second.attempt, first.attempt + 1);
+        assert_eq!(second.generation, first.generation + 1);
+        assert!(matches!(
+            finalize_attempt(&store, &first, "succeeded", Some("{}".into()), None),
+            Err(Error::Invalid(message)) if message == "job execution generation was fenced"
+        ));
+        let current = client.job(&second.id).unwrap();
+        assert_eq!(current.state, "running");
+        assert!(current.result.is_none());
+        assert!(!current.cancel_requested);
+        finalize_attempt(&store, &second, "succeeded", Some("{}".into()), None).unwrap();
+        assert_eq!(client.job(&second.id).unwrap().state, "succeeded");
+    }
+
+    #[test]
+    fn explicit_cancel_wins_over_late_failure_or_interruption() {
+        for outcome in ["failed", "interrupted"] {
+            let (_temp, root, store, running) = running_job();
+            Store::open(&root).unwrap().cancel_job(&running.id).unwrap();
+            finalize_attempt(
+                &store,
+                &running,
+                outcome,
+                None,
+                Some("execution failed or stopped".into()),
+            )
+            .unwrap();
+            let current = store.job(&running.id).unwrap();
+            assert_eq!(current.state, "cancelled");
+            assert!(current.result.is_none());
+            assert_eq!(current.error.as_deref(), Some("Job cancelled"));
+        }
+    }
 }

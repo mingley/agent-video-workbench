@@ -219,6 +219,11 @@ transcript excerpts; continue with `nextOffset`. Pair the verified PNG with
 observed source PTS/time bases, tile coordinates and coverage metadata. MCP
 `avw-media` kind `storyboard` returns both. Sparse sampling can miss important
 content; request denser frames or a `budget-preview` window before choosing cuts.
+Each tile's `suggestedPreview` is an editable request centered on the observed
+frame. A range of up to nine seconds leaves room under a 10-second output cap;
+actual duration and byte checks still apply. For sources longer than 24 hours,
+continue with a new storyboard scope starting at the prior `scopeEndMs` when
+more video remains. Editing and transcript-search limits remain separate.
 
 `budget-preview` accepts source start/end, `maxDurationMs`, `maxBytes`, `width`
 and `height`. Its verified attachment reports measured limits, encoding attempts

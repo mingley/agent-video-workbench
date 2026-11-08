@@ -1,4 +1,4 @@
-# Develop Agent Video Workbench 0.5.1
+# Develop Agent Video Workbench 0.5.2
 
 The Rust application provides durable local projects, a typed CLI/JSON API,
 MCP stdio, source inspection, optional local transcription, captioned named
@@ -261,7 +261,10 @@ functional summaries and archive/binary/source identities. For 0.3.1 this is
 on ARM64. The 0.4.0 pipeline requires 35 summaries on x86_64 and 30 on ARM64,
 including color/memory, preservation and newer creator-agent workflows; browser
 suites run only on x86_64. The 0.5.0 pipeline adds source-view CLI/MCP checks,
-requiring 36 summaries on x86_64 and 31 on ARM64. Local ASR and one-hour
+requiring 36 summaries on x86_64 and 31 on ARM64. The 0.5.2 pipeline adds
+fake-provider ASR cache checks on both architectures and a generated duplicate-
+asset A/B benchmark on x86_64: 39 and 33 summaries respectively. Local ASR
+and one-hour
 measurements remain separate. It uploads the exact
 qualified assets through Actions, verifies existing asset bytes on retry, and
 refuses to replace different assets or a different target. A published release

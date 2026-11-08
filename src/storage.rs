@@ -180,7 +180,11 @@ pub fn gc(root: &Path, grace_seconds: u64, dry_run: bool) -> Result<Value> {
                     j["result"][key]
                         .as_str()
                         .is_some_and(|p| Path::new(p).starts_with(&path))
-                })
+                }) || (name == "analysis"
+                    && j["result"]["assetId"].is_string()
+                    && j["result"]["path"]
+                        .as_str()
+                        .is_some_and(|p| Path::new(p).with_extension("manifest.json") == path))
             }) {
                 continue;
             }

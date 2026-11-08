@@ -2,10 +2,10 @@ use agent_video_workbench::{
     analysis::{self, Input, Task},
     media,
     service::{Request, Service, envelope},
-    source_views::{BudgetPreview, Storyboard},
+    source_views::{self, BudgetPreview, Storyboard},
     store::Store,
 };
-use agentcut_core::{Asset, Project, RationalRate};
+use agentcut_core::{Asset, Project, RationalRate, RationalTime};
 use serde_json::{Value, json};
 fn fixture() -> Project {
     let mut project = Project::new("views", 360, 640, RationalRate::frames(30).unwrap());
@@ -121,4 +121,62 @@ fn invalid_view_enqueue_does_not_leave_a_job_or_edit() {
     let store = Store::open(&root).unwrap();
     assert!(store.jobs().unwrap().is_empty());
     assert_eq!(store.project().unwrap().revision, 0);
+}
+
+#[test]
+fn storyboard_scopes_can_start_after_a_day_and_keep_video_end_bounds() {
+    let mut project = fixture();
+    project.assets[0].metadata.duration = Some(RationalTime::new(
+        90_001_000,
+        RationalRate::frames(1_000).unwrap(),
+    ));
+    let mut query: Storyboard = serde_json::from_value(json!({
+        "assetId":"source","startMs":86_400_000,"sampleEveryMs":1000
+    }))
+    .unwrap();
+    assert!(source_views::validate_storyboard(&query, &project).is_ok());
+    query.end_ms = Some(90_001_000);
+    assert!(source_views::validate_storyboard(&query, &project).is_ok());
+
+    query.start_ms = 0;
+    query.end_ms = Some(86_400_001);
+    assert!(source_views::validate_storyboard(&query, &project).is_err());
+    query.start_ms = -1;
+    assert!(source_views::validate_storyboard(&query, &project).is_err());
+    query.start_ms = 86_400_000;
+    query.end_ms = Some(90_001_001);
+    assert!(source_views::validate_storyboard(&query, &project).is_err());
+
+    // The container extends 1.001s beyond the selected video stream.
+    project.assets[0]
+        .extensions
+        .get_mut("avw.ingest.v1")
+        .unwrap()["streams"][0]["duration"] = json!("90000.000000");
+    query.end_ms = None;
+    assert!(source_views::validate_storyboard(&query, &project).is_ok());
+    query.end_ms = Some(90_000_000);
+    assert!(source_views::validate_storyboard(&query, &project).is_ok());
+    query.end_ms = Some(90_000_001);
+    assert!(source_views::validate_storyboard(&query, &project).is_err());
+    query.start_ms = 90_000_000;
+    query.end_ms = None;
+    assert!(source_views::validate_storyboard(&query, &project).is_err());
+}
+
+#[test]
+fn storyboard_scope_arithmetic_handles_maximum_timestamp_without_panicking() {
+    let mut project = fixture();
+    project.assets[0].metadata.duration = Some(RationalTime::new(
+        i64::MAX,
+        RationalRate::frames(1_000).unwrap(),
+    ));
+    let mut query: Storyboard = serde_json::from_value(json!({
+        "assetId":"source","startMs":i64::MAX-1,"sampleEveryMs":1000
+    }))
+    .unwrap();
+    assert!(source_views::validate_storyboard(&query, &project).is_ok());
+    query.end_ms = Some(i64::MAX);
+    assert!(source_views::validate_storyboard(&query, &project).is_ok());
+    query.offset = 1;
+    assert!(source_views::validate_storyboard(&query, &project).is_err());
 }

@@ -1,0 +1,39 @@
+name: Focused ASR timing checks
+on:
+  push:
+    branches: [research/asr-focused]
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+      - name: Show formatting corrections on failure
+        if: failure()
+        run: |
+          cargo fmt --all
+          git diff
+      - name: Strict Rust checks and build
+        run: |
+          set -euo pipefail
+          python3 tests/test_release_qualification.py
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          cargo test --locked
+          cargo build --release --locked
+          python3 scripts/check-schema.py target/release/avw
+      - name: Install checksum-verified media runtime and previous release
+        run: |
+          set -euo pipefail
+          scripts/setup-media.sh "$RUNNER_TEMP/tools"
+          scripts/install-release.sh "$RUNNER_TEMP/baseline" 0.5.1
+      - name: ASR cache and clock regressions
+        run: |
+          set -euo pipefail
+          media="$RUNNER_TEMP/tools/ffmpeg8/linux"
+          python3 evaluation/asr_cache_smoke.py --avw "$PWD/target/release/avw" --baseline-avw "$RUNNER_TEMP/baseline/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/asr-cache"
+          python3 evaluation/asr_clock_smoke.py --avw "$PWD/target/release/avw" --baseline-avw "$RUNNER_TEMP/baseline/avw" --ffmpeg "$media/ffmpeg" --ffprobe "$media/ffprobe" --output "$RUNNER_TEMP/asr-clock"

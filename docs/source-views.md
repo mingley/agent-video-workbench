@@ -38,13 +38,31 @@ is retained. Image tiles have no burned timestamp text; pair the image with this
 mapping when passing it to an agent. Requested seek times alone are not proof of
 which frame was decoded. Missing or inconsistent source clocks are refused.
 
+Each new tile includes a copyable `suggestedPreview` request for `budget-preview`.
+It centers up to nine seconds on the **observed** frame in original source time,
+sliding the interval at the selected scope boundaries. The suggested profile
+uses `maxDurationMs: 10000`, `maxBytes: 1048576` and 640×640 dimension bounds,
+preserving aspect ratio without upscaling. Edit those budgets for the actual host
+and task. The suggested interval and profile are not a guarantee that encoded
+media will fit: VFR timing, audio/container overhead or content complexity can
+still make the job fail. Submit selected suggestions individually and check each
+verified result; overlapping suggestions may describe the same footage. The
+storyboard response carries a frozen revision and source SHA-256. If the project
+changed since it was created, verify the asset still has that identity or create
+a fresh storyboard before using its suggested range in a new job.
+
 A page covers at most 24 samples. `nextOffset` advances through the same source,
 `startMs`, `endMs` and sampling recipe; null means its last page. The default
-scope is the reported video span up to 24 hours. An audio-only container tail
-is reported by `reportedVideoEndMsFloor`, `sourceDurationMsFloor` and
-`coverage.audioOnlyTailMayRemain`; it does not create phantom video samples.
-Use transcript/audio inspection for remaining audio. A longer source reports
-`coverage.scopeContinues`. An explicit `endMs` must be within 24 hours.
+scope starts at `startMs` and extends for up to 24 hours, the source duration,
+or the reported video end when available, whichever comes first. An explicit `endMs` must be in the source
+and no more than 24 hours after `startMs`. To continue through a longer source,
+set the next request's `startMs` to the prior `scopeEndMs` and reset `offset`
+to zero. `coverage.scopeContinues` refers to the whole container; an
+audio-only tail is separately reported by `reportedVideoEndMsFloor`,
+`sourceDurationMsFloor` and `coverage.audioOnlyTailMayRemain`. It does not
+create phantom video samples. Use transcript/audio inspection for remaining
+audio. Source evidence, provider search, transcript import, compose and assemble
+currently retain separate absolute 24-hour source-position limits.
 `sampleEveryMs` accepts 1000–300000, `tileWidth` accepts 128–512 in multiples of
 16, and `maxBytes` accepts 16384–2097152. The default page has 12 tiles, 256×144
 letterboxed cells and a 1 MiB PNG cap. Oversized images fail with an instruction
@@ -135,8 +153,11 @@ source ranges in `plan-edit`/`assemble`; do not reimport previews as new masters
 Retain source protections and speech-safe handle review.
 
 Cache keys bind source bytes, clock/color metadata, request budgets, backend and
-view adapter; storyboard context also binds its active transcripts. Cache reuse
-revalidates originals and output hashes. Changed artifacts are refused. Jobs are
+view adapter; storyboard context also binds its active transcripts. Existing
+frozen storyboard artifacts created before `suggestedPreview` remain readable
+and may omit it. New storyboard recipes use a refreshed cache identity; existing
+budget-preview cache identities are unchanged. Cache reuse revalidates originals
+and output hashes. Changed artifacts are refused. Jobs are
 cancellable and retain the existing worker deadline/resource limits. A page can
 fail if its requested interval has no decodable frame or a reliable clock.
 Generated-media checks establish tested cases, not arbitrary camera/host support.
