@@ -35,7 +35,7 @@ def required_summaries(tag, arch):
     if tuple(map(int, tag[1:].split('.'))) >= (0, 5, 0):
         required.add('source-views')
     if tuple(map(int, tag[1:].split('.'))) >= (0, 5, 2):
-        required.add('asr-cache')
+        required.update({'asr-cache', 'asr-clock'})
         if arch == 'x86_64':
             required.add('duplicate-assets')
     return required
@@ -49,6 +49,9 @@ def verify_summaries(native, required):
     if ('asr-cache' in required and
             json.loads(summaries['asr-cache'].read_text()).get('legacyV2Compatibility') != 'passed'):
         raise ValueError('ASR legacy cache compatibility must be exercised and pass')
+    if ('asr-clock' in required and
+            json.loads(summaries['asr-clock'].read_text()).get('legacy', {}).get('v2Exercised') is not True):
+        raise ValueError('ASR source-clock compatibility with 0.5.1 must be exercised and pass')
 
 
 def main():

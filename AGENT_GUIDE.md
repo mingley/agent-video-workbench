@@ -42,8 +42,11 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    content blocks; the host must support consuming them. See the
    [creator-agent toolkit](docs/creator-agent-toolkit.md).
 3. Optionally queue `transcribe-start` when local Whisper is configured. Review
-   machine text before `transcript-import`. Cues contain ID, startMs, endMs and
-   literal text, plus assetId/language/provider. `transcript-search` can optionally
+   machine text before `transcript-import`. ASR checks the source audio clock and
+   rejects unverified gaps or ambiguous origins. Older ASR artifacts may contain
+   shifted times; rerun and review them before attaching or selecting a version.
+   Existing artifacts and project history stay unchanged. Cues contain ID, startMs,
+   endMs and literal text, plus assetId/language/provider. `transcript-search` can optionally
    find a literal phrase across adjacent cues, with revision-pinned pagination and
    playable source context where available; opt into canonical Unicode matching
    or no-space cue joining when appropriate. See [transcript search](docs/transcript-search.md).

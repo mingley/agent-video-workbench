@@ -10,7 +10,10 @@ once in the initial render-verification pass while every asset identity and
 regular path is checked. Legacy HDR metadata recovery may recheck originals. A
 concurrently requested cancellation is resolved atomically with job completion.
 ASR cache sidecars remain referenced for existing and new successful jobs, and
-source asset identities do not share mismatched transcript records.
+source asset identities do not share mismatched transcript records. New ASR
+requests use an audited source audio clock and a separate cache; old artifacts
+remain readable but can have shifted cue timestamps. Timestamp gaps or ambiguous
+origins are rejected rather than silently mapped onto a continuous WAV.
 
 Native qualification and the generated-media A/B benchmark must pass before
 publication; source review alone is not runtime proof.

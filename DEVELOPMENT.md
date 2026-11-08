@@ -262,8 +262,9 @@ on ARM64. The 0.4.0 pipeline requires 35 summaries on x86_64 and 30 on ARM64,
 including color/memory, preservation and newer creator-agent workflows; browser
 suites run only on x86_64. The 0.5.0 pipeline adds source-view CLI/MCP checks,
 requiring 36 summaries on x86_64 and 31 on ARM64. The 0.5.2 pipeline adds
-fake-provider ASR cache checks on both architectures and a generated duplicate-
-asset A/B benchmark on x86_64: 38 and 32 summaries respectively. Local ASR
+fake-provider ASR cache and source-clock checks on both architectures and
+observational duplicate-asset and ASR-audit comparisons on x86_64: 39 and 33
+required summaries respectively. Local ASR
 and one-hour
 measurements remain separate. It uploads the exact
 qualified assets through Actions, verifies existing asset bytes on retry, and

@@ -61,9 +61,10 @@ class QualificationTests(unittest.TestCase):
     def test_052_requires_cache_and_duplicate_asset_evidence(self):
         self.assertEqual(len(PUBLISH.required_summaries('v0.5.1', 'x86_64')), 36)
         self.assertEqual(len(PUBLISH.required_summaries('v0.5.1', 'aarch64')), 31)
-        self.assertEqual(len(PUBLISH.required_summaries('v0.5.2', 'x86_64')), 38)
-        self.assertEqual(len(PUBLISH.required_summaries('v0.5.2', 'aarch64')), 32)
+        self.assertEqual(len(PUBLISH.required_summaries('v0.5.2', 'x86_64')), 39)
+        self.assertEqual(len(PUBLISH.required_summaries('v0.5.2', 'aarch64')), 33)
         self.assertIn('asr-cache', PUBLISH.required_summaries('v0.5.2', 'aarch64'))
+        self.assertIn('asr-clock', PUBLISH.required_summaries('v0.5.2', 'aarch64'))
         self.assertIn('duplicate-assets', PUBLISH.required_summaries('v0.5.2', 'x86_64'))
         self.assertNotIn('duplicate-assets', PUBLISH.required_summaries('v0.5.2', 'aarch64'))
 
@@ -74,12 +75,20 @@ class QualificationTests(unittest.TestCase):
             for name in required:
                 (root / name).mkdir()
                 (root / name / 'summary.json').write_text('{"passed": true}')
+            clock = root / 'asr-clock' / 'summary.json'
+            clock.write_text(json.dumps({'passed': True, 'legacy': {'v2Exercised': True}}))
             target = root / 'asr-cache' / 'summary.json'
             for status in (None, 'not-exercised', 'failed'):
                 target.write_text(json.dumps({'passed': True, 'legacyV2Compatibility': status}))
                 with self.assertRaises(ValueError):
                     PUBLISH.verify_summaries(root, required)
             target.write_text(json.dumps({'passed': True, 'legacyV2Compatibility': 'passed'}))
+            PUBLISH.verify_summaries(root, required)
+            for status in (None, False, 'passed'):
+                clock.write_text(json.dumps({'passed': True, 'legacy': {'v2Exercised': status}}))
+                with self.assertRaises(ValueError):
+                    PUBLISH.verify_summaries(root, required)
+            clock.write_text(json.dumps({'passed': True, 'legacy': {'v2Exercised': True}}))
             PUBLISH.verify_summaries(root, required)
 
     def test_missing_failed_malformed_and_unexpected_summaries_cannot_pass(self):

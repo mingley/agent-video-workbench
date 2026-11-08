@@ -8,9 +8,11 @@ uses its host's file tools to deliver results.
 **0.5.2 source** adds ready-to-use preview requests to storyboard tiles, lets
 storyboard scopes continue past the 24-hour position, and avoids repeatedly
 hashing identical managed originals in the initial render verification pass. It
-also resolves cancellation ordering and preserves ASR cache sidecars and source identities. Output duration,
-byte and integrity checks remain enforced. Editing and transcript search retain
-their separate 24-hour source-position limits.
+also resolves cancellation ordering and maps ASR cues to an audited source audio
+clock. Older transcript artifacts remain available but may contain shifted times;
+new requests use a separate cache. Output duration, byte and integrity checks
+remain enforced. Editing and transcript search retain their separate 24-hour
+source-position limits.
 
 **[0.5.1](https://github.com/mingley/agent-video-workbench/releases/tag/v0.5.1) improves browsing latency.** Event-driven subprocess completion,
 bounded storyboard graphs and one-pass preview validation retain decoded media
