@@ -46,12 +46,15 @@ preserving aspect ratio without upscaling. Edit those budgets for the actual hos
 and task. The suggested interval and profile are not a guarantee that encoded
 media will fit: VFR timing, audio/container overhead or content complexity can
 still make the job fail. Submit selected suggestions individually and check each
-verified result; overlapping suggestions may describe the same footage.
+verified result; overlapping suggestions may describe the same footage. The
+storyboard response carries a frozen revision and source SHA-256. If the project
+changed since it was created, verify the asset still has that identity or create
+a fresh storyboard before using its suggested range in a new job.
 
 A page covers at most 24 samples. `nextOffset` advances through the same source,
 `startMs`, `endMs` and sampling recipe; null means its last page. The default
-scope starts at `startMs` and extends for up to 24 hours or to the reported
-video end, whichever comes first. An explicit `endMs` must be in the source
+scope starts at `startMs` and extends for up to 24 hours, the source duration,
+or the reported video end when available, whichever comes first. An explicit `endMs` must be in the source
 and no more than 24 hours after `startMs`. To continue through a longer source,
 set the next request's `startMs` to the prior `scopeEndMs` and reset `offset`
 to zero. `coverage.scopeContinues` refers to the whole container; an

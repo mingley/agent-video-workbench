@@ -29,7 +29,7 @@ try {
   const image=await call('avw-media',{kind:'storyboard',project,jobId:summary.storyboardJobId});
   const png=image.response.content.find(c=>c.type==='image');
   if (!png || png.mimeType!=='image/png' || !Buffer.from(png.data,'base64').subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) throw new Error('invalid image content');
-  if (image.value.revision!==1) throw new Error('frozen revision missing');
+  if (image.value.revision!==1 || image.value.sourceSha256!==summary.sourceSha256) throw new Error('frozen revision or source identity missing');
   if (!image.value.storyboard.tiles.every(t=>Number.isInteger(t.observedPts) && t.timeBase)) throw new Error('observed clocks missing');
   if (!image.value.storyboard.tiles.every(t=>t.suggestedPreview && t.suggestedPreview.assetId==='source')) throw new Error('copyable suggested previews missing');
   if (summary.legacyCompatibility?.exercised) {

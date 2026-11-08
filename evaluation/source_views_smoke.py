@@ -139,6 +139,11 @@ run([a.ffmpeg,'-v','error','-f','lavfi','-i','testsrc2=s=320x180:r=30:d=8','-f',
 call('import',source=str(vfr),id='vfr',expectedRevision=1,key='vfr-import')
 vr,_,vra=view('source-storyboard',{'assetId':'vfr','startMs':550,'endMs':4500,'sampleEveryMs':1000,'limit':4},'vfr-storyboard')
 assert vr['data']['tiles'][0]['sourceTimeMs']==600,vr['data']
+vfr_tile=vr['data']['tiles'][0]
+vfr_suggestion=assert_suggestion(vfr_tile,550,4500)
+vfr_suggested,_,vfr_suggested_artifact=view('budget-preview',vfr_suggestion,'vfr-suggested-preview')
+assert_preview_budget(vfr_suggested,vfr_suggested_artifact,vfr_suggestion)
+assert any(pair['sourcePts']==vfr_tile['observedPts'] for pair in vfr_suggested['data']['frameMapping'])
 vp,_,vpa=view('budget-preview',{'assetId':'vfr','startMs':500,'endMs':4500,'maxDurationMs':4500,'maxBytes':1000000,'width':320,'height':180},'vfr-preview')
 assert vp['data']['frameMapping'] and abs(vp['data']['sourceClock']['containerOrigin']['value']*vp['data']['sourceClock']['containerOrigin']['rate']['denominator']/vp['data']['sourceClock']['containerOrigin']['rate']['numerator']-5)<.001,vp['data']
 # Validate delay against authored bursts, not just packet metadata.
@@ -280,5 +285,5 @@ summary={'passed':True,'storyboardTotalSamples':3,'pagination':True,'observedFra
 summary.update({'exactStoryboardCells':True,'raggedAndDensePages':True,'largeFrameSequentialFallback':True,'singlePreviewValidationDecode':True,'measuredImpossibleBudgetHint':True,'videoOnlyPreview':True,'twelveTileImageProcesses':4})
 summary['limitations'][0]='Generated local media; no semantic model or host-specific media acceptance'
 summary.update({'longSourceBeyond24Hours':True,'suggestedPreviewFromObservedPts':True,
-                'legacyCompatibility':legacy})
+                'vfrSuggestedPreview':True,'sourceSha256':original_sha,'legacyCompatibility':legacy})
 (root/'summary.json').write_text(json.dumps(summary,indent=2));print(json.dumps(summary,indent=2))
