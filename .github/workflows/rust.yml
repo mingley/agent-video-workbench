@@ -7,7 +7,7 @@ on:
 jobs:
   qualify:
     # Internal branches already qualify on push. Fork PRs still need parent CI.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    if: github.ref_name != 'research/asr-audio-clock' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository)
     strategy:
       fail-fast: false
       matrix:

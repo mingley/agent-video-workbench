@@ -1,0 +1,15 @@
+name: Research ASR audio clock
+on:
+  push:
+    branches: [research/asr-audio-clock]
+  workflow_dispatch:
+jobs:
+  audio-clock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install checksum-verified FFmpeg
+        run: scripts/setup-media.sh "$RUNNER_TEMP/tools"
+      - name: Observe decoded audio timelines
+        run: python3 evaluation/asr_clock_diagnostic.py --ffmpeg "$RUNNER_TEMP/tools/ffmpeg8/linux/ffmpeg" --ffprobe "$RUNNER_TEMP/tools/ffmpeg8/linux/ffprobe"
