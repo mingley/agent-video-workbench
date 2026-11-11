@@ -1,10 +1,10 @@
 # Make and deliver your first edit
 
-This walkthrough targets **0.5.0** and creates two independent,
+This walkthrough targets **0.5.0 and later** and creates two independent,
 captioned five-second outputs. The same JSON requests work in the MCP `avw`
 tool. Start with [installation](deployment.md); no speech model is required.
 Use a checkout for the request example files below; the installed binary needs
-no build. The automated ID extraction below uses the 0.5.0 CLI;
+no build. The automated ID extraction below uses the 0.5.0-and-later CLI;
 explicit `jq` alternatives are provided for the older 0.4.0 binary.
 You can also download the three JSON examples and substitute their
 local paths in the request commands.
@@ -95,7 +95,7 @@ avw worker "$avw_workspace/project"
 ```
 
 The variable captures the batch ID without copying it by hand. `--result-pointer`
-is available in 0.5.0; for the older 0.4.0 binary, capture
+is available in 0.5.0 and later; for the older 0.4.0 binary, capture
 the normal JSON response instead (enable Bash `pipefail` to retain command errors):
 
 ```bash
@@ -126,7 +126,7 @@ avw artifact project "$avw_child_id"
 avw artifact project "$avw_child_id" --sheet
 ```
 
-For the published binary, use
+For the older 0.4.0 binary, enable Bash `pipefail` as above and use
 `avw_child_id=$(avw batch-status project "$avw_batch_id" | jq -er '.result.items[0].id') || exit 1`
 instead of `--result-pointer`.
 
@@ -174,7 +174,7 @@ profiles, protection, analysis and feedback.
 
 ## Scripting and project identity
 
-The updated source CLI accepts `--result-pointer /id` (a JSON Pointer relative
+The published 0.5.0-and-later CLI accepts `--result-pointer /id` (a JSON Pointer relative
 to `result`): strings print unquoted; numbers, arrays and objects print as JSON.
 Errors keep the normal envelope and nonzero exit status. A missing field after a
 successful operation returns `E_RESULT_POINTER` with the complete result; the
