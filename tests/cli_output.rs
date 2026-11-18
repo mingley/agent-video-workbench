@@ -57,3 +57,44 @@ fn invalid_pointer_is_rejected_before_mutation_and_errors_stay_structured() {
     assert_eq!(error["ok"], json!(false));
     assert!(error["error"]["code"].is_string());
 }
+
+#[test]
+fn bounded_job_status_wait_reports_the_same_job_without_launching_it() {
+    let temp = tempfile::tempdir().unwrap();
+    let project = temp.path().join("project");
+    let path = project.to_str().unwrap();
+    assert!(cli(&["create", path, "--name", "wait"]).status.success());
+    let start = cli(&[
+        "--result-pointer",
+        "/id",
+        "render-start",
+        path,
+        "--expected-revision",
+        "0",
+        "--key",
+        "wait-test",
+        "--no-launch",
+    ]);
+    assert!(start.status.success());
+    let id = String::from_utf8(start.stdout).unwrap();
+    let id = id.trim();
+
+    let started = std::time::Instant::now();
+    let waited = cli(&["job-status", path, id, "--wait-ms", "120"]);
+    assert!(waited.status.success());
+    assert!(started.elapsed() >= std::time::Duration::from_millis(120));
+    let observed: Value = serde_json::from_slice(&waited.stdout).unwrap();
+    assert_eq!(observed["result"]["state"], "queued");
+    assert_eq!(observed["result"]["attempt"], 0);
+    assert_eq!(waited.stdout, cli(&["job-status", path, id]).stdout);
+
+    let oversized = cli(&["job-status", path, id, "--wait-ms", "20001"]);
+    assert!(!oversized.status.success());
+    let rejected: Value = serde_json::from_slice(&oversized.stdout).unwrap();
+    assert_eq!(rejected["error"]["code"], "E_INVALID_REQUEST");
+
+    let cancelled = cli(&["job-cancel", path, id]);
+    assert!(cancelled.status.success());
+    let status = cli(&["job-status", path, id, "--wait-ms", "1500"]);
+    assert_eq!(status.stdout, cancelled.stdout);
+}

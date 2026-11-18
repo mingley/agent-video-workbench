@@ -1,5 +1,22 @@
 # Implementation and qualification
 
+## Fast job status and bounded waits on main
+
+`job-status` and `batch-status` can wait up to 20 seconds per call through
+either CLI or MCP. A timeout returns the usual status so an agent can continue
+working or wait again. Status checks skip loading the editing snapshot. Batch
+status reads all children from one database snapshot.
+
+On Linux x86_64 with an AMD EPYC 9V74, 30 interleaved calls per binary to a
+warm project with 18,000 generated transcript cues (6.7 MB head snapshot)
+measured median single-job status at 42.3 ms → 2.8 ms and four-output batch
+status at 38.4 ms → 2.7 ms, against the published 0.5.2 binary. Both builds
+returned identical status results. Median calls on the 1.9 KB head snapshot
+were 2.0–2.3 ms across both builds. The
+[benchmark](../evaluation/job_status_performance.py) measures CLI status
+with process startup and no active media work. See
+[Jobs and verified delivery](agent-api.md#jobs-and-verified-delivery) for usage.
+
 ## Source navigation, verification and cache integrity on 0.5.2 source
 
 Storyboard pages suggest editable, budget-aware preview requests centered on

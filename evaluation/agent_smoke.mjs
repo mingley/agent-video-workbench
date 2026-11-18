@@ -2,7 +2,8 @@
 import { pathToFileURL } from 'node:url';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
+import { promisify } from 'node:util';
 const [avw, ffmpeg, ffprobe, font, root, sdkRoot] = process.argv.slice(2);
 if (!sdkRoot) throw new Error('Usage: node agent_smoke.mjs AVW FFMPEG FFPROBE FONT NEW_ROOT SDK_ROOT');
 const { Client } = await import(pathToFileURL(path.join(sdkRoot,'dist/esm/client/index.js')));
@@ -28,6 +29,13 @@ try {
  }
  await call({command:'doctor'});await call({command:'agent-guide'});
  await call({command:'create',project:'project',name:'MCP creator loop'});
+ const parked=await call({command:'batch-start',project:'project',sequences:['seq_main'],expectedRevision:0,key:'mcp-wait-timeout',noLaunch:true});
+ const parkedStatus={command:'batch-status',project:'project',id:parked.id,waitMs:100};
+ const pending=await call(parkedStatus);
+ if(pending.complete||pending.items[0].state!=='queued')throw new Error(JSON.stringify(pending));
+ await call({command:'job-cancel',project:'project',id:pending.items[0].id});
+ const cancelled=await call(parkedStatus);
+ if(!cancelled.complete||cancelled.succeeded!==0||cancelled.items[0].state!=='cancelled')throw new Error(JSON.stringify(cancelled));
  const state=()=>call({command:'status',project:'project'});
  for(const [id,file] of [['phone','source.mp4'],['font','font.ttf']]){
    const p=await state();await call({command:'import',project:'project',source:file,id,expectedRevision:p.revision,key:'import-'+id});
@@ -46,8 +54,16 @@ try {
  const wrong=await call({...compose,edit:{...compose.edit,name:'different'}},true);if(wrong.error.code!=='E_IDEMPOTENCY_CONFLICT')throw new Error('wrong conflict');
  const job=await call({command:'render-start',project:'project',sequence:'product_demo',expectedRevision:edited.revision,key:'render-short'});
  const replayJob=await call({command:'render-start',project:'project',sequence:'product_demo',expectedRevision:edited.revision,key:'render-short'});if(job.id!==replayJob.id)throw new Error('duplicate job');
- let status;
- for(let i=0;i<240;i++){status=await call({command:'job-status',project:'project',id:job.id});if(['succeeded','failed','cancelled','interrupted'].includes(status.state))break;await new Promise(resolve=>setTimeout(resolve,250));}
+ async function waitFor(request, done) {
+   for(let i=0;i<6;i++){
+     const status=await call({...request,waitMs:10000});
+     if(done(status))return status;
+   }
+   throw new Error('Job did not finish within 60 seconds: '+JSON.stringify(request));
+ }
+ const waitForJob=id=>waitFor({command:'job-status',project:'project',id},job=>
+   !['queued','running','verifying'].includes(job.state));
+ const status=await waitForJob(job.id);
  if(status.state!=='succeeded')throw new Error(JSON.stringify(status));
  const artifact=await call({command:'artifact',project:'project',id:job.id});if(!fs.existsSync(artifact.path)||artifact.mimeType!=='video/mp4')throw new Error('artifact unavailable');
  const manifest=JSON.parse(fs.readFileSync(status.result.manifest,'utf8'));if(manifest.verification.expectedFrames!==180)throw new Error('wrong decoded duration');
@@ -62,8 +78,7 @@ try {
  if(JSON.stringify((await state()).sequences.find(s=>s.id==='product_demo'))!==originalOutput)throw new Error('composing variants changed the first output');
  for(const sequence of ['hook_b','hook_c']) {
    const queued=await call({command:'render-start',project:'project',sequence,expectedRevision:finalRevision,key:'render-'+sequence});
-   let done;
-   for(let i=0;i<240;i++){done=await call({command:'job-status',project:'project',id:queued.id});if(['succeeded','failed','cancelled','interrupted'].includes(done.state))break;await new Promise(resolve=>setTimeout(resolve,250));}
+   const done=await waitForJob(queued.id);
    if(done.state!=='succeeded')throw new Error(JSON.stringify(done));
    await call({command:'artifact',project:'project',id:queued.id});
  }
@@ -89,20 +104,26 @@ try {
  // Later edits must not change the frozen delivery inputs.
  p=await state();outcome=await call({command:'apply',project:'project',batch:{schemaVersion:'1.0.0',projectId:p.projectId,baseRevision:finalRevision,idempotencyKey:'mcp-after-batch',operations:[{id:'rename',op:'project.rename',params:{name:'After queued delivery'}}]}});
  finalRevision=outcome.revision;
- const worker=spawnSync(avw,['worker',path.join(root,'project')],{encoding:'utf8'});if(worker.status!==0)throw new Error(worker.stderr);
- let batchStatus;for(let i=0;i<240;i++){batchStatus=await call({command:'batch-status',project:'project',id:batch.id});if(batchStatus.complete)break;await new Promise(resolve=>setTimeout(resolve,250));}
+ const batchRequest={command:'batch-status',project:'project',id:batch.id};
+ const [batchStatus]=await Promise.all([
+   waitFor(batchRequest,status=>status.complete),
+   promisify(execFile)(avw,['worker',path.join(root,'project')],{timeout:90000}),
+ ]);
  if(!batchStatus.complete||batchStatus.succeeded!==2||batchStatus.items.some(j=>j.revision!==frozen))throw new Error(JSON.stringify(batchStatus));
+ const cliBatch=spawnSync(avw,['--workspace',root,'batch-status','project',batch.id,'--wait-ms','100'],{encoding:'utf8'});
+ if(cliBatch.status!==0||JSON.stringify(JSON.parse(cliBatch.stdout).result)!==JSON.stringify(batchStatus))throw new Error('CLI/MCP batch wait diverged');
  await call({command:'delivery',project:'project',id:batch.id,destination:'review-set'});
  if(!fs.existsSync(path.join(root,'review-set','index.html')))throw new Error('delivery bundle missing');
  const index=await call({command:'analyze-start',project:'project',expectedRevision:finalRevision,key:'mcp-source-index',noLaunch:true,task:{kind:'frame-index',assetId:'phone',startMs:1000,endMs:2000}});
  const analysisWorker=spawnSync(avw,['worker',path.join(root,'project')],{encoding:'utf8'});if(analysisWorker.status!==0)throw new Error(analysisWorker.stderr);
- let indexed;for(let i=0;i<240;i++){indexed=await call({command:'job-status',project:'project',id:index.id});if(['succeeded','failed','cancelled'].includes(indexed.state))break;await new Promise(resolve=>setTimeout(resolve,250));}if(indexed.state!=='succeeded')throw new Error(JSON.stringify(indexed));
+ const indexed=await waitForJob(index.id);
+ if(indexed.state!=='succeeded')throw new Error(JSON.stringify(indexed));
  const indexArtifact=await call({command:'artifact',project:'project',id:index.id});
  if(JSON.parse(fs.readFileSync(indexArtifact.path,'utf8')).data.frames.length!==30)throw new Error('MCP original PTS index wrong');
  await call({command:'verify-project',project:'project'});
  await call({command:'maintain',workspace:'.',dryRun:true});
  await call({command:'backup',project:'project',destination:'backup'});
  const reopened=await call({command:'status',project:'backup'});if(reopened.revision!==finalRevision)throw new Error('backup lost revision');
- fs.writeFileSync(path.join(root,'summary.json'),JSON.stringify({passed:true,officialMcpSdk:true,cliMcpOutcomeEquivalent:true,transcriptMappedCaptions:true,independentNamedOutputs:4,defaultHdCanvasTested:true,frozenBatchDelivery:true,expandedSchemaAndAnalysis:true,cacheReused:true,decodedFrames:180,jobId:job.id,artifact:artifact.path},null,2));
+ fs.writeFileSync(path.join(root,'summary.json'),JSON.stringify({passed:true,officialMcpSdk:true,cliMcpOutcomeEquivalent:true,transcriptMappedCaptions:true,independentNamedOutputs:4,defaultHdCanvasTested:true,frozenBatchDelivery:true,boundedJobAndBatchWait:true,expandedSchemaAndAnalysis:true,cacheReused:true,decodedFrames:180,jobId:job.id,artifact:artifact.path},null,2));
  console.log('Agent interface smoke passed:',path.join(root,'summary.json'));
 } finally {await client.close();}

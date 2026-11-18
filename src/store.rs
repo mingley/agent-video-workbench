@@ -92,7 +92,7 @@ impl Store {
         Self::open_backup(path)
     }
 
-    pub(crate) fn open_backup(path: &Path) -> Result<Self> {
+    fn check_project_file(path: &Path) -> Result<()> {
         if !std::fs::symlink_metadata(path.join("project.sqlite"))
             .is_ok_and(|meta| meta.file_type().is_file())
         {
@@ -100,6 +100,32 @@ impl Store {
                 "project.sqlite must be a regular file".into(),
             ));
         }
+        Ok(())
+    }
+
+    /// Job status needs the queue tables, not the current editing snapshot.
+    pub(crate) fn open_job_reader(path: &Path) -> Result<Self> {
+        if path.join("backup.incomplete").exists() {
+            return Err(Error::Invalid("backup is incomplete".into()));
+        }
+        Self::check_project_file(path)?;
+        let root = path.canonicalize()?;
+        let conn = Connection::open_with_flags(
+            root.join("project.sqlite"),
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NOFOLLOW,
+        )?;
+        conn.busy_timeout(Duration::from_secs(10))?;
+        let version: u32 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        if version != 4 {
+            // Preserve the existing upgrade and error behavior for older stores.
+            drop(conn);
+            return Self::open(path);
+        }
+        Ok(Self { conn, root })
+    }
+
+    pub(crate) fn open_backup(path: &Path) -> Result<Self> {
+        Self::check_project_file(path)?;
         let mut store = Self::connect(path)?;
         let version: u32 = store
             .conn

@@ -152,6 +152,23 @@ ends may be decoded-stream EOF. See [inspection timing](inspection-timing.md).
 `batch-start` returns a parent ID and freezes all selected outputs atomically.
 Use `job-status` for children and `batch-status` for aggregate completion.
 The parent is a `batch` record; aggregate status is computed from its children.
+
+Both status commands accept optional `waitMs` (CLI `--wait-ms`), from 0 through
+20,000. Zero is the default and reads status once. A positive value rechecks
+status on the server and returns as soon as the job finishes, all batch children
+finish, or the wait expires. Expiration returns the ordinary status response:
+check whether the job is still `queued`, `running` or `verifying`, or whether the
+batch still has `complete: false`. Use a wait shorter than the client timeout;
+the MCP stdio session serves requests sequentially. For example:
+
+```sh
+avw --result-pointer /state job-status project "$job_id" --wait-ms 5000
+avw batch-status project "$batch_id" --wait-ms 5000
+```
+
+A waiting status call observes existing work. Queue work normally and let a
+worker claim it. Retrieve and verify the finished file with `artifact`.
+
 Invalid analysis tasks are rejected against the frozen revision before a job or
 request key is recorded. Generated context-preview requests are bound to their
 project, source and media configuration; regenerate them on another service

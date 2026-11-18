@@ -107,6 +107,9 @@ enum Action {
     BatchStatus {
         project: PathBuf,
         id: String,
+        /// Wait up to this many milliseconds for the batch to finish (max 20000).
+        #[arg(long, default_value_t = 0)]
+        wait_ms: u32,
     },
     Delivery {
         project: PathBuf,
@@ -472,6 +475,9 @@ enum Action {
     JobStatus {
         project: PathBuf,
         id: String,
+        /// Wait up to this many milliseconds for the job to finish (max 20000).
+        #[arg(long, default_value_t = 0)]
+        wait_ms: u32,
     },
     JobCancel {
         project: PathBuf,

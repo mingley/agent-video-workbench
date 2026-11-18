@@ -3895,6 +3895,14 @@
         },
         "project": {
           "type": "string"
+        },
+        "waitMs": {
+          "default": 0,
+          "description": "Wait for active work for up to this many milliseconds. Zero reads once.",
+          "format": "uint32",
+          "maximum": 20000,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
@@ -4508,6 +4516,14 @@
         },
         "project": {
           "type": "string"
+        },
+        "waitMs": {
+          "default": 0,
+          "description": "Wait for all children to finish. Zero reads once.",
+          "format": "uint32",
+          "maximum": 20000,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [

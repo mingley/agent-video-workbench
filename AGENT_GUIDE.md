@@ -135,9 +135,11 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    frames; check the full output and overlay visibility before accepting it.
 9. `render-start` freezes a sequence at expectedRevision and returns a durable job.
    Priority is -100..100; larger values run first, with stable ties. `batch-start`
-   freezes 1..32 distinct sequences in one transaction. Poll `job-status` or
-   `batch-status`; retry/cancel children independently. Later edits do not change
-   queued snapshots. Encoding is followed by full decode and verification.
+   freezes 1..32 distinct sequences in one transaction. Use `job-status` or
+   `batch-status` with `waitMs: 5000` to get completion or the latest state in
+   one call. If still active, wait again or continue other work. Retry or cancel
+   children independently. Later edits do not change queued snapshots. Encoding
+   is followed by full decode and verification.
 10. `artifact` returns verified path, MIME, SHA-256 and revision; sheet retrieval
     verifies its hash too. Each render has matching SRT/VTT, cover, indexed sheet
     and manifest. `delivery` packages a succeeded render or batch into a new

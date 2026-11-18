@@ -336,6 +336,10 @@ pub enum Request {
     JobStatus {
         project: PathBuf,
         id: String,
+        /// Wait for active work for up to this many milliseconds. Zero reads once.
+        #[serde(default)]
+        #[schemars(range(max = jobs::MAX_WAIT_MS))]
+        wait_ms: u32,
     },
     JobCancel {
         project: PathBuf,
@@ -477,6 +481,10 @@ pub enum Request {
     BatchStatus {
         project: PathBuf,
         id: String,
+        /// Wait for all children to finish. Zero reads once.
+        #[serde(default)]
+        #[schemars(range(max = jobs::MAX_WAIT_MS))]
+        wait_ms: u32,
     },
     Delivery {
         project: PathBuf,
@@ -525,6 +533,16 @@ fn sequence() -> String {
 }
 fn limit() -> u32 {
     50
+}
+
+fn validate_job_wait(wait_ms: u32) -> Result<()> {
+    if wait_ms > jobs::MAX_WAIT_MS {
+        return Err(Error::Invalid(format!(
+            "waitMs must be between 0 and {}",
+            jobs::MAX_WAIT_MS
+        )));
+    }
+    Ok(())
 }
 pub struct Service {
     pub root: Option<PathBuf>,
@@ -739,8 +757,19 @@ impl Service {
                 }
                 Ok(serde_json::to_value(batch)?)
             }
-            Request::BatchStatus { project, id } => {
-                Store::open(&self.path(&project)?)?.batch_status(&id)
+            Request::BatchStatus {
+                project,
+                id,
+                wait_ms,
+            } => {
+                validate_job_wait(wait_ms)?;
+                let store = Store::open_job_reader(&self.path(&project)?)?;
+                let status = jobs::wait_status(
+                    wait_ms,
+                    || store.batch_snapshot(&id),
+                    |status| status.complete,
+                )?;
+                Ok(serde_json::to_value(status)?)
             }
             Request::Delivery {
                 project,
@@ -861,7 +890,7 @@ impl Service {
             ),
             Request::Schema {} => Ok(serde_json::to_value(schemars::schema_for!(Request))?),
             Request::Capabilities {} => Ok(
-                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["source-storyboard","budget-preview","host-readiness","agent-media","source-evidence","prepare-highlights","provider-search","provider-search-results","suggest-reframe","audio-cleanup","review-import","preview-word-alignment","accept-word-alignment","word-alignment","translation-context","plan-translation","batch-delivery-check","batch-delivery","thumbnail-candidates","chapter-draft","delivery-check","plan-edit","apply-edit-plan","assemble","edit-preflight","compare-outputs","maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"Composed SDR H.264/AAC; source-preserving Rec.709 or 10-bit PQ/HLG HEVC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"assemble color:preserve retains PQ/HLG in 10-bit HEVC; composed outputs tone map to Rec.709; Dolby Vision compatible base layer only","recommendedWorkflow":["source-storyboard","budget-preview","inspect","assemble","plan-edit","apply-edit-plan","edit-preflight","render-start","artifact","compare-outputs","chapter-draft","delivery-check","delivery"],"asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"analysisProviderConfigured":self.provider.is_some(),"renderAnimation":"opacity; linear/step position and constant-viewport crop; other channels refused", "downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
+                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["source-storyboard","budget-preview","host-readiness","agent-media","source-evidence","prepare-highlights","provider-search","provider-search-results","suggest-reframe","audio-cleanup","review-import","preview-word-alignment","accept-word-alignment","word-alignment","translation-context","plan-translation","batch-delivery-check","batch-delivery","thumbnail-candidates","chapter-draft","delivery-check","plan-edit","apply-edit-plan","assemble","edit-preflight","compare-outputs","maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"Composed SDR H.264/AAC; source-preserving Rec.709 or 10-bit PQ/HLG HEVC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"assemble color:preserve retains PQ/HLG in 10-bit HEVC; composed outputs tone map to Rec.709; Dolby Vision compatible base layer only","recommendedWorkflow":["source-storyboard","budget-preview","inspect","assemble","plan-edit","apply-edit-plan","edit-preflight","render-start","artifact","compare-outputs","chapter-draft","delivery-check","delivery"],"asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"analysisProviderConfigured":self.provider.is_some(),"renderAnimation":"opacity; linear/step position and constant-viewport crop; other channels refused", "downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1,"jobWaitMs":jobs::MAX_WAIT_MS},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
             ),
             Request::AgentGuide {} => Ok(json!({"guide":include_str!("../AGENT_GUIDE.md")})),
             Request::Doctor {} => doctor(&self.backend),
@@ -1384,9 +1413,16 @@ impl Service {
                 Ok(json!(Store::open(&self.path(&project)?)?.imports()?))
             }
             Request::Jobs { project } => job_list(&Store::open(&self.path(&project)?)?, 100),
-            Request::JobStatus { project, id } => Ok(serde_json::to_value(
-                Store::open(&self.path(&project)?)?.job(&id)?,
-            )?),
+            Request::JobStatus {
+                project,
+                id,
+                wait_ms,
+            } => {
+                validate_job_wait(wait_ms)?;
+                let store = Store::open_job_reader(&self.path(&project)?)?;
+                let job = jobs::wait_status(wait_ms, || store.job(&id), |job| !job.active())?;
+                Ok(serde_json::to_value(job)?)
+            }
             Request::JobCancel { project, id } => Ok(serde_json::to_value(
                 Store::open(&self.path(&project)?)?.cancel_job(&id)?,
             )?),

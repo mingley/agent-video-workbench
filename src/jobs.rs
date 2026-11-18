@@ -73,6 +73,40 @@ pub struct Job {
     pub error: Option<String>,
 }
 
+impl Job {
+    pub(crate) fn active(&self) -> bool {
+        matches!(self.state.as_str(), "queued" | "running" | "verifying")
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BatchStatus {
+    batch_id: String,
+    revision: i64,
+    pub(crate) complete: bool,
+    succeeded: usize,
+    items: Vec<Job>,
+}
+
+pub(crate) const MAX_WAIT_MS: u32 = 20_000;
+
+pub(crate) fn wait_status<T>(
+    wait_ms: u32,
+    mut read: impl FnMut() -> Result<T>,
+    done: impl Fn(&T) -> bool,
+) -> Result<T> {
+    let deadline = Instant::now() + Duration::from_millis(u64::from(wait_ms));
+    loop {
+        let current = read()?;
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if done(&current) || remaining.is_zero() {
+            return Ok(current);
+        }
+        std::thread::sleep(remaining.min(Duration::from_millis(100)));
+    }
+}
+
 fn now() -> Result<i64> {
     let time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -171,6 +205,12 @@ impl Store {
     }
 
     pub fn batch_status(&self, id: &str) -> Result<Value> {
+        Ok(serde_json::to_value(self.batch_snapshot(id)?)?)
+    }
+
+    pub(crate) fn batch_snapshot(&self, id: &str) -> Result<BatchStatus> {
+        // Read all children from one SQLite snapshot, even during concurrent retries.
+        let tx = self.conn.unchecked_transaction()?;
         let batch = self.job(id)?;
         if batch.state != "batch" {
             return Err(Error::Invalid("job is not a batch".into()));
@@ -196,24 +236,58 @@ impl Store {
                 "succeeded" | "failed" | "cancelled" | "interrupted" | "unavailable"
             )
         });
-        Ok(
-            json!({"batchId":batch.id,"revision":batch.revision,"complete":complete,"succeeded":items.iter().filter(|j|j.state=="succeeded").count(),"items":items}),
-        )
+        let succeeded = items.iter().filter(|j| j.state == "succeeded").count();
+        tx.commit()?;
+        Ok(BatchStatus {
+            batch_id: batch.id,
+            revision: batch.revision,
+            complete,
+            succeeded,
+            items,
+        })
     }
 
     pub fn job(&self, id: &str) -> Result<Job> {
-        let row = self.conn.query_row("SELECT id,revision,state,attempt,generation,cancel_requested,updated,input,result,error FROM jobs WHERE id=?1",[id], |r| Ok((r.get::<_,String>(0)?,r.get::<_,i64>(1)?,r.get::<_,String>(2)?,r.get::<_,i64>(3)?,r.get::<_,i64>(4)?,r.get::<_,bool>(5)?,r.get::<_,i64>(6)?,r.get::<_,Option<String>>(7)?,r.get::<_,Option<String>>(8)?,r.get::<_,Option<String>>(9)?)))?;
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT id, revision, state, attempt, generation, cancel_requested, updated,
+                    input, result, error FROM jobs WHERE id=?1",
+        )?;
+        let (
+            id,
+            revision,
+            state,
+            attempt,
+            generation,
+            cancel_requested,
+            updated,
+            input,
+            result,
+            error,
+        ) = stmt.query_row([id], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+                r.get::<_, Option<String>>(7)?,
+                r.get::<_, Option<String>>(8)?,
+                r.get(9)?,
+            ))
+        })?;
         Ok(Job {
-            id: row.0,
-            revision: row.1,
-            state: row.2,
-            attempt: row.3,
-            generation: row.4,
-            cancel_requested: row.5,
-            updated: row.6,
-            input: row.7.map(|s| serde_json::from_str(&s)).transpose()?,
-            result: row.8.map(|s| serde_json::from_str(&s)).transpose()?,
-            error: row.9,
+            id,
+            revision,
+            state,
+            attempt,
+            generation,
+            cancel_requested,
+            updated,
+            input: input.map(|s| serde_json::from_str(&s)).transpose()?,
+            result: result.map(|s| serde_json::from_str(&s)).transpose()?,
+            error,
         })
     }
 
