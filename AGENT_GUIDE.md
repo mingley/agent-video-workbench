@@ -133,7 +133,10 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
    `suggest-reframe` also creates a reviewable crop proposal from externally
    observed subject boxes. It does not perform detection or verify unsampled
    frames; check the full output and overlay visibility before accepting it.
-9. `render-start` freezes a sequence at expectedRevision and returns a durable job.
+9. When the creator provides delivery constraints, run `delivery-preflight`
+   with the same brief and revision intended for the render. Fix known mismatches
+   before encoding. Check final bytes and stream durations with `delivery-check`.
+   `render-start` freezes a sequence at expectedRevision and returns a durable job.
    Priority is -100..100; larger values run first, with stable ties. `batch-start`
    freezes 1..32 distinct sequences in one transaction. Use `job-status` or
    `batch-status` with `waitMs: 5000` to get completion or the latest state in

@@ -259,6 +259,13 @@ pub enum Request {
         id: String,
         brief: crate::delivery_check::DeliveryBrief,
     },
+    /// Check planned properties at the current revision before encoding.
+    DeliveryPreflight {
+        project: PathBuf,
+        sequence: String,
+        expected_revision: u64,
+        brief: crate::delivery_check::DeliveryBrief,
+    },
     Compose {
         project: PathBuf,
         edit: workflow::Compose,
@@ -763,7 +770,7 @@ impl Service {
                 wait_ms,
             } => {
                 validate_job_wait(wait_ms)?;
-                let store = Store::open_job_reader(&self.path(&project)?)?;
+                let store = Store::open_reader(&self.path(&project)?)?;
                 let status = jobs::wait_status(
                     wait_ms,
                     || store.batch_snapshot(&id),
@@ -779,6 +786,16 @@ impl Service {
             Request::DeliveryCheck { project, id, brief } => {
                 brief.validate()?;
                 crate::delivery_check::check(&self.path(&project)?, &id, &brief, &self.backend)
+            }
+            Request::DeliveryPreflight {
+                project,
+                sequence,
+                expected_revision,
+                brief,
+            } => {
+                brief.validate()?;
+                let snapshot = Store::open_reader(&self.path(&project)?)?.project()?;
+                crate::delivery_check::preflight(&snapshot, &sequence, expected_revision, &brief)
             }
             Request::BatchDeliveryCheck { project, id, brief } => {
                 brief.validate()?;
@@ -890,7 +907,7 @@ impl Service {
             ),
             Request::Schema {} => Ok(serde_json::to_value(schemars::schema_for!(Request))?),
             Request::Capabilities {} => Ok(
-                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["source-storyboard","budget-preview","host-readiness","agent-media","source-evidence","prepare-highlights","provider-search","provider-search-results","suggest-reframe","audio-cleanup","review-import","preview-word-alignment","accept-word-alignment","word-alignment","translation-context","plan-translation","batch-delivery-check","batch-delivery","thumbnail-candidates","chapter-draft","delivery-check","plan-edit","apply-edit-plan","assemble","edit-preflight","compare-outputs","maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"Composed SDR H.264/AAC; source-preserving Rec.709 or 10-bit PQ/HLG HEVC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"assemble color:preserve retains PQ/HLG in 10-bit HEVC; composed outputs tone map to Rec.709; Dolby Vision compatible base layer only","recommendedWorkflow":["source-storyboard","budget-preview","inspect","assemble","plan-edit","apply-edit-plan","edit-preflight","render-start","artifact","compare-outputs","chapter-draft","delivery-check","delivery"],"asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"analysisProviderConfigured":self.provider.is_some(),"renderAnimation":"opacity; linear/step position and constant-viewport crop; other channels refused", "downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1,"jobWaitMs":jobs::MAX_WAIT_MS},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
+                json!({"apiVersion":"1","version":env!("CARGO_PKG_VERSION"),"commands":["source-storyboard","budget-preview","host-readiness","agent-media","source-evidence","prepare-highlights","provider-search","provider-search-results","suggest-reframe","audio-cleanup","review-import","preview-word-alignment","accept-word-alignment","word-alignment","translation-context","plan-translation","batch-delivery-check","batch-delivery","thumbnail-candidates","chapter-draft","delivery-check","delivery-preflight","plan-edit","apply-edit-plan","assemble","edit-preflight","compare-outputs","maintain","analyze-start","library-export","library-import","import-url","interchange-export","interchange-import","catalog","verify-project","relink","cache-gc","backup-restore","batch-start","batch-status","delivery","studio","studio-state","reviews","resume","import","imports","transcribe-start","transcript-import","transcript-search","compose","apply","restore","protect","unprotect","inspect","render-start","job-status","job-cancel","job-retry","artifact","backup"],"editOperations":EDITS,"media":{"output":"Composed SDR H.264/AAC; source-preserving Rec.709 or 10-bit PQ/HLG HEVC","source":"local SDR/PQ/HLG video/audio/image/font","hdr":"assemble color:preserve retains PQ/HLG in 10-bit HEVC; composed outputs tone map to Rec.709; Dolby Vision compatible base layer only","recommendedWorkflow":["source-storyboard","budget-preview","inspect","assemble","plan-edit","apply-edit-plan","edit-preflight","delivery-preflight","render-start","artifact","compare-outputs","chapter-draft","delivery-check","delivery"],"asr":{"provider":"local whisper.cpp","configured":self.asr.is_some(),"machineTextRequiresReview":true}},"analysisProviderConfigured":self.provider.is_some(),"renderAnimation":"opacity; linear/step position and constant-viewport crop; other channels refused", "downloadHosts":self.downloads.hosts,"limits":{"requestBytes":8388608,"analysisRangeMs":300000,"outputDurationSeconds":3600,"canvasPixelsPerAxis":4096,"parallelRendersPerProject":1,"jobWaitMs":jobs::MAX_WAIT_MS},"transports":["CLI JSON","MCP stdio"],"supportedPlatform":"Linux; local filesystem with locking"}),
             ),
             Request::AgentGuide {} => Ok(json!({"guide":include_str!("../AGENT_GUIDE.md")})),
             Request::Doctor {} => doctor(&self.backend),
@@ -1419,7 +1436,7 @@ impl Service {
                 wait_ms,
             } => {
                 validate_job_wait(wait_ms)?;
-                let store = Store::open_job_reader(&self.path(&project)?)?;
+                let store = Store::open_reader(&self.path(&project)?)?;
                 let job = jobs::wait_status(wait_ms, || store.job(&id), |job| !job.active())?;
                 Ok(serde_json::to_value(job)?)
             }

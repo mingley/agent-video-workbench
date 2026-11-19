@@ -38,8 +38,9 @@ source windows help the agent review a paper edit before committing it.
 Find literal phrases across transcript cues and listen to source context; map
 creator feedback across retained, moved or removed source intervals. Review
 pages can copy the exact render and playback time back to the agent.
-Check a creator's delivery brief against verified render bytes and draft
-chapters from selected markers; both keep the frozen revision visible.
+Check a creator's delivery brief against the edit plan before encoding and
+against the verified file afterward. Draft chapters from selected markers in
+the frozen revision. See [delivery checks](docs/creator-delivery-checks.md).
 Use the [creator-agent toolkit](docs/creator-agent-toolkit.md) for grounded
 highlight proposals, model-visible media, reviewed captions and feedback,
 reframing, and checked batch delivery.

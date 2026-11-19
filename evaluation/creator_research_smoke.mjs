@@ -46,7 +46,7 @@ try {
     return expectOk ? value.result : value.error;
   }
   const capabilities = await call({ command: 'capabilities' });
-  if (!capabilities.commands.includes('delivery-check') || !capabilities.commands.includes('chapter-draft')) {
+  if (!['delivery-check', 'delivery-preflight', 'chapter-draft'].every(name => capabilities.commands.includes(name))) {
     throw new Error('Research-backed commands are missing from capabilities');
   }
   await call({ command: 'create', project: 'project', name: 'Research workflow' });
@@ -81,16 +81,49 @@ try {
       { id: 'three', op: 'marker.add', params: { id: 'm2', sequence: 'baseline', at: at(205) } },
       { id: 'private', op: 'marker.add', params: { id: 'secret', sequence: 'baseline', at: at(250), name: 'secret marker' } },
     ] } });
+  const brief = { schemaVersion: 1, dimensions: { width: 160, height: 90 }, aspectRatio: { width: 16, height: 9 },
+    maxDurationMs: 32000, maxBytes: 100000000, color: 'sdr' };
+  const briefFile = jsonFile('delivery-brief.json', brief);
+  const preflightRequest = { command: 'delivery-preflight', project: 'project', sequence: 'baseline',
+    expectedRevision: 4, brief };
+  const ready = await call(preflightRequest);
+  const outcomes = report => Object.fromEntries(report.checks.map(check => [check.constraint, check.status]));
+  if (ready.phase !== 'planned' || ready.revision !== 4 || ready.status !== 'unknown' ||
+      JSON.stringify(outcomes(ready)) !== JSON.stringify({
+        dimensions: 'pass', aspectRatio: 'pass', maxDurationMs: 'unknown', maxBytes: 'unknown', color: 'pass',
+      })) throw new Error('Unexpected plan evidence: ' + JSON.stringify(ready));
+  const preflightEnvelope = jsonFile('delivery-preflight.json', preflightRequest);
+  for (const args of [['delivery-preflight', 'project', 'baseline', '--expected-revision', '4',
+    '--request', briefFile], ['request', preflightEnvelope]]) {
+    if (JSON.stringify(cli(args, '/nonexistent/ffprobe')) !== JSON.stringify(ready)) {
+      throw new Error('CLI/MCP preflight differs or requires media');
+    }
+  }
+  const blocked = await call({ ...preflightRequest, brief: { schemaVersion: 1,
+    dimensions: { width: 1080, height: 1920 }, maxDurationMs: 31999, requiredSidecars: ['srt'] } });
+  if (blocked.status !== 'fail' || blocked.checks.length !== 3 ||
+      blocked.checks.some(check => check.status !== 'fail')) throw new Error(JSON.stringify(blocked));
+  if ((await call({ command: 'jobs', project: 'project' })).length !== 0 ||
+      fs.readdirSync(path.join(root, 'project', 'renders')).length !== 0) {
+    throw new Error('Preflight started a render');
+  }
   const job = await call({ command: 'render-start', project: 'project', sequence: 'baseline',
     expectedRevision: 4, key: 'frozen-render', noLaunch: true });
   await call({ command: 'apply', project: 'project', batch: { schemaVersion: '1.0.0', projectId: project.projectId,
     baseRevision: 4, idempotencyKey: 'later-rename', operations: [
       { id: 'rename', op: 'project.rename', params: { name: 'Later project' } },
     ] } });
+  if ((await call(preflightRequest, false)).code !== 'E_REVISION_CONFLICT') {
+    throw new Error('Preflight silently accepted a stale revision');
+  }
   const worker = spawnSync(avw, ['worker', path.join(root, 'project')], { encoding: 'utf8', timeout: 300000 });
   if (worker.status !== 0) throw new Error(worker.stderr);
   const completed = await call({ command: 'job-status', project: 'project', id: job.id });
   if (completed.state !== 'succeeded') throw new Error(JSON.stringify(completed));
+  const rendered = JSON.parse(fs.readFileSync(completed.result.manifest, 'utf8'));
+  if (ready.plannedVideoDuration.value !== rendered.verification.expectedFrames) {
+    throw new Error('Preflight planned frame count differs from the verified render');
+  }
   const selections = [{ markerId: 'm0', title: 'Introduction' }, { markerId: 'm1', title: 'How it works' },
     { markerId: 'm2', title: 'Next steps' }];
   const chapterRequest = { command: 'chapter-draft', project: 'project', id: job.id, selections };
@@ -108,15 +141,12 @@ try {
   }
   const badChapters = await call({ ...chapterRequest, selections: [selections[1], selections[0]] });
   if (badChapters.youtube.documentedTimestampChecks !== 'fail') throw new Error('Bad chapter order was accepted');
-  const brief = { schemaVersion: 1, dimensions: { width: 160, height: 90 }, aspectRatio: { width: 16, height: 9 },
-    maxDurationMs: 32000, maxBytes: 100000000, color: 'sdr' };
   const checkRequest = { command: 'delivery-check', project: 'project', id: job.id, brief };
   const check = await call(checkRequest);
   if (check.status !== 'pass' || check.artifact.revision !== 4 || check.checks.length !== 5
       || !check.checks.every(item => item.status === 'pass') || sha(check.artifact.path) !== check.artifact.sha256) {
     throw new Error('Measured delivery check failed: ' + JSON.stringify(check));
   }
-  const briefFile = jsonFile('delivery-brief.json', brief);
   const checkEnvelope = jsonFile('delivery-request.json', checkRequest);
   for (const args of [['delivery-check', 'project', job.id, '--request', briefFile], ['request', checkEnvelope]]) {
     if (JSON.stringify(cli(args)) !== JSON.stringify(check)) throw new Error('CLI/MCP delivery checks differ');
@@ -142,7 +172,8 @@ try {
   }
   const summary = { passed: true, officialMcpSdk: true, namedCliAndJsonEquivalent: true,
     unicodeAndNoSpaceSearch: true, frozenChapterRevision: chapters.render.revision, chapterOrderFailure: true,
-    selectedMarkersOnly: true, deliveryPassFailUnknown: true, tamperedMasterRejected: true, sourceUnchanged: true };
+    selectedMarkersOnly: true, deliveryPassFailUnknown: true, deliveryPreflightBeforeQueue: true,
+    tamperedMasterRejected: true, sourceUnchanged: true };
   jsonFile('summary.json', summary);
   console.log('Creator research workflow passed:', path.join(root, 'summary.json'));
 } finally { await client.close(); }

@@ -3581,6 +3581,38 @@
     },
     {
       "additionalProperties": false,
+      "description": "Check planned properties at the current revision before encoding.",
+      "properties": {
+        "brief": {
+          "$ref": "#/$defs/DeliveryBrief"
+        },
+        "command": {
+          "const": "delivery-preflight",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "project",
+        "sequence",
+        "expectedRevision",
+        "brief"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
       "properties": {
         "command": {
           "const": "compose",

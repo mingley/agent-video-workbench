@@ -8,7 +8,7 @@ use crate::{
     process::{self, Uncontrolled},
     store::Store,
 };
-use agentcut_core::{ItemPayload, Sequence};
+use agentcut_core::{ItemPayload, Project, RationalTime, RoundingMode, Sequence};
 use agentcut_render::FfmpegBackend;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -43,6 +43,16 @@ pub enum Color {
     Sdr,
     HdrPq,
     HdrHlg,
+}
+
+impl Color {
+    fn tags(self) -> (&'static str, &'static str, &'static str) {
+        match self {
+            Self::Sdr => ("bt709", "bt709", "bt709"),
+            Self::HdrPq => ("bt2020", "smpte2084", "bt2020nc"),
+            Self::HdrHlg => ("bt2020", "arib-std-b67", "bt2020nc"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
@@ -291,6 +301,208 @@ fn add(
     checks.push(json!({"constraint":name,"requested":requested,"status":status,"actual":actual,"reason":reason}));
 }
 
+fn overall_status(checks: &[Value]) -> &'static str {
+    if checks.iter().any(|check| check["status"] == "fail") {
+        "fail"
+    } else if checks.iter().any(|check| check["status"] == "unknown") {
+        "unknown"
+    } else {
+        "pass"
+    }
+}
+
+fn match_status(matches: bool) -> &'static str {
+    if matches { "pass" } else { "fail" }
+}
+
+/// Compare the delivery brief to the current editing plan without opening media.
+pub fn preflight(
+    project: &Project,
+    sequence_id: &str,
+    expected_revision: u64,
+    brief: &DeliveryBrief,
+) -> Result<Value> {
+    brief.validate()?;
+    if project.revision != expected_revision {
+        return Err(Error::Conflict {
+            expected: expected_revision,
+            current: project.revision,
+        });
+    }
+    let sequence = project.require_sequence(sequence_id)?;
+    let policy = crate::assembly::policy(sequence)?;
+    let clips = policy
+        .as_ref()
+        .map(|_| crate::assembly::clips(sequence))
+        .transpose()?;
+    let rate = sequence.frame_rate;
+    let frames = if let Some(clips) = &clips {
+        // The source-preserving renderer rounds each cut on its own.
+        clips.iter().try_fold(0_i64, |sum, clip| -> Result<i64> {
+            sum.checked_add(clip.duration.rescale_to(rate, RoundingMode::Nearest)?.value)
+                .ok_or_else(|| invalid("planned video frame count overflow"))
+        })?
+    } else {
+        sequence
+            .effective_duration()?
+            .rescale_to(rate, RoundingMode::Nearest)?
+            .value
+    };
+    if frames <= 0 {
+        return Err(invalid(
+            "delivery preflight requires a sequence with at least one planned frame",
+        ));
+    }
+    let canvas = sequence.canvas;
+    let duration = RationalTime::new(frames, rate);
+    let mut checks = Vec::new();
+    if let Some(size) = &brief.dimensions {
+        add(
+            &mut checks,
+            "dimensions",
+            json!(size),
+            match_status(size.width == canvas.width && size.height == canvas.height),
+            json!({"width":canvas.width,"height":canvas.height}),
+            "planned output raster",
+        );
+    }
+    if let Some(ratio) = &brief.aspect_ratio {
+        // Both render paths set the final output to square pixels.
+        let width = u64::from(canvas.width) * u64::from(ratio.height);
+        let height = u64::from(canvas.height) * u64::from(ratio.width);
+        add(
+            &mut checks,
+            "aspectRatio",
+            json!(ratio),
+            match_status(width == height),
+            json!({"width":canvas.width,"height":canvas.height}),
+            "planned square-pixel display aspect ratio",
+        );
+    }
+    if let Some(max) = brief.max_duration_ms {
+        let planned_num = u128::try_from(frames).expect("positive frame count")
+            * u128::from(rate.denominator)
+            * 1000;
+        let max_num = u128::from(max) * u128::from(rate.numerator);
+        let (status, reason) = if planned_num > max_num {
+            ("fail", "planned video alone exceeds the limit")
+        } else {
+            (
+                "unknown",
+                "planned video fits; use delivery-check for the final container and stream durations",
+            )
+        };
+        add(
+            &mut checks,
+            "maxDurationMs",
+            json!(max),
+            status,
+            json!(duration),
+            reason,
+        );
+    }
+    if let Some(max) = brief.max_bytes {
+        add(
+            &mut checks,
+            "maxBytes",
+            json!(max),
+            "unknown",
+            Value::Null,
+            "master file size is measured after encoding",
+        );
+    }
+    if let Some(color) = brief.color {
+        let contract = if let (Some(policy), Some(clips)) = (&policy, &clips) {
+            let mut contracts = clips
+                .iter()
+                .map(|item| -> Result<crate::assembly::OutputColor> {
+                    let ItemPayload::Clip(clip) = &item.payload else {
+                        unreachable!("assembly::clips only returns clips")
+                    };
+                    crate::assembly::output_color(project.require_asset(&clip.asset_id)?, policy)
+                });
+            let first = contracts.next().and_then(std::result::Result::ok);
+            first.filter(|expected| {
+                contracts.all(|result| result.is_ok_and(|value| value == *expected))
+            })
+        } else {
+            Some(crate::assembly::OutputColor::sdr())
+        };
+        let (status, evidence, reason) = match contract {
+            Some(c) => (
+                match_status(
+                    (c.primaries.as_str(), c.transfer.as_str(), c.matrix.as_str()) == color.tags(),
+                ),
+                json!(c),
+                "planned output color tags",
+            ),
+            None => (
+                "unknown",
+                Value::Null,
+                "saved source metadata does not establish one assembly color contract",
+            ),
+        };
+        add(&mut checks, "color", json!(color), status, evidence, reason);
+    }
+    if !brief.required_sidecars.is_empty() {
+        let (status, evidence, reason) = match planned_caption_count(sequence) {
+            Ok(Some(count)) => (
+                "pass",
+                json!({"cueCount":count}),
+                "visible captions have valid sidecar timing and nonblank text",
+            ),
+            Ok(None) => (
+                "fail",
+                json!({"cueCount":0}),
+                "no visible caption cues with nonblank text",
+            ),
+            Err(error) => (
+                "fail",
+                json!({"error":error.to_string()}),
+                "the current sequence cannot produce the required sidecar",
+            ),
+        };
+        for requested in &brief.required_sidecars {
+            add(
+                &mut checks,
+                "requiredSidecar",
+                json!(requested),
+                status,
+                evidence.clone(),
+                reason,
+            );
+        }
+    }
+    Ok(json!({
+        "schemaVersion":1,"phase":"planned","status":overall_status(&checks),
+        "projectId":project.project_id,"revision":project.revision,"sequenceId":sequence_id,
+        "brief":brief,"plannedVideoDuration":duration,"checks":checks,
+        "nextCheck":"delivery-check"
+    }))
+}
+
+fn planned_caption_count(sequence: &Sequence) -> Result<Option<usize>> {
+    let (_, _, mapping) = crate::delivery::sidecars(sequence)?;
+    let cues = mapping["cues"]
+        .as_array()
+        .expect("sidecars returns a cue array");
+    Ok(caption_evidence(sequence, cues)?.then_some(cues.len()))
+}
+
+fn caption_evidence(sequence: &Sequence, cues: &[Value]) -> Result<bool> {
+    let cue_ids: BTreeSet<_> = cues
+        .iter()
+        .filter_map(|cue| cue["itemId"].as_str())
+        .collect();
+    if cue_ids.len() != cues.len() {
+        return Err(invalid("caption cue identities are invalid"));
+    }
+    Ok(sequence.tracks.iter().flat_map(|track| &track.items).any(|item| {
+        cue_ids.contains(item.id.as_str())
+            && matches!(&item.payload, ItemPayload::Caption(caption) if !caption.text.trim().is_empty())
+    }))
+}
+
 fn color_tags(video: &Value) -> Option<(&str, &str, &str)> {
     let get = |key| {
         video
@@ -404,21 +616,13 @@ fn sidecar(
             "frozen sequence has no caption cues",
         );
     }
-    let cue_ids: BTreeSet<_> = cues
-        .iter()
-        .filter_map(|cue| cue["itemId"].as_str())
-        .collect();
-    if cue_ids.len() != cues.len() {
+    let Ok(has_text) = caption_evidence(sequence, cues) else {
         return (
             "unknown",
             Value::Null,
             "frozen caption cue identities are invalid",
         );
-    }
-    let has_text = sequence.tracks.iter().flat_map(|track| &track.items).any(|item| {
-        cue_ids.contains(item.id.as_str())
-            && matches!(&item.payload, ItemPayload::Caption(caption) if !caption.text.trim().is_empty())
-    });
+    };
     if !has_text {
         return (
             "fail",
@@ -718,11 +922,7 @@ pub fn check(
     }
     if let Some(requested) = brief.color {
         if let Some(tags) = video.and_then(color_tags) {
-            let expected = match requested {
-                Color::Sdr => ("bt709", "bt709", "bt709"),
-                Color::HdrPq => ("bt2020", "smpte2084", "bt2020nc"),
-                Color::HdrHlg => ("bt2020", "arib-std-b67", "bt2020nc"),
-            };
+            let expected = requested.tags();
             add(
                 &mut checks,
                 "color",
@@ -754,13 +954,7 @@ pub fn check(
             reason,
         );
     }
-    let status = if checks.iter().any(|c| c["status"] == "fail") {
-        "fail"
-    } else if checks.iter().any(|c| c["status"] == "unknown") {
-        "unknown"
-    } else {
-        "pass"
-    };
+    let status = overall_status(&checks);
     Ok(
         json!({"schemaVersion":1,"status":status,"brief":brief,"artifact":{"jobId":id,"artifactId":artifact,"revision":revision,"sequenceId":sequence,"sequenceBinding":binding,"path":master,"sha256":sha,"bytes":bytes,"manifest":manifest_path},"checks":checks,"limitations":["When metadata is requested, the master is probed again and rehashed; the manifest is not independently authenticated", "Durations are metadata, not an independent playback measurement", "Caption sidecar checks do not establish speech completeness, accessibility, timing or text accuracy", "Color tags do not establish visual appearance or HDR mastering quality", "Passing does not establish upload acceptance or editorial approval"]}),
     )
@@ -870,6 +1064,47 @@ mod tests {
             .iter()
             .find(|check| check["constraint"] == name)
             .unwrap()
+    }
+
+    #[test]
+    fn preflight_checks_exact_frame_duration_and_visible_captions() {
+        let temp = TempDir::new().unwrap();
+        let (root, _, _) = fixture(&temp, true);
+        let mut project = Store::open(&root).unwrap().project().unwrap();
+        let sequence = project.require_sequence_mut("seq_main").unwrap();
+        sequence.frame_rate = agentcut_core::RationalRate {
+            numerator: 30_000,
+            denominator: 1001,
+        };
+        sequence.duration = Some(RationalTime::new(30, sequence.frame_rate));
+
+        let constraints = brief(json!({
+            "schemaVersion":1,"aspectRatio":{"width":9,"height":16},
+            "maxDurationMs":1000,"requiredSidecars":["srt","vtt"],"color":"hdr-pq"
+        }));
+        let report = preflight(&project, "seq_main", 1, &constraints).unwrap();
+        assert_eq!(report["plannedVideoDuration"]["value"], 30);
+        assert_eq!(result_for(&report, "maxDurationMs")["status"], "fail");
+        assert_eq!(result_for(&report, "aspectRatio")["status"], "pass");
+        assert_eq!(result_for(&report, "color")["status"], "fail");
+        assert_eq!(
+            result_for(&report, "requiredSidecar")["actual"]["cueCount"],
+            1
+        );
+        assert_eq!(result_for(&report, "requiredSidecar")["status"], "pass");
+
+        project
+            .require_sequence_mut("seq_main")
+            .unwrap()
+            .track_mut("track_v1")
+            .unwrap()
+            .solo = true;
+        let fits_video =
+            brief(json!({"schemaVersion":1,"maxDurationMs":1001,"requiredSidecars":["srt"]}));
+        let report = preflight(&project, "seq_main", 1, &fits_video).unwrap();
+        assert_eq!(result_for(&report, "maxDurationMs")["status"], "unknown");
+        assert_eq!(result_for(&report, "requiredSidecar")["status"], "fail");
+        assert_eq!(report["status"], "fail");
     }
 
     #[test]

@@ -159,6 +159,15 @@ enum Action {
         #[arg(long)]
         request: PathBuf,
     },
+    /// Compare a delivery brief with the current plan before starting a render.
+    DeliveryPreflight {
+        project: PathBuf,
+        sequence: String,
+        #[arg(long)]
+        expected_revision: u64,
+        #[arg(long)]
+        request: PathBuf,
+    },
     BatchDeliveryCheck {
         project: PathBuf,
         id: String,
@@ -644,6 +653,17 @@ fn execute(cli: Cli) -> Result<Value> {
         } => Request::DeliveryCheck {
             project,
             id,
+            brief: agent_video_workbench::json::read(&request)?,
+        },
+        Action::DeliveryPreflight {
+            project,
+            sequence,
+            expected_revision,
+            request,
+        } => Request::DeliveryPreflight {
+            project,
+            sequence,
+            expected_revision,
             brief: agent_video_workbench::json::read(&request)?,
         },
         Action::BatchDeliveryCheck {

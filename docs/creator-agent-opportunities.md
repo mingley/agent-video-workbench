@@ -135,10 +135,13 @@ The report is returned to the caller and does not itself modify a package.
 **Current batch slice:** `batch-delivery-check` evaluates each requested output,
 and `batch-delivery` binds reports and successful review artifacts into a
 package while retaining failed and unavailable siblings as explicit results.
-The package minimizes project metadata; its selected media and caller-authored
-metadata still need review before sharing. Pre-render constraint planning and
-maintained platform templates remain future work. Do not embed unverified
-platform rules.
+The package minimizes project metadata. Review its selected media and
+caller-authored metadata before sharing.
+
+**Before rendering:** `delivery-preflight` can evaluate the same brief against
+the current sequence at an explicit revision. It catches plan mismatches such
+as the wrong raster, an overlong video or missing visible captions without an
+encode. Final bytes and container duration still require artifact verification.
 
 **Next-slice acceptance:** Exercise one passing and one failing output in a frozen batch,
 including an actual file-size check, missing sidecar, mismatched duration and

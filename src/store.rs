@@ -103,8 +103,8 @@ impl Store {
         Ok(())
     }
 
-    /// Job status needs the queue tables, not the current editing snapshot.
-    pub(crate) fn open_job_reader(path: &Path) -> Result<Self> {
+    /// Open a current store for queries without loading the editing snapshot.
+    pub(crate) fn open_reader(path: &Path) -> Result<Self> {
         if path.join("backup.incomplete").exists() {
             return Err(Error::Invalid("backup is incomplete".into()));
         }

@@ -1,5 +1,14 @@
 # Implementation and qualification
 
+## Delivery preflight on main
+
+`delivery-preflight` checks a revision-bound sequence against the same brief
+used for final delivery. The generated creator workflow exercises matching and
+mismatching constraints over the named CLI, JSON requests and official MCP
+client. It verifies that preflight queues no render, rejects an old revision
+after an edit and predicts the frame count of a subsequently verified output.
+See [delivery checks](creator-delivery-checks.md).
+
 ## Fast job status and bounded waits on main
 
 `job-status` and `batch-status` can wait up to 20 seconds per call through

@@ -1,10 +1,10 @@
 # Check a delivery and draft chapters
 
-These read-only operations use a completed queued `render-start` job and its
-frozen project revision. They do not change the project, repair old exports,
-upload anything, or establish platform acceptance. If an older synchronous
-`render` lacks a job-bound sequence, render the selected revision through
-`render-start` before using these operations.
+Check the delivery brief against the current editing plan before encoding,
+then check the finished render against the same brief. The artifact check and
+chapter draft use a completed queued `render-start` job and its frozen project
+revision. If an older synchronous `render` lacks a job-bound sequence, queue a
+new render before checking the artifact or drafting chapters.
 
 ## Check a creator's brief
 
@@ -21,6 +21,26 @@ Put only the constraints the creator actually requested in `brief.json`:
   "color": "sdr"
 }
 ```
+
+```sh
+avw delivery-preflight project short --expected-revision 5 --request brief.json
+```
+
+The equivalent request for JSON or MCP uses `command: "delivery-preflight"`,
+`project`, `sequence`, `expectedRevision`, and `brief`. Use the revision from
+`resume`. If it changed, reload the project and check the new plan. Queue the
+render with the revision returned by preflight so intervening edits trigger a
+conflict.
+
+The report has `phase: "planned"`. It checks raster dimensions, display
+aspect ratio, planned color tags, and whether visible captions can produce
+nonempty sidecars. If the planned video alone exceeds the duration cap, that
+check fails. If the video fits, the check stays `unknown` until the container
+and streams can be measured. File size also stays `unknown` until encoding.
+Preflight reads the project plan without opening source media, invoking FFmpeg,
+or starting a job. Use `delivery-check` to verify the resulting file.
+
+### After rendering
 
 ```sh
 avw delivery-check project "$RENDER_JOB_ID" --request brief.json
