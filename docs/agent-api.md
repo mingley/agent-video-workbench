@@ -111,7 +111,7 @@ unreviewed risks and commits intent with the sequence atomically. Preflight's
 | `transcript-search` | Matching source cues, or opt-in literal matches across adjacent cues, with `nextOffset` |
 | `source-evidence`, `prepare-highlights` | Revision-pinned source windows and reviewable, externally proposed clip plans |
 | `provider-search`, `provider-search-results` | Explicitly queue and validate configured provider moment-search proposals |
-| `agent-media` | Bounded verified frame, sheet or proxy-audio content as base64 JSON |
+| `agent-media` | Bounded source frames, exact edited review frames, sheets or proxy audio as base64 JSON |
 | `preview-word-alignment`, `accept-word-alignment`, `word-alignment` | Validate, review and retrieve caller-supplied source-word timing |
 | `translation-context`, `plan-translation` | Review supplied caption translations and prepare a provenance-bound variant |
 | `suggest-reframe` | Review an editable crop path from caller-supplied subject observations |

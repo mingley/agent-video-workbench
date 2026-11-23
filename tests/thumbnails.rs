@@ -180,16 +180,31 @@ fn encoder_failure_cleans_staging_and_preserves_existing_artifacts() {
 }
 
 #[test]
-fn decoded_frame_with_wrong_pts_is_never_published() {
+fn missing_extra_or_wrong_later_pts_never_publish_a_group() {
     let f = fixture();
     let fake = f._temp.path().join("fake-ffmpeg");
-    fs::write(&fake, "#!/bin/sh\necho '[Parsed_showinfo_0 @ x] config in time_base: 1/30, frame_rate: 30/1' >&2\necho '[Parsed_showinfo_0 @ x] n: 0 pts: 1 pts_time:0.033333' >&2\nexit 0\n").unwrap();
-    fs::set_permissions(&fake, fs::Permissions::from_mode(0o755)).unwrap();
     let output = f._temp.path().join("output");
-    let backend = FfmpegBackend::new(fake, PathBuf::from("/no/such/ffprobe"));
-    let error = thumbnails::create(&f.root, &f.job, &output, &request(&[0]), &backend).unwrap_err();
-    assert!(error.to_string().contains("timestamp differs"));
-    assert!(!output.exists());
+    let backend = FfmpegBackend::new(&fake, Path::new("/no/such/ffprobe"));
+    for (points, expected_error) in [
+        (vec![0, 2], "timestamp differs"),
+        (vec![0], "frame count differs"),
+        (vec![0, 1, 2], "frame count differs"),
+    ] {
+        let mut script = String::from(
+            "#!/bin/sh\necho '[Parsed_showinfo_0 @ x] config in time_base: 1/30, frame_rate: 30/1' >&2\n",
+        );
+        for (index, pts) in points.iter().enumerate() {
+            script.push_str(&format!(
+                "echo '[Parsed_showinfo_0 @ x] n: {index} pts: {pts}' >&2\n"
+            ));
+        }
+        fs::write(&fake, script).unwrap();
+        fs::set_permissions(&fake, fs::Permissions::from_mode(0o755)).unwrap();
+        let error =
+            thumbnails::create(&f.root, &f.job, &output, &request(&[0, 34]), &backend).unwrap_err();
+        assert!(error.to_string().contains(expected_error), "{error}");
+        assert!(!output.exists());
+    }
     assert!(!fs::read_dir(f._temp.path()).unwrap().any(|entry| {
         entry
             .unwrap()
@@ -197,6 +212,46 @@ fn decoded_frame_with_wrong_pts_is_never_published() {
             .to_string_lossy()
             .starts_with(".avw-thumbnails-")
     }));
+}
+
+#[test]
+fn changed_render_bytes_during_frame_extraction_are_rejected() {
+    let f = fixture();
+    let temp = f._temp.path();
+    let mut png = png::Encoder::new(fs::File::create(temp.join("frame.png")).unwrap(), 1, 1)
+        .write_header()
+        .unwrap();
+    png.write_image_data(&[0]).unwrap();
+    png.finish().unwrap();
+    let fake = temp.join("fake-ffmpeg");
+    fs::write(
+        &fake,
+        r#"#!/bin/sh
+while [ "$1" != "-i" ]; do shift; done
+printf 'replaced input' > "$2"
+echo '[Parsed_showinfo_0 @ x] config in time_base: 1/30, frame_rate: 30/1' >&2
+echo '[Parsed_showinfo_0 @ x] n: 0 pts: 0' >&2
+cat "${0%/*}/frame.png"
+"#,
+    )
+    .unwrap();
+    fs::set_permissions(&fake, fs::Permissions::from_mode(0o755)).unwrap();
+    let svc = agent_video_workbench::service::Service {
+        root: Some(temp.to_owned()),
+        backend: FfmpegBackend::new(fake, "unused-ffprobe"),
+        executable: "avw".into(),
+        asr: None,
+        downloads: Default::default(),
+        provider: None,
+    };
+    let request = serde_json::from_value(json!({"command":"agent-media",
+        "media":{"kind":"review-frame","project":"project","jobId":f.job,"atMs":0}}))
+    .unwrap();
+    let error = svc.execute(request).unwrap_err();
+    assert!(
+        error.to_string().contains("source bytes changed during"),
+        "{error}"
+    );
 }
 
 #[test]

@@ -119,6 +119,40 @@ fn image_output_is_explicit_verified_bounded_and_workspace_scoped() {
 }
 
 #[test]
+fn review_frames_require_an_authorized_project_and_output_time() {
+    let temp = tempfile::tempdir().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir(&workspace).unwrap();
+    let mut svc = service(&workspace, Path::new("unused-ffmpeg"));
+    let args = json!({"kind":"review-frame","project":"project","jobId":"render","atMs":0});
+    for (project, time, message) in [
+        ("..", 0, "outside the authorized workspace"),
+        ("project", -1, "nonnegative"),
+    ] {
+        let mut bad = args.clone();
+        bad["project"] = json!(project);
+        bad["atMs"] = json!(time);
+        let result = call(&svc, "2025-11-25", bad);
+        assert_eq!(result["result"]["isError"], true);
+        assert!(
+            result["result"]["structuredContent"]["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains(message)
+        );
+        assert_eq!(result["result"]["content"].as_array().unwrap().len(), 1);
+    }
+    svc.root = None;
+    let result = call(&svc, "2025-11-25", args);
+    assert!(
+        result["result"]["structuredContent"]["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("requires an authorized workspace")
+    );
+}
+
+#[test]
 fn audio_uses_only_verified_proxy_and_reports_actual_returned_samples() {
     let temp = tempfile::tempdir().unwrap();
     let workspace = temp.path().join("workspace");

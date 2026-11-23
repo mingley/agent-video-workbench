@@ -44,6 +44,9 @@ the frozen revision. See [delivery checks](docs/creator-delivery-checks.md).
 Use the [creator-agent toolkit](docs/creator-agent-toolkit.md) for grounded
 highlight proposals, model-visible media, reviewed captions and feedback,
 reframing, and checked batch delivery.
+On `main`, agents can inspect an exact frame of a completed edit over CLI or
+MCP with `review-frame`, or save several nearby frames in one decode pass with
+`thumbnail-candidates`.
 Build with Rust **1.99 or newer**: `cargo build --release --locked`.
 The checked-in `rust-toolchain.toml` selects stable with rustfmt and Clippy;
 the current validated compiler is 1.99.1. Published binaries need no compiler.

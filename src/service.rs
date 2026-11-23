@@ -560,7 +560,7 @@ pub struct Service {
     pub provider: Option<crate::analysis::Provider>,
 }
 impl Service {
-    fn path(&self, path: &Path) -> Result<PathBuf> {
+    pub(crate) fn path(&self, path: &Path) -> Result<PathBuf> {
         let raw = if let Some(root) = &self.root {
             if path.is_absolute() {
                 path.to_path_buf()

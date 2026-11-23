@@ -110,6 +110,14 @@ try {
   if (sha(sheetBytes) !== sheet.result.sha256 || sheet.result.jobId !== render.id || sheet.result.revision !== 2) {
     throw new Error('Contact sheet lost artifact identity or hash');
   }
+  const reviewRequest = { kind: 'review-frame', project: 'project', jobId: render.id, atMs: 527 };
+  const review = await call('avw-media', reviewRequest);
+  await assertParity(reviewRequest, review);
+  const reviewBytes = Buffer.from(review.response.content.find(c => c.type === 'image').data, 'base64');
+  if (review.result.source.role !== 'master' || review.result.frameIndex !== 5
+      || review.result.width !== 160 || review.result.height !== 90 || sha(reviewBytes) !== review.result.sha256) {
+    throw new Error('Inline review image lost the master frame or its native dimensions');
+  }
   const audioRequest = { kind: 'audio-proxy', project: 'project', jobId: proxy.id, startMs: 250, durationMs: 1000 };
   const audio = await call('avw-media', audioRequest);
   await assertParity(audioRequest, audio);
@@ -157,7 +165,7 @@ try {
   fs.writeFileSync(path.join(root, 'summary.json'), JSON.stringify({ passed: true, officialMcpSdk: true,
     imageAndAudioBlocksDecoded: true, namedJsonAndMcpParity: true, matchingErrorEnvelopes: true,
     sourcePreviewSamples: audio.result.sampleCount,
-    requestedSourceIntervalMs: [1250, 2250], verifiedContactSheet: true, alteredProxyRejected: true,
+    requestedSourceIntervalMs: [1250, 2250], verifiedContactSheet: true, verifiedEditedFrame: true, alteredProxyRejected: true,
     arbitraryPathRejected: true, sourceUnchanged: true,
     limitation: 'Client/model image and audio modality support is host dependent.' }, null, 2));
   console.log('MCP media-content workflow passed:', path.join(root, 'summary.json'));

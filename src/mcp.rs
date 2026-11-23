@@ -15,7 +15,7 @@ use std::{
     time::Duration,
 };
 const PROTOCOL: &str = "2025-11-25";
-const MAX_IMAGE_BYTES: u64 = 2 * 1024 * 1024;
+pub(crate) const MAX_IMAGE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_AUDIO_MS: u32 = 15_000;
 
 /// Transport convenience for media which the existing service has inspected
@@ -31,6 +31,13 @@ pub enum MediaRequest {
     Frame {
         project: PathBuf,
         asset_id: String,
+        at_ms: i64,
+    },
+    /// Inspect the frame containing an output timestamp in a completed render.
+    ReviewFrame {
+        project: PathBuf,
+        job_id: String,
+        #[schemars(range(min = 0))]
         at_ms: i64,
     },
     ContactSheet {
@@ -214,6 +221,23 @@ pub fn media_request(
             metadata["guidance"] = json!(
                 "The requested source seek is not an independently measured decoded-frame timestamp. Image is an SDR inspection preview."
             );
+            Ok((metadata, content))
+        }
+        MediaRequest::ReviewFrame {
+            project,
+            job_id,
+            at_ms,
+        } => {
+            if service.root.is_none() {
+                return Err(invalid("MCP media requires an authorized workspace"));
+            }
+            let (metadata, png) = crate::thumbnails::review_frame(
+                &service.path(&project)?,
+                &job_id,
+                at_ms,
+                &service.backend,
+            )?;
+            let content = json!({"type":"image","mimeType":"image/png","data":base64(&png)});
             Ok((metadata, content))
         }
         MediaRequest::ContactSheet { project, job_id } => {
@@ -478,7 +502,7 @@ pub fn serve(service: &Service, reader: &mut impl BufRead, writer: &mut impl Wri
                 "tools/list" => Some(reply(
                     id.as_ref().unwrap_or(&null),
                     json!({"tools":[{"name":"avw","description":"Persistent video editing, source inspection, transcripts, revision history, background render jobs and verified artifacts. Call agent-guide for the complete workflow.","inputSchema":tool_schema()},
-                    {"name":"avw-media","description":"Opt in to receive a verified source frame, source storyboard or contact sheet as PNG, or a short audio excerpt from a verified source-proxy job as WAV. Host image/audio support is not guaranteed. Requests use project/asset/job IDs, never arbitrary paths.","inputSchema":media_tool_schema()}]}),
+                    {"name":"avw-media","description":"Receive a source frame, an exact edited frame from a verified render, a storyboard or a contact sheet as PNG, or a short excerpt from a verified source-proxy job as WAV. Use review-frame with a render job ID and output milliseconds to inspect a finished edit.","inputSchema":media_tool_schema()}]}),
                 )),
                 "tools/call" => {
                     let arguments = serde_json::to_vec(&message["params"]["arguments"])?;

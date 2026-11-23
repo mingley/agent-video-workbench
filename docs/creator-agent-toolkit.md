@@ -62,19 +62,27 @@ provider separately; the workbench checks the returned structure and provenance.
 
 ## Send evidence to an agent
 
-The MCP `avw-media` tool accepts `kind: "frame"` with project, asset ID and
-`atMs`; `kind: "contact-sheet"` with project and render `jobId`; or
-`kind: "audio-proxy"` with project, source-proxy `jobId`, `startMs` and
-`durationMs`. It returns verified PNG image or WAV audio content in addition
-to structured metadata. Images are capped at 2 MiB; audio excerpts are at
-most 15 seconds. Audio requires MCP 2025-03-26 or later. Whether the agent can
-consume these blocks depends on its host.
+To inspect a caption, cut or overlay in a completed edit, send this request to
+the MCP `avw-media` tool, substituting the ID from `render-start`.
 
-`agent-media` exposes the same bounded operation as JSON, with the content
-base64 encoded. The CLI requires `--workspace ROOT` and reads a media request
-object from `--request FILE`. Neither route accepts arbitrary file paths.
-Inspection frames are SDR previews; their requested seek time is not an
-independently measured decoded-frame timestamp.
+```json
+{"kind":"review-frame","project":"project","jobId":"<render job ID>","atMs":1500}
+```
+
+The result includes a PNG of the frame containing that output millisecond,
+its zero-based `frameIndex`, exact `decodedTimestamp`, frozen revision,
+sequence ID and hashes for the image, review video and master. The image uses
+the verified SDR review video and fits within 768 pixels per axis. The
+request also works from the CLI with `avw --workspace ROOT agent-media
+--request frame.json`, which returns the PNG as base64 in `result.content.data`.
+
+For original footage, use `kind: "frame"` with an asset ID and source
+`atMs`. That preview reports the requested source seek. Use `storyboard`
+with a storyboard job ID, `contact-sheet` with a render job ID, or
+`audio-proxy` with a source-proxy job ID, `startMs` and `durationMs`.
+All media requests take a project. Images are capped at 2 MiB. Audio excerpts
+are capped at 15 seconds and require MCP 2025-03-26 or later. The host
+determines whether the agent can consume image and audio blocks.
 
 ## Review and revise
 
@@ -141,7 +149,8 @@ minimized sharing boundary applies to the completed destination.
 `thumbnail-candidates` accepts a completed queued render job, a new
 destination and `{"schemaVersion":1,"atMs":[1000,2500]}`. It extracts up to
 eight creator-selected frames from the verified SDR review video, verifies
-their decoded timestamps and writes PNGs with a manifest. Duplicate frame
+their decoded timestamps and writes PNGs with a manifest in request order.
+Send neighboring times together to share a decode pass. Duplicate frame
 selections, unknown timing and changed artifacts are refused. These images
 are scaled review previews; their appearance can differ from an HDR master.
 The caller selects the moments; the tool does not rank thumbnails.

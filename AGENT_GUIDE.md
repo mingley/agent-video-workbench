@@ -167,8 +167,11 @@ there. Inspect JSON `ok` and job states; a PID is not completion.
     prepares public chapter text only from explicitly selected markers and
     caller-supplied titles. Neither operation uploads or establishes acceptance;
     see [delivery checks and chapters](docs/creator-delivery-checks.md).
-    `thumbnail-candidates` extracts creator-selected frames from a verified SDR
-    review video; `batch-delivery` packages per-output briefs, results and
+    To check a cut or caption, call `avw-media` with
+    `{"kind":"review-frame","project":"project","jobId":"<render job ID>","atMs":1500}`.
+    It returns the edited SDR frame, its exact decoded timestamp and the render's
+    frozen revision. Use `thumbnail-candidates` to save up to eight output frames
+    in one request. `batch-delivery` packages per-output briefs, results and
     caller-authored metadata while retaining successful siblings.
     The delivery manifest records failed batch outputs and unresolved feedback;
     the HTML presents succeeded videos. Use host file tools

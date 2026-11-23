@@ -11,7 +11,7 @@ const { Client } = await import(pathToFileURL(path.join(sdkRoot, 'dist/esm/clien
 const { StdioClientTransport } = await import(pathToFileURL(path.join(sdkRoot, 'dist/esm/client/stdio.js')));
 fs.mkdirSync(root, { recursive: false });
 const source = path.join(root, 'source.mp4');
-const generated = spawnSync(ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=160x90:r=30000/1001:d=3',
+const generated = spawnSync(ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=800x450:r=30000/1001:d=3',
   '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=3', '-c:v', 'libx264',
   '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-x264-params', 'colorprim=bt709:transfer=bt709:colormatrix=bt709',
   '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv',
@@ -73,15 +73,17 @@ try {
   if (preview.role !== 'sdr-review-preview' || !preview.verified || !master.verified) throw new Error('Preview missing');
   const masterHash = sha(master.path);
   const previewHash = sha(preview.path);
-  const selection = { schemaVersion: 1, atMs: [1499, 0, 501] };
+  // Include neighboring frames after a nonzero seek, gaps, and the final frame.
+  const selection = { schemaVersion: 1, atMs: [1499, 0, 534, 501, 568, 1936, 2001] };
+  fs.mkdirSync(path.join(root, '100% review'));
   const request = { command: 'thumbnail-candidates', project: 'project', id: job.id,
-    destination: 'thumbnails-mcp', selection };
+    destination: '100% review/thumbnails-mcp', selection };
   const result = await call(request);
   const manifest = result.manifest;
   if (manifest.revision !== 2 || manifest.source.role !== 'sdr-review-preview'
       || manifest.source.sha256 !== previewHash || manifest.source.masterSha256 !== masterHash
       || JSON.stringify(manifest.candidates.map(item => item.requestedAtMs)) !== JSON.stringify(selection.atMs)
-      || JSON.stringify(manifest.candidates.map(item => item.frameIndex)) !== JSON.stringify([44, 0, 15])
+      || JSON.stringify(manifest.candidates.map(item => item.frameIndex)) !== JSON.stringify([44, 0, 16, 15, 17, 58, 59])
       || JSON.stringify(JSON.parse(fs.readFileSync(path.join(result.path, 'manifest.json')))) !== JSON.stringify(manifest)
       || fs.existsSync(path.join(result.path, 'thumbnails.incomplete'))) {
     throw new Error('Thumbnail manifest lost frozen timing or source identity: ' + JSON.stringify(manifest));
@@ -105,6 +107,33 @@ try {
   const jsonResult = cli(['request', jsonRequest]);
   if (JSON.stringify(cliResult.manifest) !== JSON.stringify(manifest)
       || JSON.stringify(jsonResult.manifest) !== JSON.stringify(manifest)) throw new Error('CLI/MCP thumbnail manifests differ');
+  const frameRequest = { kind: 'review-frame', project: 'project', jobId: job.id, atMs: 501 };
+  const inline = await client.callTool({ name: 'avw-media', arguments: frameRequest });
+  const metadata = inline.structuredContent.result;
+  const content = inline.content.find(block => block.type === 'image');
+  const candidate = manifest.candidates.find(item => item.requestedAtMs === frameRequest.atMs);
+  const inlineBytes = Buffer.from(content.data, 'base64');
+  if (inline.isError || metadata.kind !== 'review-frame' || metadata.revision !== 2 || metadata.jobId !== job.id
+      || metadata.sequenceId !== 'candidate' || metadata.artifactId !== manifest.artifactId
+      || JSON.stringify(metadata.source) !== JSON.stringify(manifest.source)
+      || JSON.stringify(metadata.decodedTimestamp) !== JSON.stringify(candidate.decodedTimestamp)
+      || metadata.frameIndex !== 15 || metadata.requestedAtMs !== 501
+      || metadata.width !== 768 || metadata.height !== 432 || metadata.bytes !== inlineBytes.length
+      || metadata.sha256 !== createHash('sha256').update(inlineBytes).digest('hex')
+      || content.mimeType !== 'image/png') {
+    throw new Error('Inline review frame lost frozen render identity, dimensions or hash');
+  }
+  const inlinePath = path.join(root, 'inline.png');
+  fs.writeFileSync(inlinePath, inlineBytes);
+  const expectedRgb = decode(['-i', preview.path, '-vf', 'select=eq(n\\,15),scale=768:432', '-frames:v', '1']);
+  if (!decode(['-i', inlinePath, '-frames:v', '1']).equals(expectedRgb)) {
+    throw new Error('Inline review pixels differ from the independently decoded output frame');
+  }
+  const frameFile = writeJson('review-frame.json', frameRequest);
+  const cliFrame = cli(['agent-media', '--request', frameFile]);
+  if (JSON.stringify(cliFrame.metadata) !== JSON.stringify(metadata) || cliFrame.content.data !== content.data) {
+    throw new Error('CLI and MCP review frames differ');
+  }
   const first = path.join(result.path, manifest.candidates[0].path);
   const firstHash = sha(first);
   const existing = await call(request, false);
@@ -118,13 +147,17 @@ try {
     fs.writeFileSync(preview.path, 'tampered');
     const error = await call({ ...request, destination: 'tampered' }, false);
     if (!error.message.includes('bytes changed') || fs.existsSync(path.join(root, 'tampered'))) throw new Error('Changed preview was accepted');
+    const failed = await client.callTool({ name: 'avw-media', arguments: frameRequest });
+    if (!failed.isError || !failed.structuredContent.error.message.includes('bytes changed')
+        || failed.content.some(block => block.type === 'image')) throw new Error('Changed preview returned an inline frame');
   } finally { fs.writeFileSync(preview.path, previewBytes); }
   if ((await call({ command: 'status', project: 'project' })).revision !== 3
       || sha(source) !== sourceHash || sha(master.path) !== masterHash || sha(preview.path) !== previewHash) {
     throw new Error('Thumbnail extraction changed a project or source artifact');
   }
   writeJson('summary.json', { passed: true, officialMcpSdk: true, namedCliAndJsonEquivalent: true,
-    frozenRevision: 2, currentRevision: 3, sourceRole: preview.role, candidates: 3,
+    frozenRevision: 2, currentRevision: 3, sourceRole: preview.role, candidates: selection.atMs.length,
+    inlineCliAndMcpMatchFrozenFrame: true,
     decodedPngMatchesReferenceFrames: true, exactFractionalRateDecodedPtsChecked: true, sourceAndRenderUnchanged: true,
     outOfRangeAndDuplicateFramesRejected: true, changedPreviewRejected: true, destinationNotOverwritten: true });
   console.log('Thumbnail candidates passed:', path.join(root, 'summary.json'));

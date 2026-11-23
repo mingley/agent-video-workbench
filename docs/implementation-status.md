@@ -1,5 +1,26 @@
 # Implementation and qualification
 
+## Exact output frames on main
+
+`review-frame` returns an edited frame from a completed render over CLI or
+MCP. The generated-media tests check the frozen revision, rational timestamp,
+PNG hash and pixels against an independent decode at 30000/1001 fps. They
+exercise both a master used for SDR review and a separate SDR review video.
+[Using review frames](creator-agent-toolkit.md#send-evidence-to-an-agent)
+
+`thumbnail-candidates` shares one FFmpeg decode for nearby selections.
+The table gives median CLI wall time across seven alternating pairs against
+`191cb1b` on Linux x86_64 with FFmpeg 8.0.1. Both binaries read the same
+eight-second 1280×720, 30 fps generated edit. Every PNG hash and complete
+manifest matched. Timings include file verification and publication of the
+PNGs. [Reproduce the benchmark](../evaluation/review_frames_performance.py)
+
+| Selected output frames | Before | After | Media processes before → after |
+| --- | ---: | ---: | ---: |
+| One frame | 457 ms | 413 ms | 3 → 1 |
+| Eight near a cut | 3,644 ms | 486 ms | 24 → 1 |
+| Eight spaced one second apart | 3,207 ms | 2,706 ms | 24 → 8 |
+
 ## Delivery preflight on main
 
 `delivery-preflight` checks a revision-bound sequence against the same brief

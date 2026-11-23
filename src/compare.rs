@@ -145,7 +145,7 @@ pub(crate) fn artifact(store: &Store, root: &Path, id: &str) -> Result<Frozen> {
         snapshot,
         sequence_id: sequence_id.to_owned(),
         identity,
-        manifest: manifest.clone(),
+        manifest,
     })
 }
 

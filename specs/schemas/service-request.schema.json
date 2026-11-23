@@ -1408,6 +1408,34 @@
         },
         {
           "additionalProperties": false,
+          "description": "Inspect the frame containing an output timestamp in a completed render.",
+          "properties": {
+            "atMs": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "jobId": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "review-frame",
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project",
+            "jobId",
+            "atMs"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "properties": {
             "jobId": {
               "type": "string"
